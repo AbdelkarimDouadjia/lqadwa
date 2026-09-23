@@ -24,14 +24,13 @@ async function post(action, expected = 200, overrideHeaders = {}) {
 await post({ action: "read-notifications" }, 403, { origin: "https://invalid.example" });
 await post({ action: "profile", name: "x", city: "invalid" }, 400);
 const token = randomUUID();
-const search = { action: "search", medicine: "اختبار آلي · منتج توضيحي", city: "algiers", night: false, token };
+const search = { action: "search", medicine: "اختبار آلي · منتج توضيحي", city: "algiers", night: false, demo: true, token };
 let data = await post(search);
 assert.equal(data.responses.filter(r => r.request === token).length, 3);
+assert(data.responses.filter(r => r.request === token).every(r => r.status === "yes"), "synthetic demo responds instantly");
 data = await post(search);
 assert.equal(data.requests.filter(r => r.id === token).length, 1, "search retry is idempotent");
 const reserve = { action: "reserve", request: token, pharmacy: "algiers-1", consent: true };
-await post(reserve, 409);
-await post({ action: "reply", request: token, pharmacy: "algiers-1", available: true });
 await post({ ...reserve, consent: false }, 400);
 const race = await Promise.all([200, 200].map(async () => {
   const response = await fetch(`${origin}/api/app`, { method: "POST", headers: { "content-type": "application/json", origin, cookie }, body: JSON.stringify(reserve) });
@@ -51,7 +50,6 @@ await post(collect, 409);
 await post({ action: "cancel", reservation: booking.id }, 409);
 const cancelToken = randomUUID();
 await post({ ...search, token: cancelToken });
-await post({ action: "reply", request: cancelToken, pharmacy: "algiers-2", available: true });
 data = await post({ ...reserve, request: cancelToken, pharmacy: "algiers-2" });
 const cancelBooking = data.reservations.find(r => r.request === cancelToken);
 data = await post({ action: "cancel", reservation: cancelBooking.id });

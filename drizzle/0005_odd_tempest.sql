@@ -1,0 +1,1 @@
+CREATE INDEX `idx_reservation_locations_updated` ON `reservation_locations` (`updated`);

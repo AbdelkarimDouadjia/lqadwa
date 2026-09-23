@@ -45,3 +45,9 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+/android/.gradle/
+/android/app/build/
+/android/build/
+/android/local.properties
+*.keystore
+*.jks

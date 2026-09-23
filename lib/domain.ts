@@ -22,14 +22,14 @@ export type Booking = { id: string; request: string; pharmacy: string; code: str
 export type Notice = { id: string; title: string; created: number; read: number };
 export type PharmacyApplication = { id: string; name: string; address: string; city: string; latitude: number; longitude: number; phone: string; license: string; status: "pending" | "approved" | "rejected" | "suspended"; duty: number; hours: string; created: number; updated: number };
 export type StaffRequest = { id: string; pharmacy: string; medicine: string; created: number; city: string; status: Reply["status"] };
-export type StaffBooking = Omit<Booking, "code">;
+export type StaffBooking = Omit<Booking, "code"> & { approachLat?: number | null; approachLng?: number | null; approachUpdated?: number | null };
 export type StockItem = { id: string; pharmacy: string; name: string; quantity: number; updated: number };
 export type AppData = {
   profile: { name: string; city: string }; pharmacies: Pharmacy[];
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;
   staffRequests: StaffRequest[]; staffBookings: StaffBooking[]; stock: StockItem[];
-  admin: { applications: (PharmacyApplication & { owner: string })[]; users: number; searches: number; bookings: number } | null;
+  admin: { applications: (PharmacyApplication & { owner: string })[]; users: number; searches: number; bookings: number; canInvite: boolean } | null;
 };
 export function normalize(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f\u064B-\u065F]/g, "").replace(/[أإآ]/g, "ا").toLowerCase().trim();

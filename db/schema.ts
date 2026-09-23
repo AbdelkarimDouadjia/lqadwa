@@ -39,3 +39,15 @@ export const stockItems = sqliteTable("stock_items", {
   id: text("id").primaryKey(), pharmacy: text("pharmacy").notNull().references(() => registeredPharmacies.id),
   name: text("name").notNull(), quantity: integer("quantity").notNull(), updated: integer("updated").notNull(),
 }, (t) => [uniqueIndex("idx_stock_items_pharmacy_name").on(t.pharmacy, t.name)]);
+
+export const adminMembers = sqliteTable("admin_members", {
+  owner: text("owner").primaryKey(), invitedBy: text("invited_by").notNull(), created: integer("created").notNull(),
+});
+export const adminInvites = sqliteTable("admin_invites", {
+  hash: text("hash").primaryKey(), createdBy: text("created_by").notNull(), created: integer("created").notNull(),
+  expires: integer("expires").notNull(), usedBy: text("used_by"),
+});
+export const reservationLocations = sqliteTable("reservation_locations", {
+  reservation: text("reservation").primaryKey().references(() => reservations.id),
+  latitude: integer("latitude").notNull(), longitude: integer("longitude").notNull(), updated: integer("updated").notNull(),
+}, (t) => [index("idx_reservation_locations_updated").on(t.updated)]);

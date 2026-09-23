@@ -22,6 +22,27 @@
       "when": 1790174578511,
       "tag": "0002_dusty_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790178039604,
+      "tag": "0003_sweet_sabretooth",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790178195633,
+      "tag": "0004_cold_venom",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790178241124,
+      "tag": "0005_odd_tempest",
+      "breakpoints": true
     }
   ]
 }

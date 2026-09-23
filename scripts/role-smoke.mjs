@@ -13,6 +13,8 @@ async function post(input, status = 200) {
   return body;
 }
 const registration = { action: "register-pharmacy", name: "صيدلية اختبار آلي - غير حقيقية", address: "عنوان اختباري محلي فقط، الجزائر", city: "algiers", latitude: 36.7538, longitude: 3.0588, phone: "0550000000", license: "TEST-DO-NOT-APPROVE" };
+const previous = await (await fetch(`${origin}/api/app`, { headers: { cookie } })).json();
+if (previous.ownPharmacy && ["approved", "suspended"].includes(previous.ownPharmacy.status)) await post({ action: "admin-review", pharmacy: previous.ownPharmacy.id, status: "rejected" });
 let data = await post(registration);
 const pharmacy = data.ownPharmacy;
 assert.equal(pharmacy.status, "pending");
@@ -31,6 +33,10 @@ data = await post({ action: "reserve", request: token, pharmacy: pharmacy.id, co
 const booking = data.reservations.find((row) => row.request === token);
 assert(booking && booking.code);
 assert(data.staffBookings.some((row) => row.id === booking.id));
+data = await post({ action: "share-location", reservation: booking.id, enabled: true, latitude: 36.7541, longitude: 3.0591 });
+assert(data.staffBookings.find((row) => row.id === booking.id)?.approachLat != null, "assigned pharmacy sees coarse approach");
+data = await post({ action: "share-location", reservation: booking.id, enabled: false });
+assert.equal(data.staffBookings.find((row) => row.id === booking.id)?.approachLat, null, "patient can stop sharing");
 data = await post({ action: "collect", reservation: booking.id, pharmacy: pharmacy.id, code: booking.code, checked: true });
 assert.equal(data.reservations.find((row) => row.id === booking.id).status, "collected");
 data = await post({ action: "stock-delete", pharmacy: pharmacy.id, item: data.stock[0].id });
@@ -38,4 +44,8 @@ assert.equal(data.stock.length, 0);
 data = await post({ action: "admin-review", pharmacy: pharmacy.id, status: "suspended" });
 assert.equal(data.ownPharmacy.status, "suspended");
 await post({ action: "stock-upsert", pharmacy: pharmacy.id, name: "دواء تجريبي", quantity: 1 }, 403);
-console.log("PASS: pharmacy application, admin approval/suspension, stock guard and CRUD, verified inbox, reply, reservation, collection.");
+const invited = await post({ action: "admin-invite-create" });
+assert.match(invited.invite, /^[0-9a-f-]{73}$/);
+await post({ action: "admin-invite-redeem", token: invited.invite });
+await post({ action: "admin-invite-redeem", token: invited.invite }, 409);
+console.log("PASS: pharmacy approval/suspension, stock CRUD, reply, reservation, opt-in location, collection, one-use admin invite.");

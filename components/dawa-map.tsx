@@ -4,7 +4,7 @@ import type { Map as LeafletMap, LayerGroup } from "leaflet";
 import type { Pharmacy } from "@/lib/domain";
 import { cities } from "@/lib/domain";
 
-export function DawaMap({ city, pharmacies, position, onSelect }: { city: string; pharmacies: Pharmacy[]; position: { lat: number; lng: number } | null; onSelect: (pharmacy: Pharmacy) => void }) {
+export function DawaMap({ city, pharmacies, position, onSelect, approaches = [] }: { city: string; pharmacies: Pharmacy[]; position: { lat: number; lng: number } | null; onSelect: (pharmacy: Pharmacy) => void; approaches?: { lat: number; lng: number; label: string }[] }) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<LeafletMap | null>(null);
   const markers = useRef<LayerGroup | null>(null);
@@ -30,7 +30,7 @@ export function DawaMap({ city, pharmacies, position, onSelect }: { city: string
   useEffect(() => {
     if (!ready || !map.current || !markers.current) return;
     const center = cities.find((item) => item.id === city) || cities[0];
-    map.current.setView([center.lat, center.lng], 12);
+    if (!map.current.getBounds().contains([center.lat, center.lng])) map.current.setView([center.lat, center.lng], 12);
     markers.current.clearLayers();
     void import("leaflet").then((L) => {
       if (!markers.current) return;
@@ -44,7 +44,8 @@ export function DawaMap({ city, pharmacies, position, onSelect }: { city: string
         marker.on("click", () => callback.current(pharmacy));
       });
       if (position) L.circleMarker([position.lat, position.lng], { radius: 7, color: "#3566a1", fillColor: "#7196df", fillOpacity: 1 }).addTo(markers.current!);
+      approaches.forEach((point) => { const label = document.createElement("span"); label.textContent = point.label; L.circle([point.lat, point.lng], { radius: 100, color: "#306df1", fillOpacity: .18 }).addTo(markers.current!).bindPopup(label); });
     });
-  }, [ready, city, pharmacies, position]);
+  }, [ready, city, pharmacies, position, approaches]);
   return <div ref={element} className="dawa-map" role="application" aria-label="OpenStreetMap" />;
 }

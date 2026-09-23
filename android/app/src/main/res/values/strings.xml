@@ -1,0 +1,4 @@
+<resources>
+  <string name="asset_statements">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://luqya-algeria.adcker-7656.chatgpt.site\"}}]</string>
+  <color name="brand">#123344</color>
+</resources>
