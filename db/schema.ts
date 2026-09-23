@@ -1,0 +1,41 @@
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+export const profiles = sqliteTable("profiles", {
+  id: text("id").primaryKey(), name: text("name").notNull(), city: text("city").notNull().default("algiers"),
+});
+export const pharmacySettings = sqliteTable("pharmacy_settings", {
+  owner: text("owner").notNull(), pharmacy: text("pharmacy").notNull(), duty: integer("duty").notNull(),
+}, (t) => [primaryKey({ columns: [t.owner, t.pharmacy] })]);
+export const requests = sqliteTable("requests", {
+  id: text("id").primaryKey(), owner: text("owner").notNull(), medicine: text("medicine").notNull(),
+  city: text("city").notNull(), created: integer("created").notNull(),
+}, (t) => [index("idx_requests_owner_created").on(t.owner, t.created)]);
+export const responses = sqliteTable("responses", {
+  request: text("request").notNull().references(() => requests.id), pharmacy: text("pharmacy").notNull(),
+  status: text("status").notNull().default("pending"), updated: integer("updated"),
+}, (t) => [primaryKey({ columns: [t.request, t.pharmacy] })]);
+export const reservations = sqliteTable("reservations", {
+  id: text("id").primaryKey(), owner: text("owner").notNull(), request: text("request").notNull().references(() => requests.id),
+  pharmacy: text("pharmacy").notNull(), code: text("code").notNull(),
+  created: integer("created").notNull(), expires: integer("expires").notNull(),
+  status: text("status").notNull().default("active"),
+}, (t) => [uniqueIndex("idx_reservations_request").on(t.request), index("idx_reservations_owner").on(t.owner)]);
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(), owner: text("owner").notNull(), title: text("title").notNull(),
+  created: integer("created").notNull(), read: integer("read").notNull().default(0),
+}, (t) => [index("idx_notifications_owner_created").on(t.owner, t.created)]);
+
+export const registeredPharmacies = sqliteTable("registered_pharmacies", {
+  id: text("id").primaryKey(), owner: text("owner").notNull().unique(),
+  name: text("name").notNull(), address: text("address").notNull(), city: text("city").notNull(),
+  latitude: integer("latitude").notNull(), longitude: integer("longitude").notNull(),
+  phone: text("phone").notNull(), license: text("license").notNull(),
+  status: text("status").notNull().default("pending"), duty: integer("duty").notNull().default(0),
+  hours: text("hours").notNull().default("08:00 — 20:00"),
+  created: integer("created").notNull(), updated: integer("updated").notNull(),
+}, (t) => [index("idx_registered_pharmacies_city_status").on(t.city, t.status)]);
+
+export const stockItems = sqliteTable("stock_items", {
+  id: text("id").primaryKey(), pharmacy: text("pharmacy").notNull().references(() => registeredPharmacies.id),
+  name: text("name").notNull(), quantity: integer("quantity").notNull(), updated: integer("updated").notNull(),
+}, (t) => [uniqueIndex("idx_stock_items_pharmacy_name").on(t.pharmacy, t.name)]);

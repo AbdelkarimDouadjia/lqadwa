@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+// Mutates only the local development database. Uses a conspicuously fake pharmacy.
+const origin = "http://localhost:5173";
+const login = await fetch(`${origin}/signin-with-chatgpt?return_to=/`, { redirect: "manual" });
+const cookie = login.headers.get("set-cookie")?.split(";")[0];
+assert(cookie, "local development session");
+async function post(input, status = 200) {
+  const response = await fetch(`${origin}/api/app`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" }, body: JSON.stringify(input) });
+  const body = await response.json();
+  assert.equal(response.status, status, `${input.action}: ${JSON.stringify(body)}`);
+  return body;
+}
+const registration = { action: "register-pharmacy", name: "صيدلية اختبار آلي - غير حقيقية", address: "عنوان اختباري محلي فقط، الجزائر", city: "algiers", latitude: 36.7538, longitude: 3.0588, phone: "0550000000", license: "TEST-DO-NOT-APPROVE" };
+let data = await post(registration);
+const pharmacy = data.ownPharmacy;
+assert.equal(pharmacy.status, "pending");
+assert(data.admin.applications.some((row) => row.id === pharmacy.id));
+await post({ action: "stock-upsert", pharmacy: pharmacy.id, name: "دواء تجريبي", quantity: 2 }, 403);
+data = await post({ action: "admin-review", pharmacy: pharmacy.id, status: "approved" });
+assert.equal(data.ownPharmacy.status, "approved");
+data = await post({ action: "stock-upsert", pharmacy: pharmacy.id, name: "دواء تجريبي", quantity: 2 });
+assert.equal(data.stock.find((row) => row.name === "دواء تجريبي")?.quantity, 2);
+const token = randomUUID();
+data = await post({ action: "search", medicine: "دواء تجريبي", city: "algiers", night: false, token });
+assert(data.staffRequests.some((row) => row.id === token));
+data = await post({ action: "reply", request: token, pharmacy: pharmacy.id, available: true });
+assert.equal(data.responses.find((row) => row.request === token && row.pharmacy === pharmacy.id)?.status, "yes");
+data = await post({ action: "reserve", request: token, pharmacy: pharmacy.id, consent: true });
+const booking = data.reservations.find((row) => row.request === token);
+assert(booking && booking.code);
+assert(data.staffBookings.some((row) => row.id === booking.id));
+data = await post({ action: "collect", reservation: booking.id, pharmacy: pharmacy.id, code: booking.code, checked: true });
+assert.equal(data.reservations.find((row) => row.id === booking.id).status, "collected");
+data = await post({ action: "stock-delete", pharmacy: pharmacy.id, item: data.stock[0].id });
+assert.equal(data.stock.length, 0);
+data = await post({ action: "admin-review", pharmacy: pharmacy.id, status: "suspended" });
+assert.equal(data.ownPharmacy.status, "suspended");
+await post({ action: "stock-upsert", pharmacy: pharmacy.id, name: "دواء تجريبي", quantity: 1 }, 403);
+console.log("PASS: pharmacy application, admin approval/suspension, stock guard and CRUD, verified inbox, reply, reservation, collection.");
