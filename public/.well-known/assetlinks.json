@@ -1,1 +1,1 @@
-[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"dz.luqya.pilot","sha256_cert_fingerprints":["6E:6D:C8:8E:88:19:86:29:01:1B:6A:E5:D2:A7:2C:68:F7:AC:C5:B7:4C:5C:25:51:84:BE:66:AB:02:21:5A:20"]}}]
+[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"dz.lqidwa.pilot","sha256_cert_fingerprints":["6E:6D:C8:8E:88:19:86:29:01:1B:6A:E5:D2:A7:2C:68:F7:AC:C5:B7:4C:5C:25:51:84:BE:66:AB:02:21:5A:20"]}}]

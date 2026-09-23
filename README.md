@@ -1,4 +1,4 @@
-# لُقيا — LUQYA
+# لقيدوا — LQIDWA
 
 An Algerian pharmacy-orientation pilot in Arabic RTL, French, English and draft Kabyle. Patients request medicine availability, verified pharmacists answer, and a two-hour pickup code/QR is issued. There is **no in-app medicine sale, delivery, prescription upload, or promise of live stock**. Patients are always free. The pharmacy subscription is shown as 300 DA/month, waived through September 30, 2027; billing is not enabled.
 
@@ -40,13 +40,13 @@ The role smoke test creates and suspends a conspicuously fake pharmacy in the **
 - Fictional pharmacies are visible only with the explicit demo toggle (`?demo=1`). Their automatic responses and bookings are demonstrations. They are never routed to for actual pickup. Real mode shows only admin-approved registrations.
 - No medicine photos or prescription files are sent to the server for OCR. The only patient search data stored is the medicine name and selected wilaya; avoid entering diagnosis/personal health details in that field.
 
-The generated LUQYA logo is `public/brand/luqya.png`, paired with the Arabic wordmark in the UI. The name is a working brand, not a trademark clearance. IBM Plex Sans Arabic fonts in `public/fonts/` use the IBM Plex OFL license.
+The generated LQIDWA logo is `public/brand/luqya.png`, paired with the Arabic wordmark in the UI. The name is a working brand, not a trademark clearance. IBM Plex Sans Arabic fonts in `public/fonts/` use the IBM Plex OFL license.
 
 ## Mobile pilot and navigation
 
 `android/` builds a signed pilot APK using Android Browser Helper (Trusted Web Activity), sharing the live website's authentication, camera-file upload, geolocation and database. A supporting browser such as Chrome is required. Authentication may show browser controls on the identity-provider origin. Internet is required; offline mode displays a reconnect screen and never caches patient records. No background location tracking, offline medicine inventory or push notifications are claimed. Android 6+ is supported; this pilot is not a Play Store release.
 
-Build with Java 17+, Gradle 8.6 and Android SDK 34: set `ANDROID_HOME`, then `gradle -p android assembleRelease`. The release pilot uses the local Android debug signing key; retain that key for pilot updates. Before store distribution, use a dedicated release key and update `.well-known/assetlinks.json` with its SHA-256 fingerprint. No signing keys are committed. Download artifact: `public/downloads/luqya-demo.apk`.
+Build with Java 17+, Gradle 8.6 and Android SDK 34: set `ANDROID_HOME`, then `gradle -p android assembleRelease`. The release pilot uses the local Android debug signing key; retain that key for pilot updates. Before store distribution, use a dedicated release key and update `.well-known/assetlinks.json` with its SHA-256 fingerprint. No signing keys are committed. Download artifact: `public/downloads/lqidwa-demo.apk`.
 
 Map planning uses FOSSGIS public OSRM car and foot profiles, with explicit location disclosure, manual recalculation, route geometry, estimated time/distance, and an optional device-local live marker. Google Maps links provide turn-by-turn navigation and transit where available. No live traffic or comprehensive Algerian transit coverage is claimed. Public routing is limited to light pilot traffic (provider max one request/second); contract/self-host before scale. Booking approach sharing is opt-in, coarsened to about 100 m, accessible only to the assigned verified pharmacy, and disappears when stale. It runs while the app is open, not in the background.
 

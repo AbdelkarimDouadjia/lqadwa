@@ -1,5 +1,5 @@
 {
-  "id": "/", "name": "LUQYA · لُقيا", "short_name": "LUQYA", "description": "Find your medicine. Collect at your pharmacy.",
+  "id": "/", "name": "LQIDWA · لقيدوا", "short_name": "LQIDWA", "description": "Find your medicine. Collect at your pharmacy.",
   "start_url": "/#search", "scope": "/", "display": "standalone", "background_color": "#123344", "theme_color": "#123344", "lang": "ar", "dir": "rtl",
   "icons": [{ "src": "/brand/luqya.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any maskable" }],
   "shortcuts": [{ "name": "البحث · Search", "url": "/#search" }, { "name": "طلباتي · Bookings", "url": "/#bookings" }, { "name": "الصيدلية · Pharmacy", "url": "/#pharmacy" }]
