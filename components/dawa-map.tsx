@@ -10,7 +10,7 @@ export function DawaMap({ city, pharmacies, position, onSelect }: { city: string
   const markers = useRef<LayerGroup | null>(null);
   const callback = useRef(onSelect);
   const [ready, setReady] = useState(false);
-  callback.current = onSelect;
+  useEffect(() => { callback.current = onSelect; }, [onSelect]);
   useEffect(() => {
     let disposed = false;
     let current: LeafletMap | null = null;

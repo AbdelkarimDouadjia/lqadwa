@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Bell, BookmarkCheck, Camera, Check, CheckCheck, Clock3, Copy, FileCheck2, Globe2, LocateFixed, MapPin, Moon, MoonStar, Navigation, Package, Pill, QrCode, RefreshCw, Search, ShieldCheck, Store, Sun, Trash2, UserRound, WifiOff, X } from "lucide-react";
+import { Bell, BookmarkCheck, Camera, Check, CheckCheck, Clock3, Copy, FileCheck2, Globe2, LocateFixed, MapPin, Moon, MoonStar, Navigation, Package, QrCode, RefreshCw, Search, ShieldCheck, Store, Sun, Trash2, UserRound, WifiOff, X } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
   const [dark, setDark] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("algiers");
   const [night, setNight] = useState(false);
@@ -75,13 +75,13 @@ export default function HomePage() {
   }, [language]);
   useEffect(() => {
     const stored = localStorage.getItem("dawa-language");
-    if (stored === "ar" || stored === "fr" || stored === "en") setLanguage(stored);
+    if (stored === "ar" || stored === "fr" || stored === "en") queueMicrotask(() => setLanguage(stored));
     const preferred = localStorage.getItem("dawa-theme") === "dark";
-    setDark(preferred); document.documentElement.dataset.theme = preferred ? "dark" : "light";
+    queueMicrotask(() => setDark(preferred)); document.documentElement.dataset.theme = preferred ? "dark" : "light";
     const hash = () => { const next = window.location.hash.slice(1); if (["search", "bookings", "map", "account", "pharmacy", "admin"].includes(next)) setView(next as View); };
-    hash(); window.addEventListener("hashchange", hash);
+    queueMicrotask(hash); window.addEventListener("hashchange", hash);
     const connection = () => setOffline(!navigator.onLine);
-    connection(); window.addEventListener("online", connection); window.addEventListener("offline", connection);
+    queueMicrotask(connection); window.addEventListener("online", connection); window.addEventListener("offline", connection);
     return () => { window.removeEventListener("hashchange", hash); window.removeEventListener("online", connection); window.removeEventListener("offline", connection); };
   }, []);
   useEffect(() => {
@@ -90,7 +90,7 @@ export default function HomePage() {
     localStorage.setItem("dawa-language", language);
   }, [language, t]);
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
     const timer = window.setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine) void load(); }, 8000);
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
     return () => { clearInterval(timer); clearInterval(clock); };
@@ -179,8 +179,8 @@ export default function HomePage() {
   const replies = data.responses.filter((item) => item.request === activeRequest);
   const activeBookings = data.reservations.filter((item) => item.status === "active" && item.expires > now);
   const unread = data.notifications.filter((item) => !item.read).length;
-  const center = position || { lat: selectedCity.lat, lng: selectedCity.lng };
-  const nearby = useMemo(() => data.pharmacies.filter((item) => item.city === city && (!night || item.duty)).map((item) => ({ ...item, distance: distanceMeters(center, item) })).sort((a, b) => a.distance - b.distance), [data.pharmacies, city, night, center.lat, center.lng]);
+  const latitude = position?.lat ?? selectedCity.lat, longitude = position?.lng ?? selectedCity.lng;
+  const nearby = useMemo(() => data.pharmacies.filter((item) => item.city === city && (!night || item.duty)).map((item) => ({ ...item, distance: distanceMeters({ lat: latitude, lng: longitude }, item) })).sort((a, b) => a.distance - b.distance), [data.pharmacies, city, night, latitude, longitude]);
   const results = nearby.filter((item) => (!active || replies.some((reply) => reply.pharmacy === item.id)) && (!onlyAvailable || isFreshReply(replies.find((reply) => reply.pharmacy === item.id), now)));
   const seen = data.responses.filter((item) => item.request === activeRequest && isFreshReply(item, now)).length;
   const own = data.ownPharmacy;
