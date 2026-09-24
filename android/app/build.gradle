@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'dz.lqidwa.pilot'
     compileSdk 34
-    defaultConfig { applicationId 'dz.lqidwa.pilot'; minSdk 23; targetSdk 34; versionCode 1; versionName '0.9.0-demo' }
+    defaultConfig { applicationId 'dz.lqidwa.pilot'; minSdk 23; targetSdk 34; versionCode 2; versionName '0.9.1-demo' }
     // Pilot-only signing. Use a dedicated upload key before Play Store release.
     buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
 }

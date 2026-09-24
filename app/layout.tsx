@@ -3,11 +3,11 @@ import "./globals.css";
 import "./luqya.css";
 
 export const metadata: Metadata = {
-  title: "لقيدوا · LQIDWA | دواؤك أقرب إليك",
+  title: "لقى دوا · LQADWA | دواؤك أقرب إليك",
   description: "منصة جزائرية مجانية للبحث عن توفر الدواء وحجزه للاستلام من الصيدلية.",
   icons: { icon: "/brand/luqya.png", shortcut: "/brand/luqya.png", apple: "/brand/luqya.png" },
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "LQIDWA", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "LQADWA", statusBarStyle: "black-translucent" },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#123344" };
 
