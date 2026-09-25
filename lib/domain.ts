@@ -29,7 +29,12 @@ export type AppData = {
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;
   staffRequests: StaffRequest[]; staffBookings: StaffBooking[]; stock: StockItem[];
-  admin: { applications: (PharmacyApplication & { owner: string })[]; users: number; searches: number; bookings: number; canInvite: boolean } | null;
+  admin: { applications: (PharmacyApplication & { owner: string })[]; users: number; searches: number; bookings: number; canInvite: boolean;
+    accounts: { id: string; name: string; city: string; suspended: number; reason: string }[];
+    members: { owner: string; name: string; created: number }[];
+    activity: { id: string; actor: string; action: string; target: string; detail: string; created: number }[];
+    inventory: (StockItem & { pharmacyName: string })[];
+  } | null;
 };
 export function normalize(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f\u064B-\u065F]/g, "").replace(/[أإآ]/g, "ا").toLowerCase().trim();

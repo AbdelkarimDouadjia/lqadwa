@@ -1,20 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
-  <application android:label="LQADWA · لقى دوا" android:icon="@drawable/luqya" android:supportsRtl="true" android:allowBackup="false" android:theme="@android:style/Theme.Translucent.NoTitleBar">
-    <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
-    <activity android:name=".LaunchActivity" android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <application android:label="LQADWA · لقى دوا" android:icon="@drawable/luqya" android:supportsRtl="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@style/LqadwaTheme">
+    <activity android:name=".LaunchActivity" android:exported="true">
       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
     </activity>
-    <activity android:name="com.google.androidbrowserhelper.trusted.LauncherActivity" android:exported="true">
-      <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://lqadwa.adcker-7656.chatgpt.site/?app=1&amp;demo=1#search" />
-      <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/brand" />
-      <meta-data android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR" android:resource="@color/brand" />
-      <meta-data android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE" android:resource="@drawable/luqya" />
-      <meta-data android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR" android:resource="@color/brand" />
-      <meta-data android:name="android.support.customtabs.trusted.SPLASH_SCREEN_FADE_OUT_DURATION" android:value="220" />
-      <meta-data android:name="android.support.customtabs.trusted.FILE_PROVIDER_AUTHORITY" android:value="dz.lqidwa.pilot.fileprovider" />
-      <intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="lqadwa.adcker-7656.chatgpt.site" /></intent-filter>
-    </activity>
+    <activity android:name=".MainActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
     <provider android:name="androidx.core.content.FileProvider" android:authorities="dz.lqidwa.pilot.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/filepaths" /></provider>
   </application>
 </manifest>

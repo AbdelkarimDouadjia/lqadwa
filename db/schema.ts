@@ -51,3 +51,17 @@ export const reservationLocations = sqliteTable("reservation_locations", {
   reservation: text("reservation").primaryKey().references(() => reservations.id),
   latitude: integer("latitude").notNull(), longitude: integer("longitude").notNull(), updated: integer("updated").notNull(),
 }, (t) => [index("idx_reservation_locations_updated").on(t.updated)]);
+
+export const accountControls = sqliteTable("account_controls", {
+  owner: text("owner").primaryKey(), suspended: integer("suspended").notNull().default(0), reason: text("reason").notNull().default(""),
+});
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(), actor: text("actor").notNull(), action: text("action").notNull(), target: text("target").notNull(), detail: text("detail").notNull(), created: integer("created").notNull(),
+}, t => [index("idx_audit_created").on(t.created)]);
+export const deviceLinks = sqliteTable("device_links", {
+  id: text("id").primaryKey(), challenge: text("challenge").notNull(), code: text("code").notNull(), requestKey: text("request_key").notNull(),
+  created: integer("created").notNull(), expires: integer("expires").notNull(), owner: text("owner"), consumed: integer("consumed").notNull().default(0), attempts: integer("attempts").notNull().default(0),
+}, t => [index("idx_device_key_created").on(t.requestKey, t.created)]);
+export const mobileSessions = sqliteTable("mobile_sessions", {
+  hash: text("hash").primaryKey(), owner: text("owner").notNull(), created: integer("created").notNull(), expires: integer("expires").notNull(),
+}, t => [index("idx_mobile_owner").on(t.owner)]);

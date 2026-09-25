@@ -1,6 +1,5 @@
-import { env } from "cloudflare:workers";
 import { z } from "zod";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { identity, HttpError, isAdmin, isRootAdmin, tokenHash, audit } from "@/lib/access";
 import { database } from "@/db";
 import { cities, pharmacies, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
@@ -18,28 +17,24 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("register-pharmacy"), name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city: cityId, latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/), license: z.string().trim().min(5).max(100) }),
   z.object({ action: z.literal("admin-review"), pharmacy: id, status: z.enum(["approved", "rejected", "suspended"]) }),
   z.object({ action: z.literal("admin-invite-create") }),
+  z.object({ action: z.literal("admin-account"), owner: id, suspended: z.boolean(), reason: z.string().trim().min(3).max(200) }),
+  z.object({ action: z.literal("admin-revoke"), owner: id }),
+  z.object({ action: z.literal("admin-invites-revoke") }),
+  z.object({ action: z.literal("admin-pharmacy-edit"), pharmacy: id, name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), phone: z.string().regex(/^0\d{8,9}$/), hours: z.string().trim().min(3).max(100) }),
+  z.object({ action: z.literal("sessions-revoke") }),
   z.object({ action: z.literal("admin-invite-redeem"), token: z.string().regex(/^[0-9a-f-]{73}$/) }),
   z.object({ action: z.literal("share-location"), reservation: id, enabled: z.boolean(), latitude: z.number().min(18.9).max(38).optional(), longitude: z.number().min(-9).max(12).optional() }),
   z.object({ action: z.literal("stock-upsert"), pharmacy: id, name: z.string().trim().min(2).max(100), quantity: z.number().int().min(0).max(9999) }),
   z.object({ action: z.literal("stock-delete"), pharmacy: id, item: id }),
   z.object({ action: z.literal("read-notifications") }),
 ]);
-class HttpError extends Error { constructor(message: string, public status = 400) { super(message); } }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 type Registered = PharmacyApplication & { owner: string };
-function isRootAdmin(owner: string) { return (env.APP_ADMIN_IDS?.split(",").map((value) => value.trim()) || []).includes(owner) || (import.meta.env.DEV && owner === "local_seedy"); }
-async function isAdmin(owner: string, db: ReturnType<typeof database>) { return isRootAdmin(owner) || Boolean(await db.prepare("SELECT owner FROM admin_members WHERE owner = ?").bind(owner).first()); }
-async function tokenHash(token: string) { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))), (n) => n.toString(16).padStart(2, "0")).join(""); }
 function pharmacyFromRow(row: Registered): Pharmacy {
   const center = cities.find((city) => city.id === row.city) || cities[0];
   return { id: row.id, name: row.name, city: row.city, area: row.address, lat: row.latitude / 1e6, lng: row.longitude / 1e6, phone: row.phone, pilot: false, duty: Boolean(row.duty), hours: row.hours, distance: Math.round(Math.hypot(center.lat - row.latitude / 1e6, (center.lng - row.longitude / 1e6) * Math.cos(center.lat * Math.PI / 180)) * 111_000) };
 }
 
-async function identity() {
-  const user = await getChatGPTUser();
-  if (!user) throw new HttpError("سجّل الدخول لحفظ طلباتك بأمان.", 401);
-  return user;
-}
 function errorResponse(error: unknown) {
   if (error instanceof HttpError) return json({ error: error.message }, error.status);
   if (error instanceof z.ZodError) return json({ error: "تحقق من البيانات المدخلة ثم أعد المحاولة." }, 400);
@@ -76,8 +71,12 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
       db.prepare("SELECT count(*) AS n FROM profiles"),
       db.prepare("SELECT count(*) AS n FROM requests"),
       db.prepare("SELECT count(*) AS n FROM reservations"),
+      db.prepare("SELECT p.id, p.name, p.city, COALESCE(c.suspended, 0) AS suspended, COALESCE(c.reason, '') AS reason FROM profiles p LEFT JOIN account_controls c ON c.owner = p.id ORDER BY p.name LIMIT 200"),
+      db.prepare("SELECT a.owner, p.name, a.created FROM admin_members a LEFT JOIN profiles p ON p.id = a.owner ORDER BY a.created DESC"),
+      db.prepare("SELECT a.id, a.action, a.target, a.detail, a.created, COALESCE(p.name, a.actor) AS actor FROM audit_log a LEFT JOIN profiles p ON p.id = a.actor ORDER BY a.created DESC LIMIT 100"),
+      db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated, p.name AS pharmacyName FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy ORDER BY s.updated DESC LIMIT 200"),
     ]);
-    admin = { applications: rows[0].results as Registered[], users: Number((rows[1].results[0] as { n: number }).n), searches: Number((rows[2].results[0] as { n: number }).n), bookings: Number((rows[3].results[0] as { n: number }).n), canInvite: isRootAdmin(owner) };
+    admin = { applications: rows[0].results as Registered[], users: Number((rows[1].results[0] as { n: number }).n), searches: Number((rows[2].results[0] as { n: number }).n), bookings: Number((rows[3].results[0] as { n: number }).n), canInvite: isRootAdmin(owner), accounts: rows[4].results as NonNullable<AppData["admin"]>["accounts"], members: rows[5].results as NonNullable<AppData["admin"]>["members"], activity: rows[6].results as NonNullable<AppData["admin"]>["activity"], inventory: rows[7].results as NonNullable<AppData["admin"]>["inventory"] };
   }
   return {
     profile: results[0].results[0] as AppData["profile"],
@@ -89,21 +88,21 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
     role: admin ? "admin" : ownPharmacy ? "pharmacist" : "client", admin,
   };
 }
-export async function GET() {
-  try { const user = await identity(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك")); }
+export async function GET(request: Request) {
+  try { const user = await identity(request); return json(await snapshot(user.userId, user.fullName || "مرحباً بك")); }
   catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {
   try {
     const origin = request.headers.get("origin");
-    if (!origin || origin !== new URL(request.url).origin) throw new HttpError("مصدر الطلب غير صالح.", 403);
+    if ((!origin || origin !== new URL(request.url).origin) && !request.headers.has("x-lqadwa-session")) throw new HttpError("مصدر الطلب غير صالح.", 403);
     if (!request.headers.get("content-type")?.startsWith("application/json")) throw new HttpError("نوع طلب غير صالح.", 415);
     const raw = await request.text();
     if (raw.length > 4096) throw new HttpError("الطلب أكبر من الحجم المسموح.", 413);
     let parsed: unknown;
     try { parsed = JSON.parse(raw); } catch { throw new HttpError("بيانات الطلب غير صالحة."); }
     const input = actionSchema.parse(parsed);
-    const user = await identity();
+    const user = await identity(request);
     const owner = user.userId, db = database(), now = Date.now();
     const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) VALUES (?, ?, ?, ?, 0)").bind(crypto.randomUUID(), recipient, title, now);
     // Demo locations are synthetic and isolated from approved pharmacies.
@@ -186,20 +185,44 @@ export async function POST(request: Request) {
       if (!await isAdmin(owner, db)) throw new HttpError("هذه العملية متاحة للإدارة فقط.", 403);
       const application = await db.prepare("SELECT owner, name FROM registered_pharmacies WHERE id = ?").bind(input.pharmacy).first<{ owner: string; name: string }>();
       if (!application) throw new HttpError("الطلب غير موجود.", 404);
+      if (input.status === "approved" && await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(application.owner).first()) throw new HttpError("أعد تفعيل حساب المالك قبل اعتماد الصيدلية.", 409);
       await db.prepare("UPDATE registered_pharmacies SET status = ?, updated = ? WHERE id = ?").bind(input.status, now, input.pharmacy).run();
+      await audit(owner, "pharmacy-status", input.pharmacy, `${application.name}: ${input.status}`).run();
       await notify(`تحديث طلب صيدلية ${application.name}: ${input.status === "approved" ? "تم الاعتماد" : input.status === "rejected" ? "تحتاج البيانات إلى مراجعة" : "تم تعليق الحساب"}.`, application.owner).run();
+    } else if (input.action === "admin-account") {
+      if (!await isAdmin(owner) || input.owner === owner || isRootAdmin(input.owner) || (await isAdmin(input.owner) && !isRootAdmin(owner))) throw new HttpError("لا يمكنك تغيير هذا الحساب.", 403);
+      if (!await db.prepare("SELECT id FROM profiles WHERE id = ?").bind(input.owner).first()) throw new HttpError("الحساب غير موجود.", 404);
+      await db.batch([
+        db.prepare("INSERT INTO account_controls (owner, suspended, reason) VALUES (?, ?, ?) ON CONFLICT(owner) DO UPDATE SET suspended = excluded.suspended, reason = excluded.reason").bind(input.owner, Number(input.suspended), input.reason),
+        db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner),
+        audit(owner, input.suspended ? "account-suspend" : "account-reactivate", input.owner, input.reason),
+      ]);
+      if (input.suspended) await db.prepare("UPDATE registered_pharmacies SET status = 'suspended', updated = ? WHERE owner = ? AND status = 'approved'").bind(now, input.owner).run();
+    } else if (input.action === "admin-revoke") {
+      if (!isRootAdmin(owner) || isRootAdmin(input.owner) || input.owner === owner) throw new HttpError("صلاحية المالك مطلوبة.", 403);
+      await db.batch([db.prepare("DELETE FROM admin_members WHERE owner = ?").bind(input.owner), db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner), audit(owner, "admin-revoke", input.owner, "Access revoked")]);
+    } else if (input.action === "admin-invites-revoke") {
+      if (!isRootAdmin(owner)) throw new HttpError("صلاحية المالك مطلوبة.", 403);
+      await db.batch([db.prepare("UPDATE admin_invites SET expires = ? WHERE used_by IS NULL").bind(now), audit(owner, "invites-revoke", "pending", "Pending invitations invalidated")]);
+    } else if (input.action === "admin-pharmacy-edit") {
+      if (!await isAdmin(owner)) throw new HttpError("صلاحية الإدارة مطلوبة.", 403);
+      const result = await db.prepare("UPDATE registered_pharmacies SET name = ?, address = ?, phone = ?, hours = ?, updated = ? WHERE id = ?").bind(input.name, input.address, input.phone, input.hours, now, input.pharmacy).run();
+      if (!result.meta.changes) throw new HttpError("الصيدلية غير موجودة.", 404);
+      await audit(owner, "pharmacy-edit", input.pharmacy, input.name).run();
+    } else if (input.action === "sessions-revoke") {
+      await db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(owner).run();
     } else if (input.action === "admin-invite-create") {
       if (!isRootAdmin(owner)) throw new HttpError("دعوات الإدارة متاحة لمالك المنصة فقط.", 403);
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
       await db.prepare("INSERT INTO admin_invites (hash, created_by, created, expires) VALUES (?, ?, ?, ?)").bind(await tokenHash(token), owner, now, now + 7 * 24 * 3600_000).run();
+      await audit(owner, "admin-invite", "pending", "7 day, single-use invitation").run();
       return json({ ...await snapshot(owner, user.fullName || "مرحباً بك"), invite: token });
     } else if (input.action === "admin-invite-redeem") {
       const hash = await tokenHash(input.token);
-      const results = await db.batch([
-        db.prepare("UPDATE admin_invites SET used_by = ? WHERE hash = ? AND used_by IS NULL AND expires > ?").bind(owner, hash, now),
-        db.prepare("INSERT INTO admin_members (owner, invited_by, created) SELECT ?, created_by, ? FROM admin_invites WHERE hash = ? AND used_by = ? ON CONFLICT(owner) DO NOTHING").bind(owner, now, hash, owner),
-      ]);
-      if (!results[0].meta.changes) throw new HttpError("رابط الدعوة غير صالح أو استُخدم من قبل.", 409);
+      const invitation = await db.prepare("UPDATE admin_invites SET used_by = ? WHERE hash = ? AND used_by IS NULL AND expires > ? RETURNING created_by").bind(owner, hash, now).first<{ created_by: string }>();
+      if (!invitation) throw new HttpError("رابط الدعوة غير صالح أو استُخدم من قبل.", 409);
+      await db.prepare("INSERT INTO admin_members (owner, invited_by, created) VALUES (?, ?, ?) ON CONFLICT(owner) DO NOTHING").bind(owner, invitation.created_by, now).run();
+      await audit(owner, "admin-joined", owner, "Invitation accepted").run();
     } else if (input.action === "share-location") {
       const booking = await db.prepare("SELECT b.id FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ? AND b.owner = ? AND b.status = 'active' AND b.expires > ? AND p.status = 'approved'").bind(input.reservation, owner, now).first();
       if (!booking) throw new HttpError("الموقع متاح للحجز الحقيقي النشط فقط.", 403);

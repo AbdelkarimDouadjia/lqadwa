@@ -14,12 +14,12 @@ import android.widget.TextView;
 import android.provider.Settings;
 import java.util.Locale;
 
-/** Native launch screen; the verified TWA takes over without a browser toolbar. */
+/** Native launch screen followed by native application views. */
 public final class LaunchActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable openApp = () -> {
         if (isFinishing()) return;
-        startActivity(new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class));
+        startActivity(new Intent(this, MainActivity.class));
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         finish();
     };
