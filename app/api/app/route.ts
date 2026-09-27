@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { stopPharmacyBookings } from "@/lib/pharmacy-status";
+import { limitedJson, requireMutationOrigin, rateLimit, maintainEphemeralData } from "@/lib/http-security";
 import { identity, HttpError, isAdmin, isRootAdmin, tokenHash, audit } from "@/lib/access";
 import { database } from "@/db";
 import { cities, pharmacies, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
@@ -38,14 +40,14 @@ function pharmacyFromRow(row: Registered): Pharmacy {
 function errorResponse(error: unknown) {
   if (error instanceof HttpError) return json({ error: error.message }, error.status);
   if (error instanceof z.ZodError) return json({ error: "تحقق من البيانات المدخلة ثم أعد المحاولة." }, 400);
-  console.error("Application request failed", error instanceof Error ? error.message : "unknown");
+  console.error("Application request failed", error instanceof Error ? error.name : "unknown");
   return json({ error: "تعذّر الاتصال بالخدمة. بياناتك الحالية محفوظة؛ حاول مجدداً." }, 503);
 }
 async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
   const db = database();
   const now = Date.now();
   await db.batch([
-    db.prepare("INSERT INTO profiles (id, name, city) VALUES (?, ?, 'algiers') ON CONFLICT(id) DO NOTHING").bind(owner, fallbackName),
+    db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, 'algiers' WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING").bind(owner, fallbackName, await tokenHash(owner)),
     db.prepare("UPDATE reservations SET status = 'expired' WHERE owner = ? AND status = 'active' AND expires <= ?").bind(owner, now),
     db.prepare("DELETE FROM reservation_locations WHERE updated < ?").bind(now - 5 * 60_000),
   ]);
@@ -89,22 +91,17 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
   };
 }
 export async function GET(request: Request) {
-  try { const user = await identity(request); return json(await snapshot(user.userId, user.fullName || "مرحباً بك")); }
+  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك")); }
   catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {
   try {
-    const origin = request.headers.get("origin");
-    if ((!origin || origin !== new URL(request.url).origin) && !request.headers.has("x-lqadwa-session")) throw new HttpError("مصدر الطلب غير صالح.", 403);
-    if (!request.headers.get("content-type")?.startsWith("application/json")) throw new HttpError("نوع طلب غير صالح.", 415);
-    const raw = await request.text();
-    if (raw.length > 4096) throw new HttpError("الطلب أكبر من الحجم المسموح.", 413);
-    let parsed: unknown;
-    try { parsed = JSON.parse(raw); } catch { throw new HttpError("بيانات الطلب غير صالحة."); }
-    const input = actionSchema.parse(parsed);
+    requireMutationOrigin(request);
+    const input = actionSchema.parse(await limitedJson(request));
     const user = await identity(request);
-    const owner = user.userId, db = database(), now = Date.now();
-    const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) VALUES (?, ?, ?, ?, 0)").bind(crypto.randomUUID(), recipient, title, now);
+    const owner = user.userId, db = database(), now = Date.now(), ownerHash = await tokenHash(user.userId);
+    await rateLimit(owner, input.action === "collect" ? "pickup-attempt" : "mutation", input.action === "collect" ? 10 : 90);
+    const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, ?, ?, ?, 0 WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ?)").bind(crypto.randomUUID(), recipient, title, now, recipient);
     // Demo locations are synthetic and isolated from approved pharmacies.
     if ("pharmacy" in input && input.action !== "admin-review" && !pharmacies.some((p) => p.id === input.pharmacy)) {
       const registered = await db.prepare("SELECT id FROM registered_pharmacies WHERE id = ?").bind(input.pharmacy).first();
@@ -116,10 +113,10 @@ export async function POST(request: Request) {
         const count = await db.prepare("SELECT count(*) AS n FROM requests WHERE owner = ? AND created > ?").bind(owner, now - 60_000).first<{ n: number }>();
         if ((count?.n || 0) >= 8) throw new HttpError("طلبات كثيرة خلال دقيقة واحدة. انتظر قليلاً ثم حاول.", 429);
         const current = await snapshot(owner, user.fullName || "مرحباً بك");
-        const targets = current.pharmacies.filter((p) => p.city === input.city && (!input.night || p.duty) && p.pilot === input.demo);
+        const targets = current.pharmacies.filter((p) => p.city === input.city && (!input.night || p.duty) && p.pilot === input.demo).sort((a, b) => a.distance - b.distance).slice(0, 25);
         if (!targets.length) throw new HttpError("لا توجد صيدليات مناوبة في النطاق المختار. جرّب جميع الصيدليات.");
         await db.batch([
-          db.prepare("INSERT INTO requests (id, owner, medicine, city, created) VALUES (?, ?, ?, ?, ?)").bind(input.token, owner, input.medicine, input.city, now),
+          db.prepare("INSERT INTO requests (id, owner, medicine, city, created) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?)").bind(input.token, owner, input.medicine, input.city, now, ownerHash),
           ...targets.map((p) => p.pilot ? db.prepare("INSERT INTO responses (request, pharmacy, status, updated) VALUES (?, ?, 'yes', ?)").bind(input.token, p.id, now) : db.prepare("INSERT INTO responses (request, pharmacy, status) VALUES (?, ?, 'pending')").bind(input.token, p.id)),
           notify(`طلب توفر جديد: ${input.medicine}`),
           ...targets.filter((p) => !p.pilot).map((p) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, owner, ?, ?, 0 FROM registered_pharmacies WHERE id = ? AND status = 'approved'").bind(crypto.randomUUID(), `طلب توفر جديد: ${input.medicine}`, now, p.id)),
@@ -143,8 +140,9 @@ export async function POST(request: Request) {
       const result = await db.prepare(`INSERT INTO reservations (id, owner, request, pharmacy, code, created, expires, status)
         SELECT ?, ?, r.id, s.pharmacy, ?, ?, ?, 'active' FROM requests r JOIN responses s ON s.request = r.id
         WHERE r.id = ? AND r.owner = ? AND s.pharmacy = ? AND s.status = 'yes' AND s.updated > ?
+        AND (? = 1 OR EXISTS (SELECT 1 FROM registered_pharmacies p WHERE p.id = s.pharmacy AND p.status = 'approved'))
         AND NOT EXISTS (SELECT 1 FROM reservations b WHERE b.request = r.id)
-        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000).run();
+        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000, Number(pharmacies.some(p => p.id === input.pharmacy))).run();
       if (!result.meta.changes) throw new HttpError("الطلب محجوز بالفعل أو انتهى تأكيد التوفر. أرسل طلب بحث جديداً.", 409);
       await notify("تم تأكيد الحجز لمدة ساعتين. رمز الاستلام موجود في حجوزاتي.").run();
     } else if (input.action === "cancel") {
@@ -172,32 +170,32 @@ export async function POST(request: Request) {
         if (!result.meta.changes) throw new HttpError("لا تملك صلاحية تعديل هذه الصيدلية.", 403);
       }
     } else if (input.action === "profile") {
-      await db.prepare("INSERT INTO profiles (id, name, city) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, city = excluded.city").bind(owner, input.name, input.city).run();
+      await db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, city = excluded.city").bind(owner, input.name, input.city, ownerHash).run();
     } else if (input.action === "register-pharmacy") {
       const prior = await db.prepare("SELECT id, status FROM registered_pharmacies WHERE owner = ?").bind(owner).first<{ id: string; status: string }>();
       if (prior?.status === "approved" || prior?.status === "suspended") throw new HttpError("تواصل مع الإدارة لتعديل ملف الصيدلية المعتمدة.", 409);
       await db.prepare(`INSERT INTO registered_pharmacies (id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, '08:00 — 20:00', ?, ?)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, '08:00 — 20:00', ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?)
         ON CONFLICT(owner) DO UPDATE SET name = excluded.name, address = excluded.address, city = excluded.city, latitude = excluded.latitude, longitude = excluded.longitude, phone = excluded.phone, license = excluded.license, status = 'pending', updated = excluded.updated`)
-        .bind(prior?.id || crypto.randomUUID(), owner, input.name, input.address, input.city, Math.round(input.latitude * 1e6), Math.round(input.longitude * 1e6), input.phone, input.license, now, now).run();
+        .bind(prior?.id || crypto.randomUUID(), owner, input.name, input.address, input.city, Math.round(input.latitude * 1e6), Math.round(input.longitude * 1e6), input.phone, input.license, now, now, ownerHash).run();
       await notify("وصل طلب انضمام صيدليتك؛ ستظهر للمرضى بعد تحقق الإدارة.").run();
     } else if (input.action === "admin-review") {
       if (!await isAdmin(owner, db)) throw new HttpError("هذه العملية متاحة للإدارة فقط.", 403);
       const application = await db.prepare("SELECT owner, name FROM registered_pharmacies WHERE id = ?").bind(input.pharmacy).first<{ owner: string; name: string }>();
       if (!application) throw new HttpError("الطلب غير موجود.", 404);
       if (input.status === "approved" && await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(application.owner).first()) throw new HttpError("أعد تفعيل حساب المالك قبل اعتماد الصيدلية.", 409);
-      await db.prepare("UPDATE registered_pharmacies SET status = ?, updated = ? WHERE id = ?").bind(input.status, now, input.pharmacy).run();
-      await audit(owner, "pharmacy-status", input.pharmacy, `${application.name}: ${input.status}`).run();
-      await notify(`تحديث طلب صيدلية ${application.name}: ${input.status === "approved" ? "تم الاعتماد" : input.status === "rejected" ? "تحتاج البيانات إلى مراجعة" : "تم تعليق الحساب"}.`, application.owner).run();
+      await db.batch([db.prepare("UPDATE registered_pharmacies SET status = ?, updated = ? WHERE id = ?").bind(input.status, now, input.pharmacy), audit(owner, "pharmacy-status", input.pharmacy, `${application.name}: ${input.status}`), notify(`تحديث طلب الصيدلية: ${input.status}.`, application.owner), ...(input.status === "approved" ? [] : stopPharmacyBookings(input.pharmacy, now))]);
     } else if (input.action === "admin-account") {
       if (!await isAdmin(owner) || input.owner === owner || isRootAdmin(input.owner) || (await isAdmin(input.owner) && !isRootAdmin(owner))) throw new HttpError("لا يمكنك تغيير هذا الحساب.", 403);
       if (!await db.prepare("SELECT id FROM profiles WHERE id = ?").bind(input.owner).first()) throw new HttpError("الحساب غير موجود.", 404);
+      const affectedPharmacy = await db.prepare("SELECT id FROM registered_pharmacies WHERE owner = ?").bind(input.owner).first<{id:string}>();
       await db.batch([
+        ...(input.suspended && affectedPharmacy ? [db.prepare("UPDATE registered_pharmacies SET status = 'suspended', updated = ? WHERE id = ?").bind(now, affectedPharmacy.id), ...stopPharmacyBookings(affectedPharmacy.id, now)] : []),
         db.prepare("INSERT INTO account_controls (owner, suspended, reason) VALUES (?, ?, ?) ON CONFLICT(owner) DO UPDATE SET suspended = excluded.suspended, reason = excluded.reason").bind(input.owner, Number(input.suspended), input.reason),
         db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner),
         audit(owner, input.suspended ? "account-suspend" : "account-reactivate", input.owner, input.reason),
       ]);
-      if (input.suspended) await db.prepare("UPDATE registered_pharmacies SET status = 'suspended', updated = ? WHERE owner = ? AND status = 'approved'").bind(now, input.owner).run();
+
     } else if (input.action === "admin-revoke") {
       if (!isRootAdmin(owner) || isRootAdmin(input.owner) || input.owner === owner) throw new HttpError("صلاحية المالك مطلوبة.", 403);
       await db.batch([db.prepare("DELETE FROM admin_members WHERE owner = ?").bind(input.owner), db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner), audit(owner, "admin-revoke", input.owner, "Access revoked")]);

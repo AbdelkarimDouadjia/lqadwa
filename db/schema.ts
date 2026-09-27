@@ -13,13 +13,13 @@ export const requests = sqliteTable("requests", {
 export const responses = sqliteTable("responses", {
   request: text("request").notNull().references(() => requests.id), pharmacy: text("pharmacy").notNull(),
   status: text("status").notNull().default("pending"), updated: integer("updated"),
-}, (t) => [primaryKey({ columns: [t.request, t.pharmacy] })]);
+}, (t) => [primaryKey({ columns: [t.request, t.pharmacy] }), index("idx_responses_pharmacy_status").on(t.pharmacy, t.status)]);
 export const reservations = sqliteTable("reservations", {
   id: text("id").primaryKey(), owner: text("owner").notNull(), request: text("request").notNull().references(() => requests.id),
   pharmacy: text("pharmacy").notNull(), code: text("code").notNull(),
   created: integer("created").notNull(), expires: integer("expires").notNull(),
   status: text("status").notNull().default("active"),
-}, (t) => [uniqueIndex("idx_reservations_request").on(t.request), index("idx_reservations_owner").on(t.owner)]);
+}, (t) => [uniqueIndex("idx_reservations_request").on(t.request), index("idx_reservations_owner").on(t.owner), index("idx_reservations_pharmacy_status").on(t.pharmacy, t.status, t.expires)]);
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(), owner: text("owner").notNull(), title: text("title").notNull(),
   created: integer("created").notNull(), read: integer("read").notNull().default(0),
@@ -33,7 +33,7 @@ export const registeredPharmacies = sqliteTable("registered_pharmacies", {
   status: text("status").notNull().default("pending"), duty: integer("duty").notNull().default(0),
   hours: text("hours").notNull().default("08:00 — 20:00"),
   created: integer("created").notNull(), updated: integer("updated").notNull(),
-}, (t) => [index("idx_registered_pharmacies_city_status").on(t.city, t.status)]);
+}, (t) => [index("idx_registered_pharmacies_city_status").on(t.city, t.status), index("idx_pharmacies_status_name").on(t.status, t.name)]);
 
 export const stockItems = sqliteTable("stock_items", {
   id: text("id").primaryKey(), pharmacy: text("pharmacy").notNull().references(() => registeredPharmacies.id),
@@ -64,4 +64,10 @@ export const deviceLinks = sqliteTable("device_links", {
 }, t => [index("idx_device_key_created").on(t.requestKey, t.created)]);
 export const mobileSessions = sqliteTable("mobile_sessions", {
   hash: text("hash").primaryKey(), owner: text("owner").notNull(), created: integer("created").notNull(), expires: integer("expires").notNull(),
-}, t => [index("idx_mobile_owner").on(t.owner)]);
+}, t => [index("idx_mobile_owner").on(t.owner), index("idx_mobile_expiry").on(t.expires)]);
+
+export const rateLimits = sqliteTable("rate_limits", {
+  key: text("key").primaryKey(), count: integer("count").notNull(), expires: integer("expires").notNull(),
+}, t => [index("idx_rate_expiry").on(t.expires)]);
+export const maintenance = sqliteTable("maintenance", { key: text("key").primaryKey(), lastRun: integer("last_run").notNull() });
+export const closedAccounts = sqliteTable("closed_accounts", { hash: text("hash").primaryKey(), created: integer("created").notNull() });

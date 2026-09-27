@@ -1,4 +1,6 @@
-# LQADWA — controlled pilot release gates
+# LQADWA — previous pilot checklist
+
+**Superseded for 0.11.0-rc1 by [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md) and [OPERATIONS.md](./OPERATIONS.md).** The record below describes the earlier pilot, not the latest verification state.
 
 The hosted pilot has persistent D1 storage, authenticated users, private administration and a native Android APK. This is **not** clinical validation or Play Store clearance.
 

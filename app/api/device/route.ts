@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { limitedJson, rateLimit } from "@/lib/http-security";
 import { database } from "@/db";
 import { audit, HttpError, identity, tokenHash } from "@/lib/access";
 export const dynamic = "force-dynamic";
@@ -11,12 +12,10 @@ const schema = z.discriminatedUnion("action", [
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 export async function POST(request: Request) {
   try {
-    const raw = await request.text(); if (raw.length > 1024) throw new HttpError("Request too large", 413);
-    const input = schema.parse(JSON.parse(raw)), db = database(), now = Date.now();
+    const input = schema.parse(await limitedJson(request, 1024)), db = database(), now = Date.now();
     if (input.action === "create") {
       const requestKey = await tokenHash(request.headers.get("cf-connecting-ip") || "local");
-      const count = await db.prepare("SELECT count(*) AS n FROM device_links WHERE request_key = ? AND created > ?").bind(requestKey, now - 3600_000).first<{ n: number }>();
-      if ((count?.n || 0) >= 20) throw new HttpError("Too many sign-in attempts. Try later.", 429);
+      await rateLimit(requestKey, "device-create", request.headers.has("cf-connecting-ip") ? 20 : 100, 3600);
       const id = crypto.randomUUID(), code = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
       await db.batch([
         db.prepare("DELETE FROM device_links WHERE created < ?").bind(now - 86400_000),
@@ -38,6 +37,7 @@ export async function POST(request: Request) {
       return json({ approved: true });
     }
     if (input.action === "exchange") {
+      await rateLimit(input.id, "device-exchange", 30);
       const challenge = await tokenHash(input.verifier);
       const link = await db.prepare("SELECT owner FROM device_links WHERE id = ? AND challenge = ? AND expires > ?").bind(input.id, challenge, now).first<{ owner: string | null }>();
       if (!link) throw new HttpError("Expired or invalid device link", 401);
@@ -46,7 +46,8 @@ export async function POST(request: Request) {
       if (!consumed) throw new HttpError("Already exchanged", 409);
       if (await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(consumed.owner).first()) throw new HttpError("Account suspended", 403);
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
-      await db.prepare("INSERT INTO mobile_sessions (hash, owner, created, expires) VALUES (?, ?, ?, ?)").bind(await tokenHash(token), consumed.owner, now, now + 7 * 86400_000).run();
+      const saved = await db.prepare("INSERT INTO mobile_sessions (hash, owner, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) AND NOT EXISTS (SELECT 1 FROM account_controls WHERE owner = ? AND suspended = 1)").bind(await tokenHash(token), consumed.owner, now, now + 7 * 86400_000, await tokenHash(consumed.owner), consumed.owner).run();
+      if (!saved.meta.changes) throw new HttpError("Account unavailable", 403);
       return json({ token, expires: now + 7 * 86400_000 });
     }
     await identity(request);
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.message }, error.status);
     if (error instanceof z.ZodError || error instanceof SyntaxError) return json({ error: "Invalid request" }, 400);
-    console.error("Device sign-in unavailable", error instanceof Error ? error.message : "unknown");
+    console.error("Device sign-in unavailable", error instanceof Error ? error.name : "unknown");
     return json({ error: "Service unavailable. Please retry." }, 503);
   }
 }

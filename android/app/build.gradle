@@ -1,18 +1,31 @@
 plugins { id 'com.android.application' }
 android {
     namespace 'dz.lqidwa.pilot'
-    compileSdk 34
-    defaultConfig { applicationId 'dz.lqidwa.pilot'; minSdk 23; targetSdk 34; versionCode 3; versionName '0.10.0-native-pilot' }
+    compileSdk 36
+    defaultConfig { applicationId 'dz.lqidwa.pilot'; minSdk 23; targetSdk 36; versionCode 4; versionName '0.11.0-rc1' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     splits { abi { enable true; reset(); include 'arm64-v8a', 'armeabi-v7a', 'x86_64'; universalApk false } }
     packaging { jniLibs { useLegacyPackaging true } }
-    // Pilot-only signing. Use a dedicated upload key before Play Store release.
-    buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
+    // Production signing is fail-closed: CI/key custodian supplies a private keystore.
+    signingConfigs {
+        if (System.getenv('LQADWA_KEYSTORE')) {
+            production {
+                storeFile file(System.getenv('LQADWA_KEYSTORE'))
+                storePassword System.getenv('LQADWA_STORE_PASSWORD')
+                keyAlias System.getenv('LQADWA_KEY_ALIAS') ?: 'lqadwa-upload'
+                keyPassword System.getenv('LQADWA_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        pilot { initWith debug; debuggable false; matchingFallbacks = ['release']; signingConfig signingConfigs.debug }
+        release { minifyEnabled false; if (System.getenv('LQADWA_KEYSTORE')) signingConfig signingConfigs.production }
+    }
 }
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'org.maplibre.gl:android-sdk:11.8.0'
+    implementation 'org.maplibre.gl:android-sdk-opengl:13.6.1'
     implementation 'com.google.mlkit:text-recognition:16.0.1'
     implementation 'com.google.mlkit:barcode-scanning:17.3.0'
     implementation 'com.google.zxing:core:3.5.3'
