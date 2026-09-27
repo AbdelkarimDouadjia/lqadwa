@@ -1,8 +1,14 @@
-# LQADWA 0.11.0-rc1 — release handover
+# LQADWA 0.11.1 — release handover
 
 27 September 2026. Android first; no Play Store or App Store submission.
 
 A signed, hosted **release candidate for controlled testing**, not clinical/legal certification or a comprehensive security guarantee. Do not advertise fictional availability as real pharmacy stock.
+
+## Public-branding update
+
+Version 0.11.1 removes pilot/beta/RC labels from the normal web and native Android interface. Download links prioritize the native Android package and distinguish it from a browser shortcut. Fictional-data mode retains its warnings; the unreviewed Kabyle privacy translation and OCR limitations remain disclosed. This presentation change does not waive the real-patient launch gates below. Previous security results below were obtained on the preceding 0.11.0-rc1 code; this update changes interface copy and version metadata, not authorization or database behavior.
+
+Hosting: OpenAI Sites at `https://lqadwa.adcker-7656.chatgpt.site`, running the backend on Cloudflare Workers with a managed Cloudflare D1 database. Android screens are native Java/Material with MapLibre, not a WebView. Browser sign-in and external links remain intentional.
 
 ## Implemented
 
@@ -11,7 +17,7 @@ A signed, hosted **release candidate for controlled testing**, not clinical/lega
 - Only the configured owner creates one-use admin invitations and revokes delegated admins. Admins manage pharmacy approval/rejection/suspension, account suspension, pharmacy details and inventory visibility, without unrestricted patient-location browsing.
 - Pharmacies are invisible to real searches until approved. Suspension atomically cancels active bookings, invalidates availability replies and removes arrival points. Human license verification is still required.
 - Native Android UI (Java/Material + MapLibre, not a website wrapper), OCR/QR, bookings, foreground location and walking/driving routes. Transit opens external navigation, subject to coverage.
-- Android compile/target API 36, min API 23, versionCode 4. Dedicated release signing key, no release fallback to the debug key.
+- Android compile/target API 36, min API 23, versionCode 5. Dedicated release signing key, no release fallback to the debug key.
 - Confirmed account deletion on Android and web; scoped, paginated data export. Closure removes account-owned active data, revokes phones and cancels bookings at a closed pharmacy. Owner self-deletion is blocked.
 - Request-size/content-type checks, same-origin browser mutations, bounded queries, rate limits, hashed server tokens, encrypted Android tokens, expiration cleanup.
 - `/privacy` and `/account-data`, support contact `abdelkarim.douadjia@gmail.com`. Legal business identity/address was not supplied and is not invented.
@@ -21,6 +27,7 @@ A signed, hosted **release candidate for controlled testing**, not clinical/lega
 
 | Check | Result |
 | --- | --- |
+| `scripts/branding-smoke.mjs` | Four-language labels, native version, real/demo separation and safety disclosures |
 | TypeScript and production web build | Passed with updated dependencies |
 | Full npm audit | 0 reported vulnerabilities at verification time |
 | `scripts/smoke-test.mjs` | Auth, consent, input validation, idempotency, concurrent reservation, persistence, expiry timestamp, pickup and cancellation guards |
@@ -49,9 +56,9 @@ SHA-256:
 
 | Artifact | Digest |
 | --- | --- |
-| ARM64 release APK | `fa944dcca9da55b7061190becb58cba4553170cc1dd5e88f4382cdf3932ffadf` |
-| ARMv7 release APK | `ef629b90f009498c2e8deffec103f3fdddc203ce6c415ea733f18d6b81fea68b` |
-| AAB | `782887b63116069ed58a3d758be6562b10c99e70b67dc60256426a1bca470348` |
+| ARM64 release APK | `c6b8e2c4da53ce7c61f48e51164865aff7b5882ad93e91e20f13741932c89bd3` |
+| ARMv7 release APK | `fdff019d7be43cc401d4f6791a08357f8ce5ad46ec0d945d459df5e853c17af5` |
+| AAB | `651e1373268a2ba2d1d889334cf44c4bc4612eb32f445007ce4a3e1fe74d6311` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
 ## Required before broad real-patient launch

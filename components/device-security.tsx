@@ -11,7 +11,7 @@ export function DeviceSecurity({ language }: { language: Language }) {
     ar: { title: "أمان أجهزة الهاتف", help: "فقدت هاتفك؟ يمكنك إنهاء كل جلسات تطبيق Android. لن يتغير تسجيل دخولك في المتصفح.", action: "فصل كل الهواتف", done: "تم فصل جميع الهواتف. يلزم ربطها مجدداً لتسجيل الدخول." },
     fr: { title: "Sécurité des téléphones", help: "Téléphone perdu ? Révoquez toutes les sessions Android sans fermer cette session navigateur.", action: "Déconnecter tous les téléphones", done: "Tous les téléphones sont déconnectés. Une nouvelle association est nécessaire." },
     en: { title: "Phone security", help: "Lost your phone? Revoke all Android sessions without signing out of this browser.", action: "Disconnect all phones", done: "All phones disconnected. They must be linked again to sign in." },
-    kab: { title: "Taɣellist n tilifunin", help: "Tzemreḍ ad teffɣeḍ seg meṛṛa tilifunin. Iminig ad yeqqim yeqqen. Taqbaylit · Beta.", action: "Ffeɣ seg meṛṛa tilifunin", done: "Meṛṛa tilifunin ffɣen. Anekcum ilaq ad yettwasentem tikkelt nniḍen." },
+    kab: { title: "Taɣellist n tilifunin", help: "Tzemreḍ ad teffɣeḍ seg meṛṛa tilifunin. Iminig ad yeqqim yeqqen. Taqbaylit.", action: "Ffeɣ seg meṛṛa tilifunin", done: "Meṛṛa tilifunin ffɣen. Anekcum ilaq ad yettwasentem tikkelt nniḍen." },
   }[language];
   async function revoke() {
     setBusy(true); setMessage("");
