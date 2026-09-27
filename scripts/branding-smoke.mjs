@@ -1,6 +1,6 @@
 // Public branding stays separate from demo-data and medical safety disclosures.
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, existsSync} from 'node:fs';
 const read = path => readFileSync(path, 'utf8');
 const languages = JSON.parse(read('android/app/src/main/assets/languages.json'));
 for (const [language, copy] of Object.entries(languages)) {
@@ -16,4 +16,8 @@ assert.ok(read('app/page.tsx').includes('t(demoMode ? "pilotNote" : "pickupOnly"
 assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un relecteur kabylophone'));
 assert.ok(read('android/app/build.gradle').includes("versionCode 5; versionName '0.11.1'"));
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /android\.webkit|new WebView/);
+for (const old of ['lqadwa-demo.apk', 'lqadwa-armv7.apk']) {
+  assert.equal(existsSync(`public/downloads/${old}`), false, 'Do not distribute debug-signed packages');
+  assert.ok(read('next.config.ts').includes(`source: "/downloads/${old}"`), 'Preserve old download links');
+}
 console.log('Branding passed: four languages, native version, real/demo separation and safety disclosures.');

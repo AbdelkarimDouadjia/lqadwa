@@ -47,7 +47,7 @@ Destructive tests use **localhost and fictional fixtures only**. No real-user de
 
 - Recommended: `/downloads/lqadwa-release.apk` (ARM64).
 - Older phones: `/downloads/lqadwa-release-armv7.apk` (ARMv7).
-- Legacy debug-signed pilot upgrades: `/downloads/lqadwa-demo.apk`, `/downloads/lqadwa-armv7.apk`. These are not store artifacts.
+- Only release-signed APKs are publicly distributed. Legacy `/downloads/lqadwa-demo.apk` and `/downloads/lqadwa-armv7.apk` URLs redirect to their release-signed equivalents. Old debug-signed packages remain recoverable in Git and locally under `.sites-runtime/legacy-apks-0.11.1/`, not in hosted assets.
 - Signed store bundle: `android/app/build/outputs/bundle/release/app-release.aab`, local only; it exceeds the hosting per-file asset limit.
 - **Uninstall the old pilot before installing the release APK**, then sign in again. Server account data remains; unsaved local input does not. Their signing identities differ.
 - Sign-in currently requires ChatGPT; Android confirms linking in a browser. Separate email/password/SMS auth is not implemented.
