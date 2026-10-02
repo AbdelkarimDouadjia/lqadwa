@@ -1,13 +1,10 @@
 import { cities } from "./wilayas";
+import type { AdminAccess, AdminPermission } from "./admin-permissions";
 export { cities };
 
 export type Pharmacy = { id: string; name: string; city: string; area: string; distance: number; duty: boolean; hours: string; lat: number; lng: number; pilot: boolean; phone?: string };
-// These are clearly labelled fictional pilot locations, never a live pharmacy directory.
-export const pharmacies: Pharmacy[] = cities.filter((city) => ["algiers", "oran", "constantine", "setif", "annaba", "blida"].includes(city.id)).flatMap((city) => [
-  { id: `${city.id}-1`, name: "صيدلية النور", city: city.id, area: city.commune, distance: 450, duty: true, hours: "مناوبة حتى 08:00", lat: city.lat + .002, lng: city.lng + .003, pilot: true },
-  { id: `${city.id}-2`, name: "صيدلية الياسمين", city: city.id, area: "حي البساتين", distance: 850, duty: false, hours: "08:00 — 20:00", lat: city.lat - .004, lng: city.lng + .006, pilot: true },
-  { id: `${city.id}-3`, name: "صيدلية الأمل", city: city.id, area: "وسط المدينة", distance: 1600, duty: true, hours: "مناوبة حتى 08:00", lat: city.lat + .007, lng: city.lng - .008, pilot: true },
-]);
+// Deny-list for pre-release record IDs only; never a pharmacy directory.
+export const legacySampleIds = new Set(["algiers", "oran", "constantine", "setif", "annaba", "blida"].flatMap(city => [1, 2, 3].map(n => `${city}-${n}`)));
 
 export const medicines = [
   { name: "دوليبران 1000 مغ", latin: "Doliprane 1000 mg", ingredient: "باراسيتامول · Paracétamol" },
@@ -29,9 +26,9 @@ export type AppData = {
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;
   staffRequests: StaffRequest[]; staffBookings: StaffBooking[]; stock: StockItem[];
-  admin: { applications: (PharmacyApplication & { owner: string })[]; users: number; searches: number; bookings: number; canInvite: boolean;
-    accounts: { id: string; name: string; city: string; suspended: number; reason: string }[];
-    members: { owner: string; name: string; created: number }[];
+  admin: { applications: (PharmacyApplication & { owner: string })[]; applicationsCount: number; users: number; searches: number; bookings: number; canInvite: boolean; access: AdminAccess; owners: { id: string; name: string }[];
+    accounts: { id: string; name: string; city: string; suspended: number; reason: string; protected: boolean }[];
+    members: { owner: string; name: string; created: number; email: string; permissions: AdminPermission[] }[];
     activity: { id: string; actor: string; action: string; target: string; detail: string; created: number }[];
     inventory: (StockItem & { pharmacyName: string })[];
   } | null;

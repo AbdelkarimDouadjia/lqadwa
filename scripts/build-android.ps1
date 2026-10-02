@@ -26,7 +26,7 @@ try {
     $env:LQADWA_KEY_PASSWORD = $env:LQADWA_STORE_PASSWORD
     $env:LQADWA_KEYSTORE = $keystorePath
     $env:LQADWA_KEY_ALIAS = 'lqadwa-upload'
-    & (Join-Path $projectPath '.sites-runtime/android-tools/gradle-8.13/bin/gradle.bat') -p (Join-Path $projectPath 'android') assemblePilot assembleRelease bundleRelease --console=plain --no-daemon
+    & (Join-Path $projectPath '.sites-runtime/android-tools/gradle-8.13/bin/gradle.bat') -p (Join-Path $projectPath 'android') assembleRelease bundleRelease --console=plain --no-daemon
     if ($LASTEXITCODE -ne 0) { throw 'Android build failed' }
 } finally {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)

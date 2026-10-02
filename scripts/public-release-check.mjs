@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+
+// Public checks use reads and rejected requests only. Never seed or delete live accounts.
+const base='https://lqadwa.lqadwa-dz.workers.dev';
+const get=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
+const health=await get('/api/health');assert.equal(health.status,200);assert.equal((await health.json()).release,'1.0.5');
+for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
+ const response=await get(path);assert.equal(response.status,200,path);
+ assert.equal(response.headers.get('x-frame-options'),'DENY',path);
+ assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);
+ assert.equal(response.headers.get('referrer-policy'),'no-referrer',path);
+ assert.match(response.headers.get('strict-transport-security')||'',/max-age=15552000/,path);
+ assert.match(response.headers.get('content-security-policy')||'',/frame-ancestors 'none'/,path);
+ assert.doesNotMatch(await response.text(),/testing version|public pilot|نسخة تجريبية|\bbeta\b|\bprototype\b|Sign in with ChatGPT|تسجيل الدخول باستخدام ChatGPT/i,path);
+}
+assert.equal((await get('/api/app',{headers:{'oai-authenticated-user-id':'local-release-owner'}})).status,401);
+assert.equal((await get('/api/account/deletion-proof')).status,401);
+const admin=await get('/operations',{redirect:'manual'});assert.equal(admin.status,307);assert.equal(admin.headers.get('location'),'/operations/login');
+assert.equal(admin.headers.get('x-frame-options'),'DENY','private early redirect');
+const medicines=await(await get('/api/medicines?q=doliprane')).json();assert(medicines.items.some(item=>item.brand==='DOLIPRANE'&&item.registration));
+for(const name of ['lqadwa-release.apk','lqadwa-release-armv7.apk']){
+ const response=await get('/downloads/'+name);assert.equal(response.status,200,name);
+ const downloaded=Buffer.from(await response.arrayBuffer());
+ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+ assert.equal(hash(downloaded),hash(readFileSync('public/downloads/'+name)),name+' must be the newly signed artifact');
+ console.log(name,downloaded.length,'bytes; hosted SHA-256 matches signed local APK.');
+}
+console.log('PASS: public HTTPS, release, branding, private administration, authentication isolation, medicine catalog and both exact APK downloads.');

@@ -10,13 +10,18 @@ const now=Date.now(),users=Array.from({length:4},()=>({id:'release-test-'+random
 sql(users.map(u=>`INSERT INTO profiles(id,name,city) VALUES('${u.id}','FICTIONAL RELEASE TEST','algiers');INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(u.token)}','${u.id}',${now},${now+900000});`).join(''));
 const [patient,other,pharmacist,secondPharmacist]=users;
 const session=u=>({'x-lqadwa-session':u.token});
-const login=await fetch('/signin-with-chatgpt?return_to=/',{redirect:'manual'}),cookie=login.headers.get('set-cookie')?.split(';')[0];assert(cookie);
-const root={cookie,origin};
+// Start LOCAL Wrangler with --var APP_ADMIN_IDS:local-release-owner; never use this owner on the public host.
+const rootToken=randomUUID()+'-'+randomUUID(), cookie='untrusted-cookie=1';
+sql(`INSERT INTO profiles(id,name,city) VALUES('local-release-owner','LOCAL OWNER','algiers') ON CONFLICT(id) DO NOTHING;INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(rootToken)}','local-release-owner',${now},${now+900000});DELETE FROM rate_limits WHERE key='${hash(`account-write:local-release-owner:${Math.floor(now/3600000)}`)}';`);
+const root={'x-lqadwa-session':rootToken,origin};
 async function call(body,headers,status=200,path='/api/app'){const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});const raw=await r.text();const data=r.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):{error:raw};assert.equal(r.status,status,`${body.action} expected ${status}: ${JSON.stringify(data.error)}`);return data;}
 async function snapshot(u){const r=await fetch('/api/app',{headers:session(u)});assert.equal(r.status,200);return r.json();}
 async function register(u,label){const s=await call({action:'register-pharmacy',name:'FICTIONAL TEST '+label,address:'LOCAL TEST ONLY - NOT A REAL PHARMACY',city:'algiers',latitude:36.7538,longitude:3.0588,phone:'0550000000',license:'SYNTHETIC-TEST-NOT-VALID'},session(u));await call({action:'admin-review',pharmacy:s.ownPharmacy.id,status:'approved'},root);return s.ownPharmacy.id;}
 const a=await register(pharmacist,'A'),b=await register(secondPharmacist,'B');
 console.log('Role-isolation fixtures registered.');
+assert((await snapshot(patient)).pharmacies.every(p=>!p.pilot), 'Never return synthetic pharmacy listings');
+await call({action:'search',medicine:'PARACETAMOL TEST',city:'algiers',night:false,demo:true,token:randomUUID()},session(patient),400);
+await call({action:'reserve',request:randomUUID(),pharmacy:'algiers-1',consent:true},session(patient),404);
 await call({action:'admin-review',pharmacy:a,status:'approved',role:'admin'},session(patient),403);
 await call({action:'stock-upsert',pharmacy:a,name:'PARACETAMOL TEST',quantity:3},session(secondPharmacist),403);
 await call({action:'stock-upsert',pharmacy:a,name:'PARACETAMOL TEST',quantity:3},session(pharmacist));
@@ -32,6 +37,13 @@ await call({action:'collect',reservation:booking.id,pharmacy:a,code:booking.code
 await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
 assert((await snapshot(pharmacist)).staffBookings.some(r=>r.id===booking.id&&r.approachLat));
 assert(!(await snapshot(secondPharmacist)).staffBookings.some(r=>r.id===booking.id));
+sql(`UPDATE reservation_locations SET updated=${Date.now()-61000} WHERE reservation='${booking.id}';`);
+assert.equal((await snapshot(pharmacist)).staffBookings.find(r=>r.id===booking.id).approachLat,null,'Old GPS points must not remain visible');
+await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
+await call({action:'share-location',reservation:booking.id,enabled:false},session(patient));
+assert.equal((await snapshot(pharmacist)).staffBookings.find(r=>r.id===booking.id).approachLat,null,'Withdrawing consent immediately hides location');
+assert.equal(JSON.parse(sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation='${booking.id}';`))[0].results[0].n,0);
+await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
 await call({action:'read-notifications'},{...session(patient),origin:'https://evil.invalid'},403);
 assert.equal((await fetch('/api/app',{headers:{cookie,'x-lqadwa-session':'invalid'}})).status,401);
 // Some HTTP proxies omit empty headers. An empty native credential still cannot mutate via a browser cookie without Origin.

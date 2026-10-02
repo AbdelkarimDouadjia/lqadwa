@@ -64,6 +64,13 @@
       "when": 1790479224190,
       "tag": "0008_spotty_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790858350748,
+      "tag": "0009_admin_permissions",
+      "breakpoints": true
     }
   ]
 }

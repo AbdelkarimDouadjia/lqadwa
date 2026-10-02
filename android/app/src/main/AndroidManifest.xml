@@ -3,8 +3,8 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-  <application android:label="LQADWA · لقى دوا" android:icon="@drawable/luqya" android:supportsRtl="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@style/LqadwaTheme">
-    <activity android:name=".LaunchActivity" android:exported="true">
+  <application android:label="LQADWA · لقى دوا" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:supportsRtl="true" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:theme="@style/LqadwaTheme">
+    <activity android:name=".LaunchActivity" android:exported="true" android:theme="@style/LqadwaLaunchTheme">
       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
     </activity>
     <activity android:name=".MainActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />

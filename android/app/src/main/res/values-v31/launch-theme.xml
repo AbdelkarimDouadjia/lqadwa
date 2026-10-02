@@ -1,0 +1,8 @@
+<resources>
+  <style name="LqadwaLaunchTheme" parent="LqadwaTheme">
+    <item name="android:windowBackground">@color/brand</item>
+    <item name="android:windowSplashScreenBackground">@color/brand</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/luqya</item>
+    <item name="android:windowSplashScreenAnimationDuration">350</item>
+  </style>
+</resources>

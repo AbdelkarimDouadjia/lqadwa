@@ -42,10 +42,12 @@ export const stockItems = sqliteTable("stock_items", {
 
 export const adminMembers = sqliteTable("admin_members", {
   owner: text("owner").primaryKey(), invitedBy: text("invited_by").notNull(), created: integer("created").notNull(),
+  permissions: text("permissions").notNull().default("[]"), email: text("email").notNull().default(""),
 });
 export const adminInvites = sqliteTable("admin_invites", {
   hash: text("hash").primaryKey(), createdBy: text("created_by").notNull(), created: integer("created").notNull(),
   expires: integer("expires").notNull(), usedBy: text("used_by"),
+  permissions: text("permissions").notNull().default("[]"), email: text("email").notNull().default(""),
 });
 export const reservationLocations = sqliteTable("reservation_locations", {
   reservation: text("reservation").primaryKey().references(() => reservations.id),

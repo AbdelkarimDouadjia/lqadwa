@@ -1,15 +1,18 @@
 import { z } from "zod";
 import { stopPharmacyBookings } from "@/lib/pharmacy-status";
 import { limitedJson, requireMutationOrigin, rateLimit, maintainEphemeralData } from "@/lib/http-security";
-import { identity, HttpError, isAdmin, isRootAdmin, tokenHash, audit } from "@/lib/access";
+import { identity, HttpError, isAdmin, isRootAdmin, rootAdminIds, adminAccess, hasAdminPermission, tokenHash, audit } from "@/lib/access";
+import { adminPermissions, parseAdminPermissions } from "@/lib/admin-permissions";
 import { database } from "@/db";
-import { cities, pharmacies, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
+import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 const cityId = z.enum(cities.map((c) => c.id) as [string, ...string[]]);
 const id = z.string().min(1).max(100);
+const permissions = z.array(z.enum(adminPermissions)).min(1).max(adminPermissions.length).transform(p => [...new Set(p)]);
+const adminEmail = z.string().trim().email().max(254).transform(v => v.toLowerCase());
 const actionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("search"), medicine: z.string().trim().min(2).max(100), city: cityId, night: z.boolean(), demo: z.boolean().default(false), token: z.string().uuid() }),
+  z.object({ action: z.literal("search"), medicine: z.string().trim().min(2).max(100), city: cityId, night: z.boolean(), demo: z.literal(false).default(false), token: z.string().uuid() }),
   z.object({ action: z.literal("reply"), request: id, pharmacy: id, available: z.boolean() }),
   z.object({ action: z.literal("reserve"), request: id, pharmacy: id, consent: z.literal(true) }),
   z.object({ action: z.literal("cancel"), reservation: id }),
@@ -18,7 +21,8 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("profile"), name: z.string().trim().min(2).max(60), city: cityId }),
   z.object({ action: z.literal("register-pharmacy"), name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city: cityId, latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/), license: z.string().trim().min(5).max(100) }),
   z.object({ action: z.literal("admin-review"), pharmacy: id, status: z.enum(["approved", "rejected", "suspended"]) }),
-  z.object({ action: z.literal("admin-invite-create") }),
+  z.object({ action: z.literal("admin-invite-create"), email: adminEmail, permissions }),
+  z.object({ action: z.literal("admin-permissions"), owner: id, permissions }),
   z.object({ action: z.literal("admin-account"), owner: id, suspended: z.boolean(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal("admin-revoke"), owner: id }),
   z.object({ action: z.literal("admin-invites-revoke") }),
@@ -64,27 +68,42 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.created, b.expires, b.status, r.medicine, l.latitude / 1000.0 AS approachLat, l.longitude / 1000.0 AS approachLng, l.updated AS approachUpdated FROM reservations b JOIN requests r ON r.id = b.request JOIN registered_pharmacies p ON p.id = b.pharmacy LEFT JOIN reservation_locations l ON l.reservation = b.id AND l.updated > ? WHERE p.owner = ? AND p.status = 'approved' AND b.status = 'active' AND b.expires > ? ORDER BY b.created DESC LIMIT 100").bind(now - 60_000, owner, now),
     db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? ORDER BY s.updated DESC LIMIT 200").bind(owner),
   ]);
-  const settings = results[4].results as { pharmacy: string; duty: number }[];
+  // Keep legacy sample records recoverable, but never present them as real care.
+  const sampleIds = legacySampleIds;
+  const sampleRequests = new Set((results[2].results as Reply[]).filter((r) => sampleIds.has(r.pharmacy)).map((r) => r.request));
   const ownPharmacy = results[7].results[0] as Registered | undefined;
   let admin: AppData["admin"] = null;
-  if (await isAdmin(owner, db)) {
+  const access = await adminAccess(owner, db);
+  if (access) {
+    const can = (permission: typeof adminPermissions[number]) => access.permissions.includes(permission);
+    const empty = () => db.prepare("SELECT NULL WHERE 0");
+    const roots = rootAdminIds();
     const rows = await db.batch([
-      db.prepare("SELECT id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated FROM registered_pharmacies ORDER BY created DESC LIMIT 100"),
-      db.prepare("SELECT count(*) AS n FROM profiles"),
-      db.prepare("SELECT count(*) AS n FROM requests"),
-      db.prepare("SELECT count(*) AS n FROM reservations"),
-      db.prepare("SELECT p.id, p.name, p.city, COALESCE(c.suspended, 0) AS suspended, COALESCE(c.reason, '') AS reason FROM profiles p LEFT JOIN account_controls c ON c.owner = p.id ORDER BY p.name LIMIT 200"),
-      db.prepare("SELECT a.owner, p.name, a.created FROM admin_members a LEFT JOIN profiles p ON p.id = a.owner ORDER BY a.created DESC"),
-      db.prepare("SELECT a.id, a.action, a.target, a.detail, a.created, COALESCE(p.name, a.actor) AS actor FROM audit_log a LEFT JOIN profiles p ON p.id = a.actor ORDER BY a.created DESC LIMIT 100"),
-      db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated, p.name AS pharmacyName FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy ORDER BY s.updated DESC LIMIT 200"),
+      can("pharmacies") ? db.prepare("SELECT id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated FROM registered_pharmacies ORDER BY created DESC LIMIT 100") : empty(),
+      can("analytics") ? db.prepare("SELECT count(*) AS n FROM profiles") : empty(),
+      can("analytics") ? db.prepare("SELECT count(*) AS n FROM requests") : empty(),
+      can("analytics") ? db.prepare("SELECT count(*) AS n FROM reservations") : empty(),
+      can("accounts") ? db.prepare("SELECT p.id, p.name, p.city, COALESCE(c.suspended, 0) AS suspended, COALESCE(c.reason, '') AS reason, a.owner AS member FROM profiles p LEFT JOIN account_controls c ON c.owner = p.id LEFT JOIN admin_members a ON a.owner = p.id ORDER BY p.name LIMIT 200") : empty(),
+      access.isOwner ? db.prepare("SELECT a.owner, p.name, a.created, a.email, a.permissions FROM admin_members a LEFT JOIN profiles p ON p.id = a.owner ORDER BY a.created DESC LIMIT 200") : empty(),
+      can("audit") ? db.prepare("SELECT a.id, a.action, a.target, a.detail, a.created, COALESCE(p.name, a.actor) AS actor FROM audit_log a LEFT JOIN profiles p ON p.id = a.actor ORDER BY a.created DESC LIMIT 100") : empty(),
+      can("pharmacies") ? db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated, p.name AS pharmacyName FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy ORDER BY s.updated DESC LIMIT 200") : empty(),
+      roots.length ? db.prepare(`SELECT id, name FROM profiles WHERE id IN (${roots.map(() => "?").join(",")})`).bind(...roots) : empty(),
+      can("analytics") ? db.prepare("SELECT count(*) AS n FROM registered_pharmacies") : empty(),
     ]);
-    admin = { applications: rows[0].results as Registered[], users: Number((rows[1].results[0] as { n: number }).n), searches: Number((rows[2].results[0] as { n: number }).n), bookings: Number((rows[3].results[0] as { n: number }).n), canInvite: isRootAdmin(owner), accounts: rows[4].results as NonNullable<AppData["admin"]>["accounts"], members: rows[5].results as NonNullable<AppData["admin"]>["members"], activity: rows[6].results as NonNullable<AppData["admin"]>["activity"], inventory: rows[7].results as NonNullable<AppData["admin"]>["inventory"] };
+    const count = (index: number) => Number((rows[index].results[0] as { n?: number } | undefined)?.n || 0);
+    admin = {
+      applications: rows[0].results as Registered[], applicationsCount: count(9), users: count(1), searches: count(2), bookings: count(3), canInvite: access.isOwner, access,
+      owners: roots.map(id => ({id, name: (rows[8].results as {id:string;name:string}[]).find(p => p.id === id)?.name || ""})),
+      accounts: (rows[4].results as (NonNullable<AppData["admin"]>["accounts"][number] & {member?:string})[]).map(({member,...a}) => ({...a, protected: a.id === owner || isRootAdmin(a.id) || (!access.isOwner && Boolean(member))})),
+      members: (rows[5].results as {owner:string;name:string;created:number;email:string;permissions:string}[]).map(a => ({...a, permissions:parseAdminPermissions(a.permissions)})),
+      activity: rows[6].results as NonNullable<AppData["admin"]>["activity"], inventory: rows[7].results as NonNullable<AppData["admin"]>["inventory"],
+    };
   }
   return {
     profile: results[0].results[0] as AppData["profile"],
-    requests: results[1].results as RequestRecord[], responses: results[2].results as Reply[],
-    reservations: results[3].results as Booking[], notifications: results[5].results as Notice[],
-    pharmacies: [...(results[6].results as Registered[]).filter((p) => p.status === "approved").map(pharmacyFromRow), ...pharmacies.map((p) => { const s = settings.find((s) => s.pharmacy === p.id); return { ...p, duty: s ? Boolean(s.duty) : p.duty }; })],
+    requests: (results[1].results as RequestRecord[]).filter((r) => !sampleRequests.has(r.id)), responses: (results[2].results as Reply[]).filter((r) => !sampleIds.has(r.pharmacy)),
+    reservations: (results[3].results as Booking[]).filter((b) => !sampleIds.has(b.pharmacy)), notifications: results[5].results as Notice[],
+    pharmacies: (results[6].results as Registered[]).filter((p) => p.status === "approved").map(pharmacyFromRow),
     ownPharmacy: ownPharmacy || null,
     staffRequests: results[8].results as StaffRequest[], staffBookings: results[9].results as StaffBooking[], stock: results[10].results as StockItem[],
     role: admin ? "admin" : ownPharmacy ? "pharmacist" : "client", admin,
@@ -102,8 +121,9 @@ export async function POST(request: Request) {
     const owner = user.userId, db = database(), now = Date.now(), ownerHash = await tokenHash(user.userId);
     await rateLimit(owner, input.action === "collect" ? "pickup-attempt" : "mutation", input.action === "collect" ? 10 : 90);
     const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, ?, ?, ?, 0 WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ?)").bind(crypto.randomUUID(), recipient, title, now, recipient);
-    // Demo locations are synthetic and isolated from approved pharmacies.
-    if ("pharmacy" in input && input.action !== "admin-review" && !pharmacies.some((p) => p.id === input.pharmacy)) {
+    // Old clients cannot create or operate fictional bookings.
+    if ("pharmacy" in input && legacySampleIds.has(input.pharmacy)) throw new HttpError("الصيدلية غير موجودة.", 404);
+    if ("pharmacy" in input && input.action !== "admin-review" && !legacySampleIds.has(input.pharmacy)) {
       const registered = await db.prepare("SELECT id FROM registered_pharmacies WHERE id = ?").bind(input.pharmacy).first();
       if (!registered) throw new HttpError("الصيدلية غير موجودة.", 404);
     }
@@ -123,7 +143,7 @@ export async function POST(request: Request) {
         ]);
       }
     } else if (input.action === "reply") {
-      const pilot = pharmacies.some((p) => p.id === input.pharmacy);
+      const pilot = legacySampleIds.has(input.pharmacy);
       const permitted = pilot
         ? await db.prepare("SELECT r.owner AS patient FROM responses s JOIN requests r ON r.id = s.request WHERE s.request = ? AND s.pharmacy = ? AND r.owner = ? AND r.created > ? AND s.status = 'pending'").bind(input.request, input.pharmacy, owner, now - 24 * 3600_000).first<{ patient: string }>()
         : await db.prepare("SELECT r.owner AS patient FROM responses s JOIN requests r ON r.id = s.request JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE s.request = ? AND s.pharmacy = ? AND p.owner = ? AND p.status = 'approved' AND r.created > ? AND s.status = 'pending'").bind(input.request, input.pharmacy, owner, now - 24 * 3600_000).first<{ patient: string }>();
@@ -132,7 +152,7 @@ export async function POST(request: Request) {
       if (!result.meta.changes) throw new HttpError("تم الرد على الطلب من قبل.", 409);
       await notify(input.available ? "وصل تأكيد توفر من الصيدلية؛ يمكنك الحجز الآن." : "وصل رد من الصيدلية: الدواء غير متوفر.", permitted.patient).run();
     } else if (input.action === "reserve") {
-      if (!pharmacies.some((p) => p.id === input.pharmacy)) {
+      if (!legacySampleIds.has(input.pharmacy)) {
         const active = await db.prepare("SELECT id FROM registered_pharmacies WHERE id = ? AND status = 'approved'").bind(input.pharmacy).first();
         if (!active) throw new HttpError("هذه الصيدلية غير متاحة للحجز.", 409);
       }
@@ -142,7 +162,7 @@ export async function POST(request: Request) {
         WHERE r.id = ? AND r.owner = ? AND s.pharmacy = ? AND s.status = 'yes' AND s.updated > ?
         AND (? = 1 OR EXISTS (SELECT 1 FROM registered_pharmacies p WHERE p.id = s.pharmacy AND p.status = 'approved'))
         AND NOT EXISTS (SELECT 1 FROM reservations b WHERE b.request = r.id)
-        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000, Number(pharmacies.some(p => p.id === input.pharmacy))).run();
+        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000, Number(legacySampleIds.has(input.pharmacy))).run();
       if (!result.meta.changes) throw new HttpError("الطلب محجوز بالفعل أو انتهى تأكيد التوفر. أرسل طلب بحث جديداً.", 409);
       await notify("تم تأكيد الحجز لمدة ساعتين. رمز الاستلام موجود في حجوزاتي.").run();
     } else if (input.action === "cancel") {
@@ -153,7 +173,7 @@ export async function POST(request: Request) {
       const pharmacyOwner = await db.prepare("SELECT p.owner FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ?").bind(input.reservation).first<{ owner: string }>();
       if (pharmacyOwner) await notify("ألغى المريض حجزاً؛ أصبحت العلبة متاحة.", pharmacyOwner.owner).run();
     } else if (input.action === "collect") {
-      const pilot = pharmacies.some((p) => p.id === input.pharmacy);
+      const pilot = legacySampleIds.has(input.pharmacy);
       const permitted = pilot
         ? await db.prepare("SELECT id FROM reservations WHERE id = ? AND pharmacy = ? AND owner = ?").bind(input.reservation, input.pharmacy, owner).first()
         : await db.prepare("SELECT b.id FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ? AND b.pharmacy = ? AND p.owner = ? AND p.status = 'approved'").bind(input.reservation, input.pharmacy, owner).first();
@@ -164,7 +184,7 @@ export async function POST(request: Request) {
       await db.prepare("DELETE FROM reservation_locations WHERE reservation = ?").bind(input.reservation).run();
       if (patient) await notify("اكتمل الاستلام من الصيدلية. نتمنى لك دوام الصحة.", patient.owner).run();
     } else if (input.action === "duty") {
-      if (pharmacies.some((p) => p.id === input.pharmacy)) await db.prepare("INSERT INTO pharmacy_settings (owner, pharmacy, duty) VALUES (?, ?, ?) ON CONFLICT(owner, pharmacy) DO UPDATE SET duty = excluded.duty").bind(owner, input.pharmacy, Number(input.enabled)).run();
+      if (legacySampleIds.has(input.pharmacy)) await db.prepare("INSERT INTO pharmacy_settings (owner, pharmacy, duty) VALUES (?, ?, ?) ON CONFLICT(owner, pharmacy) DO UPDATE SET duty = excluded.duty").bind(owner, input.pharmacy, Number(input.enabled)).run();
       else {
         const result = await db.prepare("UPDATE registered_pharmacies SET duty = ?, updated = ? WHERE id = ? AND owner = ? AND status = 'approved'").bind(Number(input.enabled), now, input.pharmacy, owner).run();
         if (!result.meta.changes) throw new HttpError("لا تملك صلاحية تعديل هذه الصيدلية.", 403);
@@ -180,13 +200,13 @@ export async function POST(request: Request) {
         .bind(prior?.id || crypto.randomUUID(), owner, input.name, input.address, input.city, Math.round(input.latitude * 1e6), Math.round(input.longitude * 1e6), input.phone, input.license, now, now, ownerHash).run();
       await notify("وصل طلب انضمام صيدليتك؛ ستظهر للمرضى بعد تحقق الإدارة.").run();
     } else if (input.action === "admin-review") {
-      if (!await isAdmin(owner, db)) throw new HttpError("هذه العملية متاحة للإدارة فقط.", 403);
+      if (!await hasAdminPermission(owner, "pharmacies", db)) throw new HttpError("صلاحية إدارة الصيدليات مطلوبة.", 403);
       const application = await db.prepare("SELECT owner, name FROM registered_pharmacies WHERE id = ?").bind(input.pharmacy).first<{ owner: string; name: string }>();
       if (!application) throw new HttpError("الطلب غير موجود.", 404);
       if (input.status === "approved" && await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(application.owner).first()) throw new HttpError("أعد تفعيل حساب المالك قبل اعتماد الصيدلية.", 409);
       await db.batch([db.prepare("UPDATE registered_pharmacies SET status = ?, updated = ? WHERE id = ?").bind(input.status, now, input.pharmacy), audit(owner, "pharmacy-status", input.pharmacy, `${application.name}: ${input.status}`), notify(`تحديث طلب الصيدلية: ${input.status}.`, application.owner), ...(input.status === "approved" ? [] : stopPharmacyBookings(input.pharmacy, now))]);
     } else if (input.action === "admin-account") {
-      if (!await isAdmin(owner) || input.owner === owner || isRootAdmin(input.owner) || (await isAdmin(input.owner) && !isRootAdmin(owner))) throw new HttpError("لا يمكنك تغيير هذا الحساب.", 403);
+      if (!await hasAdminPermission(owner, "accounts", db) || input.owner === owner || isRootAdmin(input.owner) || (await isAdmin(input.owner) && !isRootAdmin(owner))) throw new HttpError("لا يمكنك تغيير هذا الحساب.", 403);
       if (!await db.prepare("SELECT id FROM profiles WHERE id = ?").bind(input.owner).first()) throw new HttpError("الحساب غير موجود.", 404);
       const affectedPharmacy = await db.prepare("SELECT id FROM registered_pharmacies WHERE owner = ?").bind(input.owner).first<{id:string}>();
       await db.batch([
@@ -196,6 +216,10 @@ export async function POST(request: Request) {
         audit(owner, input.suspended ? "account-suspend" : "account-reactivate", input.owner, input.reason),
       ]);
 
+    } else if (input.action === "admin-permissions") {
+      if (!isRootAdmin(owner) || isRootAdmin(input.owner) || input.owner === owner) throw new HttpError("صلاحية المالك مطلوبة.", 403);
+      if (!await db.prepare("SELECT owner FROM admin_members WHERE owner = ?").bind(input.owner).first()) throw new HttpError("المدير غير موجود.", 404);
+      await db.batch([db.prepare("UPDATE admin_members SET permissions = ? WHERE owner = ?").bind(JSON.stringify(input.permissions), input.owner), audit(owner, "admin-permissions", input.owner, input.permissions.join(","))]);
     } else if (input.action === "admin-revoke") {
       if (!isRootAdmin(owner) || isRootAdmin(input.owner) || input.owner === owner) throw new HttpError("صلاحية المالك مطلوبة.", 403);
       await db.batch([db.prepare("DELETE FROM admin_members WHERE owner = ?").bind(input.owner), db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner), audit(owner, "admin-revoke", input.owner, "Access revoked")]);
@@ -203,7 +227,7 @@ export async function POST(request: Request) {
       if (!isRootAdmin(owner)) throw new HttpError("صلاحية المالك مطلوبة.", 403);
       await db.batch([db.prepare("UPDATE admin_invites SET expires = ? WHERE used_by IS NULL").bind(now), audit(owner, "invites-revoke", "pending", "Pending invitations invalidated")]);
     } else if (input.action === "admin-pharmacy-edit") {
-      if (!await isAdmin(owner)) throw new HttpError("صلاحية الإدارة مطلوبة.", 403);
+      if (!await hasAdminPermission(owner, "pharmacies", db)) throw new HttpError("صلاحية إدارة الصيدليات مطلوبة.", 403);
       const result = await db.prepare("UPDATE registered_pharmacies SET name = ?, address = ?, phone = ?, hours = ?, updated = ? WHERE id = ?").bind(input.name, input.address, input.phone, input.hours, now, input.pharmacy).run();
       if (!result.meta.changes) throw new HttpError("الصيدلية غير موجودة.", 404);
       await audit(owner, "pharmacy-edit", input.pharmacy, input.name).run();
@@ -211,16 +235,21 @@ export async function POST(request: Request) {
       await db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(owner).run();
     } else if (input.action === "admin-invite-create") {
       if (!isRootAdmin(owner)) throw new HttpError("دعوات الإدارة متاحة لمالك المنصة فقط.", 403);
+      if (input.email === user.email.toLowerCase() || await db.prepare("SELECT owner FROM admin_members WHERE email = ?").bind(input.email).first()) throw new HttpError("الحساب عضو في الإدارة بالفعل. استخدم تعديل الصلاحيات.", 409);
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
-      await db.prepare("INSERT INTO admin_invites (hash, created_by, created, expires) VALUES (?, ?, ?, ?)").bind(await tokenHash(token), owner, now, now + 7 * 24 * 3600_000).run();
-      await audit(owner, "admin-invite", "pending", "7 day, single-use invitation").run();
+      await db.batch([db.prepare("INSERT INTO admin_invites (hash, created_by, created, expires, email, permissions) VALUES (?, ?, ?, ?, ?, ?)").bind(await tokenHash(token), owner, now, now + 7 * 24 * 3600_000, input.email, JSON.stringify(input.permissions)), audit(owner, "admin-invite", "pending", `Email-bound, 7 day invitation: ${input.permissions.join(",")}`)]);
       return json({ ...await snapshot(owner, user.fullName || "مرحباً بك"), invite: token });
     } else if (input.action === "admin-invite-redeem") {
       const hash = await tokenHash(input.token);
-      const invitation = await db.prepare("UPDATE admin_invites SET used_by = ? WHERE hash = ? AND used_by IS NULL AND expires > ? RETURNING created_by").bind(owner, hash, now).first<{ created_by: string }>();
-      if (!invitation) throw new HttpError("رابط الدعوة غير صالح أو استُخدم من قبل.", 409);
-      await db.prepare("INSERT INTO admin_members (owner, invited_by, created) VALUES (?, ?, ?) ON CONFLICT(owner) DO NOTHING").bind(owner, invitation.created_by, now).run();
-      await audit(owner, "admin-joined", owner, "Invitation accepted").run();
+      const invitation = await db.prepare("SELECT created_by, permissions, email FROM admin_invites WHERE hash = ? AND used_by IS NULL AND expires > ?").bind(hash, now).first<{created_by:string;permissions:string;email:string}>();
+      if (!invitation || !isRootAdmin(invitation.created_by) || !parseAdminPermissions(invitation.permissions).length || isRootAdmin(owner) || await isAdmin(owner, db)) throw new HttpError("رابط الدعوة غير صالح أو استُخدم من قبل.", 409);
+      if (!user.email || user.email.toLowerCase() !== invitation.email) throw new HttpError("سجّل الدخول بالبريد الإلكتروني المحدد في الدعوة، من متصفح الويب.", 403);
+      const claimed = await db.batch([
+        db.prepare("INSERT INTO admin_members (owner, invited_by, created, email, permissions) SELECT ?, created_by, ?, email, permissions FROM admin_invites WHERE hash = ? AND used_by IS NULL AND expires > ? AND email = ?").bind(owner, now, hash, now, user.email.toLowerCase()),
+        db.prepare("UPDATE admin_invites SET used_by = ? WHERE hash = ? AND used_by IS NULL AND expires > ? AND email = ?").bind(owner, hash, now, user.email.toLowerCase()),
+      ]);
+      if (!claimed[0].meta.changes) throw new HttpError("رابط الدعوة غير صالح أو استُخدم من قبل.", 409);
+      await audit(owner, "admin-joined", owner, "Email-bound invitation accepted").run();
     } else if (input.action === "share-location") {
       const booking = await db.prepare("SELECT b.id FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ? AND b.owner = ? AND b.status = 'active' AND b.expires > ? AND p.status = 'approved'").bind(input.reservation, owner, now).first();
       if (!booking) throw new HttpError("الموقع متاح للحجز الحقيقي النشط فقط.", 403);

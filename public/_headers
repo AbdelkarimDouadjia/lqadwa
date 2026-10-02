@@ -1,0 +1,11 @@
+# Cloudflare static responses do not pass through application middleware.
+/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=15552000
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(self), geolocation=(self), microphone=(), payment=(), usb=()
+  Content-Security-Policy: object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -28,12 +28,19 @@ export function DawaMap({ city, pharmacies, position, onSelect, approaches = [] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (!ready || !map.current || !markers.current) return;
+    if (!ready || !map.current) return;
     const center = cities.find((item) => item.id === city) || cities[0];
-    if (!map.current.getBounds().contains([center.lat, center.lng])) map.current.setView([center.lat, center.lng], 12);
+    map.current.setView([center.lat, center.lng], 12);
+  }, [ready, city]);
+  useEffect(() => {
+    if (ready && position && map.current) map.current.setView([position.lat, position.lng], 15);
+  }, [ready, position]);
+  useEffect(() => {
+    if (!ready || !map.current || !markers.current) return;
+    let disposed = false;
     markers.current.clearLayers();
     void import("leaflet").then((L) => {
-      if (!markers.current) return;
+      if (disposed || !markers.current) return;
       pharmacies.forEach((pharmacy) => {
         const marker = L.circleMarker([pharmacy.lat, pharmacy.lng], { radius: pharmacy.pilot ? 8 : 10, color: pharmacy.pilot ? "#667b91" : "#087f79", weight: 3, fillColor: pharmacy.pilot ? "#9caebc" : "#16b8a6", fillOpacity: .9 }).addTo(markers.current!);
         const label = document.createElement("div");
@@ -43,9 +50,14 @@ export function DawaMap({ city, pharmacies, position, onSelect, approaches = [] 
         marker.bindPopup(label);
         marker.on("click", () => callback.current(pharmacy));
       });
-      if (position) L.circleMarker([position.lat, position.lng], { radius: 7, color: "#3566a1", fillColor: "#7196df", fillOpacity: 1 }).addTo(markers.current!);
+      if (position) {
+        const accuracy = "accuracy" in position && typeof position.accuracy === "number" ? Math.min(position.accuracy, 10000) : 0;
+        L.circle([position.lat, position.lng], { radius: accuracy, color: "#306df1", weight: 1, fillOpacity: .1 }).addTo(markers.current!);
+        L.circleMarker([position.lat, position.lng], { radius: 9, color: "white", weight: 4, fillColor: "#306df1", fillOpacity: 1 }).addTo(markers.current!);
+      }
       approaches.forEach((point) => { const label = document.createElement("span"); label.textContent = point.label; L.circle([point.lat, point.lng], { radius: 100, color: "#306df1", fillOpacity: .18 }).addTo(markers.current!).bindPopup(label); });
     });
+    return () => { disposed = true; };
   }, [ready, city, pharmacies, position, approaches]);
   return <div ref={element} className="dawa-map" role="application" aria-label="OpenStreetMap" />;
 }

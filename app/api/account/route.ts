@@ -2,6 +2,7 @@ import { z } from "zod";
 import { database } from "@/db";
 import { HttpError, identity, isRootAdmin, tokenHash } from "@/lib/access";
 import { limitedJson, privateHeaders, rateLimit, requireMutationOrigin } from "@/lib/http-security";
+import { deleteAuthAccount } from "@/lib/delete-auth-account";
 export const dynamic = "force-dynamic";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: privateHeaders });
 function failure(error: unknown) {
@@ -42,11 +43,8 @@ export async function POST(request: Request) {
     const user = await identity(request, { allowClosed: true, allowSuspended: true }), owner = user.userId, db = database();
     await rateLimit(owner, "account-write", 3, 3600);
     if (input.action === "reopen") {
-      // Rejoining is an explicit browser action, never an automatic side-effect of a stale cookie.
-      if (request.headers.has("x-lqadwa-session")) throw new HttpError("Browser sign-in required", 403);
-      if (await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(owner).first()) throw new HttpError("Contact support before rejoining", 403);
-      await db.prepare("DELETE FROM closed_accounts WHERE hash = ?").bind(await tokenHash(owner)).run();
-      return json({ reopened: true });
+      // A closed identity stays closed, including during sign-in-record deletion.
+      throw new HttpError("Create a new account after completing deletion", 403);
     }
     if (isRootAdmin(owner)) throw new HttpError("Transfer platform ownership before deleting this owner account. / انقل ملكية المنصة أولاً.", 409);
     const hash = await tokenHash(owner), now = Date.now();
@@ -72,6 +70,7 @@ export async function POST(request: Request) {
       db.prepare("DELETE FROM audit_log WHERE actor = ? OR target = ?").bind(owner, owner),
       db.prepare("DELETE FROM profiles WHERE id = ?").bind(owner),
     ]);
-    return json({ deleted: true });
+    const authDeleted = !request.headers.has("x-lqadwa-session") && await deleteAuthAccount();
+    return json({ deleted: true, authDeleted });
   } catch (error) { return failure(error); }
 }

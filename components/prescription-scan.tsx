@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Check, FileScan, ImagePlus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { normalize } from "@/lib/domain";
+import { prescriptionMatches, type PrescriptionCandidate } from "@/lib/prescription-match";
 import type { Language } from "@/lib/i18n";
 import type { Worker } from "tesseract.js";
 
@@ -24,7 +24,7 @@ const copy = {
   choose: ["راجع التركيز ثم اختر", "Vérifiez le dosage puis choisissez", "Review strength, then choose", "Senqed lqedd, syen fren"],
   close: ["إغلاق ومسح النص", "Fermer et effacer le texte", "Close and clear text", "Mdel, kkes aḍris"],
 } as const;
-type Candidate = { name: string; ingredient: string };
+type Candidate = PrescriptionCandidate;
 
 export function PrescriptionScan({ language, disabled, onSelect }: { language: Language; disabled?: boolean; onSelect: (name: string) => void }) {
   const index = language === "ar" ? 0 : language === "fr" ? 1 : language === "en" ? 2 : 3;
@@ -32,25 +32,22 @@ export function PrescriptionScan({ language, disabled, onSelect }: { language: L
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [progress, setProgress] = useState(0);
   const [text, setText] = useState(""), [error, setError] = useState(false), [matched, setMatched] = useState(false), [candidates, setCandidates] = useState<Candidate[]>([]);
   const camera = useRef<HTMLInputElement>(null), gallery = useRef<HTMLInputElement>(null), worker = useRef<Worker | null>(null), run = useRef(0);
-  useEffect(() => () => { run.current++; void worker.current?.terminate(); }, []);
-  function close() { run.current++; void worker.current?.terminate(); worker.current = null; setOpen(false); setText(""); setCandidates([]); setMatched(false); setError(false); setBusy(false); }
+  useEffect(() => () => { run.current++; void worker.current?.terminate().catch(() => {}); }, []);
+  useEffect(() => { if (disabled) close(); }, [disabled]);
+  function close() { run.current++; void worker.current?.terminate().catch(() => {}); worker.current = null; setOpen(false); setText(""); setCandidates([]); setMatched(false); setError(false); setBusy(false); }
   async function match(raw: string, generation: number) {
     const { default: catalog } = await import("@/lib/medicines-2026.json");
-    const normalized = ` ${normalize(raw).replace(/[^\p{L}\p{N}]+/gu, " ")} `;
-    const unique = new Set<string>();
-    const items: Candidate[] = [];
-    for (const [brand, dose, ingredient] of catalog) {
-      const term = normalize(brand).replace(/[^\p{L}\p{N}]+/gu, " ");
-      if (term.length < 4 || !normalized.includes(` ${term} `)) continue;
-      const name = `${brand} ${dose}`.trim(); if (unique.has(name)) continue;
-      unique.add(name); items.push({ name, ingredient }); if (items.length === 16) break;
-    }
+    const items = prescriptionMatches(raw, catalog);
     if (generation === run.current) { setCandidates(items); setMatched(true); }
   }
   async function scan(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 8_000_000) { setError(true); return; }
+    if (!file.type.startsWith("image/") || file.size > 8_000_000) { setText(""); setCandidates([]); setMatched(false); setError(true); return; }
     const generation = ++run.current; setBusy(true); setProgress(0); setError(false); setText(""); setCandidates([]); setMatched(false);
+    const timeout = setTimeout(() => {
+      if (generation !== run.current) return;
+      run.current++; void worker.current?.terminate().catch(() => {}); worker.current = null; setBusy(false); setError(true);
+    }, 120000);
     try {
       const { createWorker } = await import("tesseract.js");
       const current = await createWorker(["ara", "fra", "eng"], 1, { logger: (event) => { if (generation === run.current && event.status === "recognizing text") setProgress(Math.round(event.progress * 100)); } });
@@ -63,7 +60,7 @@ export function PrescriptionScan({ language, disabled, onSelect }: { language: L
         if (!raw) setError(true); else await match(raw, generation);
       } finally { if (worker.current === current) { worker.current = null; await current.terminate(); } }
     } catch { if (generation === run.current) setError(true); }
-    finally { if (generation === run.current) setBusy(false); }
+    finally { clearTimeout(timeout); if (generation === run.current) setBusy(false); }
   }
   return <><button type="button" disabled={disabled} onClick={() => setOpen(true)}><FileScan />{t("scan")}</button><Dialog open={open} onOpenChange={(value) => !value && close()}><DialogContent className="app-dialog prescription-dialog" dir={language === "ar" ? "rtl" : "ltr"} showCloseButton={false}><button className="dialog-close icon-btn" onClick={close} aria-label={t("close")}><X /></button><span className="dialog-symbol"><FileScan /></span><DialogTitle>{t("title")}</DialogTitle><DialogDescription>{t("intro")}</DialogDescription><p className="scan-privacy"><ShieldCheck />{t("privacy")}</p><div className="row"><Button disabled={busy} onClick={() => camera.current?.click()}><Camera />{t("camera")}</Button><Button disabled={busy} variant="outline" onClick={() => gallery.current?.click()}><ImagePlus />{t("photo")}</Button></div><input ref={camera} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} /><input ref={gallery} className="visually-hidden" type="file" accept="image/*" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} />{busy && <div className="ocr-progress" role="status"><span>{t("reading")} {progress}%</span><progress value={progress} max={100} /></div>}{error && <p role="alert" className="journey-error">{t("error")}</p>}{text && <><label htmlFor="prescription-text">{t("text")}</label><textarea id="prescription-text" dir="auto" value={text} maxLength={15000} onChange={(e) => { setText(e.target.value); setCandidates([]); setMatched(false); }} /><Button variant="outline" disabled={busy} onClick={() => void match(text, run.current)}>{t("check")}</Button></>}{candidates.length > 0 && <><h3>{t("match")}</h3><p className="muted">{t("choose")}</p><div className="prescription-matches">{candidates.map((item) => <button key={item.name} onClick={() => { onSelect(item.name); close(); }}><span dir="ltr"><strong>{item.name}</strong><small>{item.ingredient}</small></span><Check /></button>)}</div></>}{matched && !candidates.length && <p className="muted">{t("manual")}</p>}<p className="soft-note">{t("caution")}</p></DialogContent></Dialog></>;
 }

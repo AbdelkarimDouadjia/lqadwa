@@ -11,13 +11,23 @@ for (const [language, copy] of Object.entries(languages)) {
 for (const path of ['app/page.tsx','components/app-install.tsx','components/account-data.tsx','components/device-security.tsx','app/privacy/page.tsx','android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java']) {
   assert.doesNotMatch(read(path), /Taqbaylit · Beta|\bRC1\b|Release candidate|نسخة مرشحة للإطلاق/i, path);
 }
-assert.ok(read('app/page.tsx').includes('t(demoMode ? "demo" : "serviceRegion")'));
-assert.ok(read('app/page.tsx').includes('t(demoMode ? "pilotNote" : "pickupOnly")'));
+assert.ok(read('app/page.tsx').includes('t("serviceRegion")'));
+assert.ok(read('app/page.tsx').includes('t("pickupOnly")'));
+assert.doesNotMatch(read('app/page.tsx'), /setDemoMode|demo-toggle/);
+assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /CheckBox examples|t\("demoMode"\)/);
+assert.ok(read('app/api/app/route.ts').includes('demo: z.literal(false).default(false)'));
 assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un relecteur kabylophone'));
-assert.ok(read('android/app/build.gradle').includes("versionCode 5; versionName '0.11.1'"));
+assert.ok(read('android/app/build.gradle').includes("versionCode 10; versionName '1.0.5'"));
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /android\.webkit|new WebView/);
+assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /public void onBackPressed\(|Comparator.comparingDouble/);
+assert.ok(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java').includes('getOnBackPressedDispatcher().addCallback(this,backNavigation)'));
+assert.ok(read('android/app/src/main/AndroidManifest.xml').includes('android:dataExtractionRules="@xml/data_extraction_rules"'));
+const native = read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java');
+assert.ok(native.includes('if(token.isEmpty()||(afterLocation==null&&sharing.isEmpty()&&!mapTracking))return;stopLocation();'), 'Late permission callbacks must not restart GPS after logout/navigation');
+assert.ok(native.includes('(authenticated&&!auth.equals(token))'), 'Responses from a previous login must not replace the current account');
+assert.ok(native.includes('b.optLong("approachUpdated")+60000-System.currentTimeMillis()'), 'Private arrival markers need a local freshness expiry');
 for (const old of ['lqadwa-demo.apk', 'lqadwa-armv7.apk']) {
   assert.equal(existsSync(`public/downloads/${old}`), false, 'Do not distribute debug-signed packages');
   assert.ok(read('next.config.ts').includes(`source: "/downloads/${old}"`), 'Preserve old download links');
 }
-console.log('Branding passed: four languages, native version, real/demo separation and safety disclosures.');
+console.log('Branding passed: four languages, native version, no public sample-data control and safety disclosures.');

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { limitedJson, rateLimit } from "@/lib/http-security";
 import { database } from "@/db";
 import { audit, HttpError, identity, tokenHash } from "@/lib/access";
+import { createDeviceSession } from "@/lib/device-session";
 export const dynamic = "force-dynamic";
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), challenge: z.string().regex(/^[0-9a-f]{64}$/) }),
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     }
     if (input.action === "approve") {
       if (request.headers.get("origin") !== new URL(request.url).origin) throw new HttpError("Invalid origin", 403);
-      // Browser SIWC only. Mobile sessions cannot approve another device.
+      // Verified browser session only. Mobile sessions cannot approve another device.
       if (request.headers.has("x-lqadwa-session")) throw new HttpError("Use browser sign-in", 403);
       const user = await identity();
       const row = await db.prepare("UPDATE device_links SET attempts = attempts + 1 WHERE id = ? AND expires > ? AND owner IS NULL AND attempts < 5 RETURNING code").bind(input.id, now).first<{ code: string }>();
@@ -45,10 +46,7 @@ export async function POST(request: Request) {
       const consumed = await db.prepare("UPDATE device_links SET consumed = 1 WHERE id = ? AND challenge = ? AND consumed = 0 AND expires > ? RETURNING owner").bind(input.id, challenge, now).first<{ owner: string }>();
       if (!consumed) throw new HttpError("Already exchanged", 409);
       if (await db.prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(consumed.owner).first()) throw new HttpError("Account suspended", 403);
-      const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
-      const saved = await db.prepare("INSERT INTO mobile_sessions (hash, owner, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) AND NOT EXISTS (SELECT 1 FROM account_controls WHERE owner = ? AND suspended = 1)").bind(await tokenHash(token), consumed.owner, now, now + 7 * 86400_000, await tokenHash(consumed.owner), consumed.owner).run();
-      if (!saved.meta.changes) throw new HttpError("Account unavailable", 403);
-      return json({ token, expires: now + 7 * 86400_000 });
+      return json(await createDeviceSession(consumed.owner));
     }
     await identity(request);
     await db.prepare("DELETE FROM mobile_sessions WHERE hash = ?").bind(await tokenHash(request.headers.get("x-lqadwa-session") || "")).run();

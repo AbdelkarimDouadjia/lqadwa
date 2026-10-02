@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lqadwa",
+  "account_id": "6fa5776fa4a5360f668f66f7ef38b912",
+  "main": "vinext/server/fetch-handler",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "lqadwa-production",
+    "database_id": "ab924e98-0775-4c33-ab10-d5cdee473029",
+    "migrations_dir": "drizzle"
+  }],
+  "vars": {
+    "SUPABASE_URL": "https://iqbqqlwappehjppupzde.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_1fxo-LndcnKMbYEPcqI17A__QPDtXuL",
+    "APP_ADMIN_IDS": "10708400-537e-4287-85d1-397a78c1fd78",
+    "APP_OWNER_EMAIL": "abdelkarim.douadjia@gmail.com"
+  }
+}

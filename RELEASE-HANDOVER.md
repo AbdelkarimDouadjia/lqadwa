@@ -1,75 +1,91 @@
-# LQADWA 0.11.1 — release handover
+# LQADWA 1.0.5 release handover
 
-27 September 2026. Android first; no Play Store or App Store submission.
+2 October 2026. Web and signed native Android release 1.0.5, versionCode 10. This release includes authentication layout polish, safer prescription matching, native Android compatibility fixes and repeatable CI checks. No store submission.
 
-A signed, hosted **release candidate for controlled testing**, not clinical/legal certification or a comprehensive security guarantee. Do not advertise fictional availability as real pharmacy stock.
+## Published links
 
-## Public-branding update
+- Client: https://lqadwa.lqadwa-dz.workers.dev/
+- Pharmacy: https://lqadwa.lqadwa-dz.workers.dev/?space=pharmacy#pharmacy
+- Private administration: https://lqadwa.lqadwa-dz.workers.dev/operations
+- Private owner/admin login: https://lqadwa.lqadwa-dz.workers.dev/operations/login
+- Android ARM64: https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release.apk
+- Android ARMv7: https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release-armv7.apk
 
-Version 0.11.1 removes pilot/beta/RC labels from the normal web and native Android interface. Download links prioritize the native Android package and distinguish it from a browser shortcut. Fictional-data mode retains its warnings; the unreviewed Kabyle privacy translation and OCR limitations remain disclosed. This presentation change does not waive the real-patient launch gates below. Previous security results below were obtained on the preceding 0.11.0-rc1 code; this update changes interface copy and version metadata, not authorization or database behavior.
+The active deployment is in the owner's Cloudflare account. No paid plan, paid API, domain purchase or payment collection was enabled. Old hosted data remains preserved; old host identities were not silently merged into new accounts.
 
-Hosting: OpenAI Sites at `https://lqadwa.adcker-7656.chatgpt.site`, running the backend on Cloudflare Workers with a managed Cloudflare D1 database. Android screens are native Java/Material with MapLibre, not a WebView. Browser sign-in and external links remain intentional.
+## Hosting and identity
 
-## Implemented
+- Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, ten applied migrations through `0009_admin_permissions`.
+- Supabase project `iqbqqlwappehjppupzde`: Authentication and protected sign-in-record deletion. Application data stays in D1.
+- Email/password authentication replaces host identity headers. Email confirmation remains required. The verified account for the supplied support email is configured as owner in `APP_ADMIN_IDS`; that configuration is server-only.
+- Native Android uses Java/Material views, MapLibre, on-device OCR/QR and encrypted Android Keystore session storage. Email/password sign-in runs inside the app. Account creation/confirmation, recovery and optional device linking use the browser.
+- Android search now has an explicit GPS control and sorts from that position; without permission, distances are marked approximate from the selected wilaya centre. Approved pharmacy staff can open a private arrival map for their own active bookings. Shared points disappear after 60 seconds, and expired phone sessions stop GPS and clear private map state. Navigation uses public walking/driving routing; transit opens external navigation and depends on provider coverage.
+- Supabase Site URL was corrected from localhost to the public Cloudflare URL. The production callback allowlist is saved as `https://lqadwa.lqadwa-dz.workers.dev/auth/callback**`. Screenshot evidence is under ignored `.cloudflare/qa/auth-redirects.png`.
+- Added server-allowlisted Google/Apple PKCE integration and native browser/device linking. Fresh public settings report Google=false, Apple=false; no non-working provider buttons are displayed. Operator credentials and provider acceptance are required. See `AUTH-PROVIDERS.md`.
+- Client web/native maps now display a permission-based current location with accuracy, foreground-only updates, recenter, destination address/copy and Google Maps driving/walking/bus/train coverage links. Web destination maps appear before route calculation. Native rerouting replaces old lines and ignores stale map/mode responses. Invalid browser sessions close dialogs and clear position.
+- Read-only production counts on 1 October: D1 has zero profiles, registered pharmacies, requests and reservations; Supabase has one confirmed non-anonymous owner. No live records were deleted. Removed the fictional pharmacy names/coordinates from the bundled directory; only a deny-list of legacy sample IDs remains for rejecting old clients.
+- Web interfaces use Arabic, French, English and Kabyle. Kabyle medical/legal wording still needs fluent human review.
+- Public administration links and synthetic-data controls are removed. Public searches include only approved registered pharmacies. No fictional pharmacy was seeded into the new production database.
+- Patient service remains free. Pharmacy price: 300 DA/month, waived through 30 September 2027. In-pharmacy pickup only; no delivery or medicine payments.
 
-- Shared persistent Cloudflare D1 database, 18 application tables, additive migrations through `0008`, indexed ownership/status queries.
-- Server-enforced patient/pharmacy/admin access. No public administration option; `/operations` requires an approved admin identity. Changing a URL or submitting `role: admin` cannot grant access.
-- Only the configured owner creates one-use admin invitations and revokes delegated admins. Admins manage pharmacy approval/rejection/suspension, account suspension, pharmacy details and inventory visibility, without unrestricted patient-location browsing.
-- Pharmacies are invisible to real searches until approved. Suspension atomically cancels active bookings, invalidates availability replies and removes arrival points. Human license verification is still required.
-- Native Android UI (Java/Material + MapLibre, not a website wrapper), OCR/QR, bookings, foreground location and walking/driving routes. Transit opens external navigation, subject to coverage.
-- Android compile/target API 36, min API 23, versionCode 5. Dedicated release signing key, no release fallback to the debug key.
-- Confirmed account deletion on Android and web; scoped, paginated data export. Closure removes account-owned active data, revokes phones and cancels bookings at a closed pharmacy. Owner self-deletion is blocked.
-- Request-size/content-type checks, same-origin browser mutations, bounded queries, rate limits, hashed server tokens, encrypted Android tokens, expiration cleanup.
-- `/privacy` and `/account-data`, support contact `abdelkarim.douadjia@gmail.com`. Legal business identity/address was not supplied and is not invented.
-- Patients remain free. Pharmacy subscription: 300 DA/month, waived through 30 September 2027. No payment collection or medicine delivery.
+## Owner and delegated administration
 
-## Checks actually passed
+Open `/operations/login` and use username `admin` or `abdelkarim.douadjia@gmail.com`. The username resolves to the owner email on the server; Supabase still verifies the account password. The dashboard checks the configured owner ID, not an editable display name or user metadata. This private login has no public signup or social-login controls.
 
-| Check | Result |
+The owner password was not changed. The numeric value shared in chat was not installed or hard-coded. Enter a new unique password of at least 12 characters directly in the protected recovery flow, using “Forgot password” and the owner email. Actual email receipt and real-owner login acceptance remain unverified; a local Auth fixture does not prove these external services work.
+
+The owner appears at the top with full administrative permissions. In **Admin team**, enter an administrator's email, select permissions, create a single-use invitation and share the link directly with that recipient. The recipient registers or signs in with that same verified email and their own password. Invitations expire after seven days and cannot grant ownership. The owner can change an admin's permissions, revoke access and invalidate unused invitations.
+
+Permissions separately govern pharmacies/inventory, account moderation, audit history and service totals. The backend checks both reads and writes on every request; changing permissions affects the next request without waiting for JWT refresh. Delegated admins cannot appoint other admins, change their own access, suspend the owner or access prescription images/full text/personal live locations. No new live admin was appointed during implementation.
+
+Before migration, live D1 contained zero delegated admins and invitations. An ignored local SQL backup was saved at `.cloudflare/backups/pre-admin-1.0.4.sql`; the migration only adds permission/email columns. No live records were deleted. The production configuration was checked to exclude the local Auth fixture server.
+
+## Verified
+
+- Authentication branding uses rounded, bordered logo tiles with consistent spacing on web/native screens. Signed-out public navigation does not show an account menu. Mobile web inputs are 48 pixels high with 16-pixel text.
+- `scripts/ocr-smoke.mjs` checks exact whole-brand matching, punctuation, duplicate removal, unrecognized text and multi-medicine prescriptions without silently selecting a strength or dropping later brands. `scripts/ocr-engine-smoke.mjs` runs the actual Arabic/French/English Tesseract worker on a synthetic printed prescription and finds both real catalog brands. This does not prove handwriting, camera or physical-phone recognition.
+- Native OCR ignores callbacks from a signed-out/replaced session. Launch behavior avoids a duplicate custom splash on Android 12+, uses adaptive launcher assets and rounded legacy branding. Android 16 back handling uses the supported back dispatcher; distance sorting works at the minimum API level. Backup rules exclude app data from cloud/device transfer.
+- Signed native 1.0.5 APKs and AAB built successfully. Full Android lint passed with zero errors and eight warnings; warnings include dependency freshness, legacy splash/resource conventions and unused resources, not waived lint errors. Physical-device acceptance is still required.
+- Common credential patterns were absent from publishable source and Git history. Private keys, environment files, database exports and local runtime state are excluded. This is not exhaustive secret detection or an independent security audit.
+- Live 1.0.5 security headers passed on static pages, application pages and the private admin redirect. A regression gate checks static pages and redirects locally. Cloudflare static header rules complement framework/proxy headers; hiding the admin link is not a security control. Both hosted APK hashes match the signed 1.0.5 artifacts byte for byte.
+- TypeScript and production web build pass.
+- `scripts/auth-smoke.mjs`: forged headers/cookies rejected, origin enforcement, validation, invalid native login rejected, deletion-proof authentication and safe redirects.
+- `scripts/release-smoke.mjs`: patient/pharmacy/admin isolation, stock and booking flows, hidden pickup codes, opt-in arrival sharing, stale-point hiding, immediate consent withdrawal, suspension cancellation, export, account closure, stale-session rejection and pickup throttling. Fixtures are local only.
+- `scripts/map-auth-check.mjs`: directions modes/origin, provider allowlist/PKCE, no fictional directory, GPS lifecycle and stale-route guards.
+- `scripts/admin-smoke.mjs`: owner username/password verification, email-bound invitation acceptance, single use, metadata privilege denial, scoped reads/writes, immediate permission changes, protected owner and revoked access. This uses an isolated LOCAL synthetic Auth server and local D1; it never creates live users or proves production email delivery.
+- `scripts/branding-smoke.mjs`: public wording and four-language/native release checks.
+- Production npm dependency audit: zero reported vulnerabilities at verification time. A fresh scan identified the newly indexed [Next.js ImageResponse advisory](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j) and [fast-uri advisory](https://github.com/advisories/GHSA-hrr3-gc8f-f4qj); Next.js/eslint-config-next were updated to 16.3.8 and fast-uri to 3.1.8. This application does not define an ImageResponse handler. Registry signatures/attestations were verified during migration.
+- Supabase deletion endpoint rejects unauthenticated/forged callers. Successful Auth deletion needs acceptance with a disposable verified account; no real user was deleted for verification.
+- Hosted D1 SQL export restored to a separate local SQLite database; integrity, foreign keys, required tables and migration count pass. Export and restore are under ignored `.cloudflare/backups/`. This does not prove a populated live-cloud disaster recovery drill.
+- Android APK signatures, ARM64 16 KB zip alignment, all six ARM64/x86_64 ELF library alignments and AAB signature verification passed for 1.0.5. Self-signed Android upload-certificate warnings are expected; the signing certificate is unchanged.
+- Public HTTPS, health release, catalog and unauthenticated administration redirect were verified. `scripts/public-release-check.mjs` passed after deployment, including byte-for-byte SHA-256 matches for both hosted signed APKs.
+- Public login DOM/layout inspection confirms no ChatGPT sign-in option or account menu, a 48-pixel rounded logo and 48-pixel inputs at a 375-pixel viewport. Arabic and French had no horizontal overflow. English and Kabyle controls were also inspected. Screenshot capture timed out, so no new screenshot evidence is asserted. This is layout/DOM evidence, not a completed visual screenshot review.
+- Fresh public `/operations/login` inspection confirms the private owner/admin identifier/password controls, owner-only delegation explanation and no signup/social-login buttons. The local English private login fits the observed mobile viewport without horizontal overflow.
+
+## Android artifacts
+
+| Artifact | SHA-256 |
 | --- | --- |
-| `scripts/branding-smoke.mjs` | Four-language labels, native version, real/demo separation and safety disclosures |
-| TypeScript and production web build | Passed with updated dependencies |
-| Full npm audit | 0 reported vulnerabilities at verification time |
-| `scripts/smoke-test.mjs` | Auth, consent, input validation, idempotency, concurrent reservation, persistence, expiry timestamp, pickup and cancellation guards |
-| `scripts/role-smoke.mjs` | Approval/suspension, stock CRUD, replies, bookings, opt-in approach, collection, invitation replay |
-| `scripts/security-smoke.mjs` | Device code/proof/origin checks, one-use exchange, revocation, role isolation and root protection |
-| `scripts/release-smoke.mjs` | Cross-account access, hidden pickup codes, input limits, suspension cancellation, export, deletion, stale-account prevention and pickup throttling |
-| Migration generation | Schema matches committed migrations |
-| Local backup/restore | Consistent SQLite snapshot, isolated restore, integrity/FK checks |
-| Android Gradle | `assemblePilot assembleRelease bundleRelease` passed |
-| Release ARM64 APK | Signature and `zipalign -P 16` verification passed |
-| 64-bit native ELF libraries | All 6 ARM64/x86-64 libraries passed 16 KB alignment checks |
-| AAB signing | `jarsigner -verify` passed; normal self-signed Android upload certificate |
-
-Destructive tests use **localhost and fictional fixtures only**. No real-user deletion test was run. Local backup verification does not prove hosted recovery. Dependency audit results do not replace independent security testing.
-
-## Android delivery
-
-- Recommended: `/downloads/lqadwa-release.apk` (ARM64).
-- Older phones: `/downloads/lqadwa-release-armv7.apk` (ARMv7).
-- Only release-signed APKs are publicly distributed. Legacy `/downloads/lqadwa-demo.apk` and `/downloads/lqadwa-armv7.apk` URLs redirect to their release-signed equivalents. Old debug-signed packages remain recoverable in Git and locally under `.sites-runtime/legacy-apks-0.11.1/`, not in hosted assets.
-- Signed store bundle: `android/app/build/outputs/bundle/release/app-release.aab`, local only; it exceeds the hosting per-file asset limit.
-- **Uninstall the old pilot before installing the release APK**, then sign in again. Server account data remains; unsaved local input does not. Their signing identities differ.
-- Sign-in currently requires ChatGPT; Android confirms linking in a browser. Separate email/password/SMS auth is not implemented.
-
-SHA-256:
-
-| Artifact | Digest |
-| --- | --- |
-| ARM64 release APK | `c6b8e2c4da53ce7c61f48e51164865aff7b5882ad93e91e20f13741932c89bd3` |
-| ARMv7 release APK | `fdff019d7be43cc401d4f6791a08357f8ce5ad46ec0d945d459df5e853c17af5` |
-| AAB | `651e1373268a2ba2d1d889334cf44c4bc4612eb32f445007ce4a3e1fe74d6311` |
+| ARM64 APK | `a4a66440f41acd6e84e7a3e26afb19b5ab30710fe1ee095119f19e8c383b0309` |
+| ARMv7 APK | `58861cc444a2655f8e288891639e4e85c622ddcbfe7ca5926bb109dea39c39fd` |
+| Store AAB | `d308b714103aecc659f40952c54ee99eb07b02eaf2c2919bd8ed3adb8ecc19eb` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
-## Required before broad real-patient launch
+The signed AAB is local at `android/app/build/outputs/bundle/release/app-release.aab`. Protected signing material remains outside the repository. Previous signed APKs are recoverable under ignored `.cloudflare/previous-apks/`.
 
-1. **Real-device acceptance:** old/current Android and a 16 KB device/emulator; install/upgrade, browser return, rotation/process death, weak network, permissions, camera/gallery, QR, GPS/routing and battery. Compilation/alignment alone does not prove these.
-2. **Pharmacist acceptance:** professional-license verification, real names/strengths, stale stock and handover. OCR/catalog matches do not validate prescriptions or treatment. Native OCR supports printed Latin, not Arabic/handwritten prescriptions.
-3. **Legal/operator:** supply legal operator identity/address and obtain Algerian pharmacy/data-protection advice, including overseas processing and retention/consent. No regulatory authorization is asserted.
-4. **Language/accessibility:** fluent Kabyle review (still beta), screen reader, large text and low-end-phone testing.
-5. **Recovery/key custody:** provider-level hosted DB export/restore drill and encrypted off-device signing-key backup with tested recovery. Neither is independently verified yet.
-6. **Operations:** quota/load testing, monitoring ownership, incident handling and independent security review. CSP currently constrains embedding/objects/form destinations; it is not a complete nonce-based script policy.
+## Source and release automation
 
-Store data-safety, app-access and health-app declarations must also be completed before submission. iOS is out of this release. See [OPERATIONS.md](./OPERATIONS.md).
+The owner-authorized private repository is https://github.com/AbdelkarimDouadjia/lqadwa. Source/history and the signed public download packages are included; private signing credentials and database exports are not. CI runs web build/security/role checks, actual printed OCR and Android build/lint using pinned actions and read-only repository permissions. The first hosted CI result must be checked after upload; local success alone does not prove GitHub runner success.
 
-Official preparation references: [Android target requirements](https://developer.android.com/google/play/requirements/target-sdk), [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes), [Play account deletion](https://support.google.com/googleplay/android-developer/answer/13327111?hl=en), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 free-limit enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/).
+Manual web deployment automation is included but Cloudflare repository secrets are not configured. A separate least-privilege deployment token must be entered by the owner; the local OAuth session was not copied into GitHub. The workflow does not apply D1 migrations or sign Android packages. No paid plan, paid overage or store publication was enabled.
+
+## Remaining acceptance and operator tasks
+
+1. Public email delivery is not verified. Although the owner replied “Done”, the inspected SMTP dashboard still showed “Enable custom SMTP” off, including another fresh check during this release (`Toggle SMTP`, `aria-checked=false`). The owner was asked to enable and save credentials directly in Supabase. Production redirect settings are now saved, but public signup, confirmation and recovery still need acceptance using a non-team address. No credentials should be pasted into chat. Evidence: prior ignored `.cloudflare/qa/smtp-status.png` and fresh browser observation of Toggle SMTP=false. Current screenshot capture timed out; no new screenshot is asserted.
+2. Configure and accept Google/Apple identity providers before claiming these logins work. Apple requires an eligible existing developer account; no paid membership was activated. Google public audience/consent and provider credentials are operator tasks.
+3. Install on actual supported phones and verify login, upgrade, camera/gallery, printed-prescription OCR, QR pickup, GPS/routes, foreground arrival sharing and weak-network behavior. No physical-device acceptance was completed here. Native OCR supports printed Latin; handwriting/Arabic recognition is not guaranteed. Catalog matches do not validate a prescription.
+4. Supply the legal operator identity/address and obtain the required local pharmacy/data-protection review before broad real-patient operation. No approval or clinical certification is asserted.
+5. Complete fluent Kabyle review, hosted recovery operations, portable encrypted signing-key backup and independent security/load review. Free service quotas and public map/transit coverage remain real constraints.
+6. Supabase's security advisor reports built-in leaked-password protection disabled. That feature requires Pro; it was not enabled because the owner requires free plans. The app enforces 12-character new passwords and request rate limits. See [Supabase password security](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+Public pages use normal release branding. Presentation changes are not evidence that the remaining acceptance tasks passed. iOS is deferred. Play/App Store publication remains for the owner after acceptance.

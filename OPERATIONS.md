@@ -2,17 +2,17 @@
 
 ## Access and costs
 
-Site hosting and persistent D1 use the existing Sites project. No new paid subscription, paid API, credit card, SMS gateway or payment processor was activated. Maps/routing use public OpenStreetMap/FOSSGIS services. This is not a promise of unlimited free hosting or indefinite availability.
+The website is deployed to the owner's Cloudflare Worker at https://lqadwa.lqadwa-dz.workers.dev, backed by D1 `lqadwa-production`. Supabase provides email/password authentication and protected sign-in-record deletion. No paid subscription, paid API, credit card, SMS gateway, domain purchase or payment processor was activated. Maps/routing use public OpenStreetMap/FOSSGIS services. Free plans have quotas and do not promise indefinite availability.
 
-Cloudflare's directly purchased D1 Free plan documents 5 million rows read/day, 100,000 rows written/day, 500 MB/database and 5 GB total storage. Index maintenance also counts as writes. Exceeding free daily query limits can fail requests until reset. Sites may impose its own limits; its underlying billing allocation is not independently visible here. Confirm actual quotas with the hosting owner before a large launch. [Pricing](https://developers.cloudflare.com/d1/platform/pricing/) · [Limits](https://developers.cloudflare.com/d1/platform/limits/).
+Cloudflare D1 Free documents 5 million rows read/day, 100,000 rows written/day, 500 MB/database and 5 GB total storage. Index maintenance also counts as writes. Exceeding free daily query limits can fail requests until reset. Monitor both Cloudflare and Supabase dashboards before widening access. [Pricing](https://developers.cloudflare.com/d1/platform/pricing/) · [Limits](https://developers.cloudflare.com/d1/platform/limits/).
 
-Search fan-out is bounded to 25 eligible pharmacies in the selected area; dashboard lists are bounded pilot views. Visible web screens poll every 30 seconds. Public routing/tiles have no guaranteed SLA. National-scale load testing and reporting are not claimed.
+Search fan-out is bounded to 25 eligible pharmacies in the selected area; dashboard lists are bounded. Visible web screens poll every 30 seconds. Android pharmacy polling preserves focused input. Public routing/tiles have no guaranteed SLA. National-scale load testing and reporting are not claimed.
 
 ## Administration
 
 - `/operations` requires server-verified admin identity, not just knowledge of its URL.
 - `APP_ADMIN_IDS` is the server-only allowlist of stable user IDs. An email alone does not grant admin rights. Never expose this setting/session credentials in public JS.
-- Root invitations expire after seven days and are single-use. Share each privately with its intended recipient, never alongside public demo links.
+- Root invitations expire after seven days and are single-use. Share each privately with its intended recipient, never alongside public app links.
 - Root can revoke admins/pending invitations. Delegated admins cannot remove/suspend root or promote admins.
 - Verify professional license and physical location independently before pharmacy approval; submitted form data is not verification.
 - Never request passwords, prescription photos or diagnoses via the support email.
@@ -21,14 +21,14 @@ Search fan-out is bounded to 25 eligible pharmacies in the selected area; dashbo
 
 `python scripts/backup-restore-smoke.py` tests a consistent snapshot and isolated restoration of the **local fixture SQLite database**. Ignored output under `.sites-runtime/db-restore-*` is never published.
 
-Before real-patient launch, obtain provider-level export/recovery access, verify retention, restore a production-format export into isolated staging, compare row counts/foreign keys and replay patient/pharmacy flows. Record recovery time and last successful drill. Do not restore over live data without an outage/reconciliation plan. Current Sites tools expose DB inspection, not a verified independent disaster-recovery workflow; automatic cloud recovery is not guaranteed here.
+The new hosted D1 export was restored into isolated local SQLite on 30 September 2026; integrity, foreign keys and migration count passed. `python scripts/verify-db-export.py <export.sql>` repeats this check without touching the live database. Private exports belong under ignored `.cloudflare/backups/`, never public assets or Git. Before broad operation, also rehearse provider-level recovery with representative data and record recovery time. Do not restore over live data without an outage/reconciliation plan.
 
 Migrations in `drizzle/` are additive/versioned. Never edit a deployed migration. Back up before destructive changes. Web-version rollback does not roll back D1 data/schema.
 
 ## Health, incidents and retention
 
 - `/api/health` returns status/release after a harmless DB query or 503; no private rows/credentials. Cache 30 seconds. No external monitoring subscription was created.
-- `/privacy` is public; `/account-data` requires identity for export/deletion/rejoining. Native Android also has confirmed account deletion.
+- `/privacy` is public; `/account-data` requires identity for export/deletion. Native Android also has confirmed application-data deletion; finish removing sign-in records through the account-data page. The protected Supabase function verifies the caller and D1 closure, and cannot delete the configured owner. Closed identities cannot be reopened through stale sessions.
 - Phone sessions: 7 days. Pairing links: 10 minutes. Reservations: 2 hours. Booking availability confirmation: 30 minutes.
 - Arrival sharing is optional, foreground only, coarse coordinates, assigned approved pharmacy only, active bookings only. Points disappear after 60 seconds without update; old points are cleared during activity-driven cleanup. Global cleanup runs at most once/15 minutes when requests arrive, not on an exact clock during inactivity.
 - Account closure removes active account data and revokes phones. A hashed closure identifier and existing suspension flag remain against automatic recreation/suspension evasion. Provider backups have separate retention.
@@ -46,6 +46,18 @@ Set `JAVA_HOME`/`ANDROID_HOME`, then run `./scripts/build-android.ps1`. Do not c
 
 ## Repeatable verification
 
-Build the web project, apply committed migrations to local D1, start localhost:5173, then run the four `.mjs` smoke scripts in `scripts/` and the Python backup/native checks. Smoke tests are hard-coded to localhost to avoid live account deletion. Fictional fixtures are not production seeds.
+Run `npm run check`, `npm audit --omit=dev --audit-level=high`, `npm run build`, `npm run test:integration` and `npm run test:ocr`. Integration applies local migrations and manages its isolated localhost Worker/Auth fixtures; port 5173 must be free. Destructive checks are hard-coded to localhost. Never deploy the local owner override or fixture accounts. Earlier `smoke-test`, `role-smoke` and `security-smoke` scripts retain previous-provider assumptions; use the current suites for this migration.
+
+Publish with `wrangler deploy --config dist/server/wrangler.json` after a successful production build. Run `scripts/public-release-check.mjs` to check the public endpoint and exact APK downloads without creating/deleting live accounts. No further deployment to the former host is authorized.
+
+Supabase email confirmation stays enabled. Set the Site URL to the public Cloudflare address and allow `https://lqadwa.lqadwa-dz.workers.dev/auth/callback**`. Custom SMTP needs owner-entered credentials; confirm email delivery to a non-team address before opening signup broadly. Built-in leaked-password protection is a Pro feature and remains disabled under the free-plan constraint; see [password security](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
 Keep the lockfile, review advisories and rerun tests after updates. Focused overrides pin patched image-size under vinext and patched esbuild under Drizzle's legacy loader; migration generation and production build passed with them. Zero audit findings is not a penetration-test result.
+
+## Private repository and CI
+
+Source is held at https://github.com/AbdelkarimDouadjia/lqadwa as a private repository. Keys, environment files, database exports and local runtime state are excluded. The common-credential scan checks publishable source; `node scripts/source-security-check.mjs --history` also checks committed patches. This is a useful leak check, not exhaustive secret detection.
+
+The Release checks workflow runs on main-branch pushes, pull requests and manual dispatch. It validates web source, dependency audit, local authentication/role isolation, actual printed OCR and native Android build/lint. GitHub Actions use pinned versions and read-only repository permissions. Signed distribution packages remain built under owner-controlled key custody, not from unsigned CI output.
+
+The Publish verified web release workflow is manual and restricted to main/master. Configure a separate Cloudflare API token with only the necessary deployment permissions as repository secret `CLOUDFLARE_API_TOKEN`, and the non-secret account identifier as `CLOUDFLARE_ACCOUNT_ID`. Do not reuse/export the local OAuth session. Configure environment approval controls if supported by the current free GitHub plan; none is claimed automatically. The workflow does not migrate D1 or sign Android releases. Free private-repository Actions minutes are finite; review usage and never enable paid overages without owner approval.
