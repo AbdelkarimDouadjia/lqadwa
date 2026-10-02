@@ -75,9 +75,11 @@ The signed AAB is local at `android/app/build/outputs/bundle/release/app-release
 
 ## Source and release automation
 
-The owner-authorized private repository is https://github.com/AbdelkarimDouadjia/lqadwa. Source/history and the signed public download packages are included; private signing credentials and database exports are not. CI runs web build/security/role checks, actual printed OCR and Android build/lint using pinned actions and read-only repository permissions. The first hosted CI result must be checked after upload; local success alone does not prove GitHub runner success.
+The owner-authorized private repository is https://github.com/AbdelkarimDouadjia/lqadwa. Source/history and the signed public download packages are included; private signing credentials and database exports are not. CI runs web build/security/role checks, actual printed OCR and Android build/lint using pinned actions and read-only repository permissions. The first GitHub web job passed all gates. Android stopped at SDK discovery because `sdkmanager` was not on PATH, before compilation; the workflow now pins Ubuntu 24.04 and verifies its preinstalled SDK. The corrected hosted Android result remains to be accepted. [Runner SDK inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
 
 Manual web deployment automation is included but Cloudflare repository secrets are not configured. A separate least-privilege deployment token must be entered by the owner; the local OAuth session was not copied into GitHub. The workflow does not apply D1 migrations or sign Android packages. No paid plan, paid overage or store publication was enabled.
+
+Public APK buttons derive their cache-version parameter from package metadata. Signed download responses require cache revalidation so existing users can receive release updates.
 
 ## Remaining acceptance and operator tasks
 

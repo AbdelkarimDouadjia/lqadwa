@@ -28,7 +28,7 @@ jobs:
       - run: npm run test:integration
       - run: npm run test:ocr
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -41,7 +41,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
         with:
           gradle-version: '8.13'
-      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      # The pinned runner already includes this SDK; sdkmanager is not on PATH.
+      - name: Verify installed Android SDK
+        run: |
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
       - run: gradle -p android assembleRelease lintRelease --console=plain --no-daemon
       # CI APKs are unsigned: never publish them as distribution packages.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

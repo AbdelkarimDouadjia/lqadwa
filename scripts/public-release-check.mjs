@@ -22,6 +22,7 @@ assert.equal(admin.headers.get('x-frame-options'),'DENY','private early redirect
 const medicines=await(await get('/api/medicines?q=doliprane')).json();assert(medicines.items.some(item=>item.brand==='DOLIPRANE'&&item.registration));
 for(const name of ['lqadwa-release.apk','lqadwa-release-armv7.apk']){
  const response=await get('/downloads/'+name);assert.equal(response.status,200,name);
+ assert.match(response.headers.get('cache-control')||'',/must-revalidate/,name+' update cache');
  const downloaded=Buffer.from(await response.arrayBuffer());
  const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
  assert.equal(hash(downloaded),hash(readFileSync('public/downloads/'+name)),name+' must be the newly signed artifact');

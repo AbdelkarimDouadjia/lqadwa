@@ -18,6 +18,7 @@ assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity
 assert.ok(read('app/api/app/route.ts').includes('demo: z.literal(false).default(false)'));
 assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un relecteur kabylophone'));
 assert.ok(read('android/app/build.gradle').includes("versionCode 10; versionName '1.0.5'"));
+assert.equal((read('components/app-install.tsx').match(/v=\$\{version\}/g)||[]).length,2,'APK links follow the package version');
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /android\.webkit|new WebView/);
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /public void onBackPressed\(|Comparator.comparingDouble/);
 assert.ok(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java').includes('getOnBackPressedDispatcher().addCallback(this,backNavigation)'));
