@@ -73,3 +73,10 @@ export const rateLimits = sqliteTable("rate_limits", {
 }, t => [index("idx_rate_expiry").on(t.expires)]);
 export const maintenance = sqliteTable("maintenance", { key: text("key").primaryKey(), lastRun: integer("last_run").notNull() });
 export const closedAccounts = sqliteTable("closed_accounts", { hash: text("hash").primaryKey(), created: integer("created").notNull() });
+export const serviceControls = sqliteTable("service_controls", {
+  id: integer("id").primaryKey(), requestsPaused: integer("requests_paused").notNull().default(0),
+  pickupsPaused: integer("pickups_paused").notNull().default(0), message: text("message").notNull().default(""), updated: integer("updated").notNull().default(0),
+});
+export const requestControls = sqliteTable("request_controls", {
+  request: text("request").primaryKey().references(() => requests.id, { onDelete: "cascade" }), stopped: integer("stopped").notNull().default(1),
+});

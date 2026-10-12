@@ -1,5 +1,19 @@
 # LQADWA operations — owner handover
 
+## Expanded management dashboard (12 October 2026)
+
+Use `/operations` with an authorized account. The owner has every management permission. Delegated admins only see granted sections; grants are checked again server-side on every request. The new `operations` permission is required for request/reservation lists and interventions. Existing delegates do not receive it automatically. Service-wide settings remain owner-only.
+
+- **Overview:** current registered profiles, approved/pending pharmacies, suspended accounts, requests and reservations in the last 30 days, reservation outcomes, stock entries, and a 14-day UTC activity table with proportional bars. Live database aggregates, not fabricated analytics or sales revenue.
+- **Users:** paginated search, edit display name/wilaya, suspend/reactivate. Signup uses the user's own verified identity. Passwords and sign-in email are not editable here; protected owner/admin accounts retain existing safeguards.
+- **Pharmacies:** create a pending record for an existing registered account (requires pharmacy and account permissions), edit address/contact/license/coordinates/hours/duty, approve/reject, or suspend/hide. Suspension cancels active pickups and removes shared arrival positions. Reapproval does not restore cancelled reservations.
+- **Inventory:** add, edit and delete entries, including pharmacy reference and quantity. This does not assert clinical suitability or automatically promise availability.
+- **Requests and reservations:** paginated operational records, stop a request or cancel an active reservation. Stopping blocks later replies/reservations and notifies affected users. Codes, prescription images/full OCR text, authentication secrets and patient GPS are not exposed. Completed pickups cannot be fabricated, reset or deleted.
+- **Service controls:** independently pause new requests/reservations or pickup confirmation, plus a public notice. Account/support/cancellation remain available. Existing reservations retain their original expiry. Database triggers enforce pauses even against older or in-flight clients.
+- **Audit:** searchable, paginated, read-only history. Sensitive edits require a reason; pharmacy approval follows the existing audited workflow. Stale pharmacy/settings edits are rejected. Account/pharmacy removal uses suspension, not destructive historical deletion. Patient self-service data deletion remains separate.
+
+Migration `0010_service_controls.sql` is additive; its defaults leave both pauses off. Apply it before deploying the new Worker. A production export was saved outside Git at `.cloudflare/backups/pre-admin-management-2026-10-12.sql`. Never seed production with integration fixtures. D1 batching provides transactional changes: [Cloudflare documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
+
 ## Access and costs
 
 The website is deployed to the owner's Cloudflare Worker at https://lqadwa.lqadwa-dz.workers.dev, backed by D1 `lqadwa-production`. Supabase provides email/password authentication and protected sign-in-record deletion. No paid subscription, paid API, credit card, SMS gateway, domain purchase or payment processor was activated. Maps/routing use public OpenStreetMap/FOSSGIS services. Free plans have quotas and do not promise indefinite availability.

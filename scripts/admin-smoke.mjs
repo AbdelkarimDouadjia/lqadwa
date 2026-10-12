@@ -3,7 +3,7 @@ import {createServer} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
-import {parseAdminPermissions} from '../lib/admin-permissions.ts';
+import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
 // APP_OWNER_EMAIL:owner@example.invalid and SUPABASE_URL:http://127.0.0.1:5888.
@@ -43,7 +43,7 @@ try{
  await request('/api/auth',{action:'admin-login',identifier:'admin',password:'short'},'',400);
  await request('/api/auth',{action:'admin-login',identifier:'admin',password:password+'wrong'},'',401);
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
- const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,4);assert(root.data.admin.owners.some(u=>u.id===owner.id));
+ const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
  const sessions={};for(const u of [delegate,recipient,other]){const login=await request('/api/auth',{action:'login',email:u.email,password});sessions[u.id]=cookie(login.response);await request('/api/app',null,sessions[u.id]);}
  assert.equal((await request('/api/app',null,sessions[delegate.id])).data.admin,null,'Editable metadata must never grant owner access');
  await request('/api/auth',{action:'admin-login',identifier:delegate.email,password},'',401);
@@ -66,6 +66,56 @@ try{
  const stocked=await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:1},sessions[other.id]);
  assert.equal(stocked.data.stock.length,1);
  assert.equal((await request('/api/app',null,sessions[recipient.id])).data.stock.length,0);
+ // Full management API remains authenticated, paginated and permission-scoped.
+ await request('/api/admin?section=accounts',null,'',401);
+ await request('/api/admin?section=accounts',null,sessions[recipient.id],403);
+ await request('/api/admin?section=accounts',null,sessions[delegate.id],403);
+ await request('/api/admin?section=inventory',null,sessions[delegate.id]);
+ await request('/api/admin',{action:'service-save',requests_paused:true,pickups_paused:true,message:'LOCAL ONLY',updated:0,reason:'Local check'},sessions[delegate.id],403);
+ const managed=await request('/api/admin?section=accounts&q='+encodeURIComponent(recipient.id),null,rootCookie);assert.equal(managed.data.total,1);assert.equal(managed.data.rows[0].id,recipient.id);
+ await request('/api/admin',{action:'account-edit',id:recipient.id,name:'LOCAL EDITED USER',city:'oran',reason:'Local profile edit'},rootCookie);
+ assert.equal((await request('/api/app',null,sessions[recipient.id])).data.profile.name,'LOCAL EDITED USER');
+ await request('/api/admin',{action:'account-edit',id:owner.id,name:'Cannot edit owner',city:'oran',reason:'Local check'},rootCookie,403);
+ await request('/api/admin',{action:'stock-save',pharmacy,name:'LOCAL ADMIN ITEM',quantity:7,reason:'Local stock create'},rootCookie);
+ const item=(await request('/api/admin?section=inventory&q=LOCAL%20ADMIN%20ITEM',null,rootCookie)).data.rows[0];assert.equal(item.quantity,7);
+ await request('/api/admin',{action:'stock-save',id:item.id,pharmacy,name:'LOCAL ADMIN ITEM EDITED',quantity:4,reason:'Local stock edit'},rootCookie);
+ await request('/api/admin',{action:'stock-delete',id:item.id,reason:'Local stock delete'},rootCookie);
+ assert.equal((await request('/api/admin?section=inventory&q=LOCAL%20ADMIN',null,rootCookie)).data.total,0);
+ const appRecord=(await request('/api/admin?section=pharmacies&q='+pharmacy,null,rootCookie)).data.rows[0];
+ await request('/api/admin',{action:'pharmacy-edit',...appRecord,duty:false,latitude:36.75,longitude:3.05,name:'LOCAL ADMIN PHARMACY',reason:'Local edit'},rootCookie);
+ await request('/api/admin',{action:'pharmacy-edit',...appRecord,duty:false,reason:'Stale edit'},rootCookie,409);
+ // A real availability workflow, entirely in the isolated local database.
+ await request('/api/app',{action:'profile',name:'LOCAL EDITED USER',city:'algiers'},sessions[recipient.id]);
+ const requestId=randomUUID();await request('/api/app',{action:'search',medicine:'Doliprane 1000 mg',city:'algiers',night:false,token:requestId},sessions[recipient.id]);
+ await request('/api/app',{action:'reply',request:requestId,pharmacy,available:true},sessions[other.id]);
+ const booking=(await request('/api/app',{action:'reserve',request:requestId,pharmacy,consent:true},sessions[recipient.id])).data.reservations.find(b=>b.request===requestId);assert(booking);
+ await request('/api/app',{action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},sessions[recipient.id]);
+ const bookings=(await request('/api/admin?section=reservations&q='+booking.id,null,rootCookie)).data.rows;assert.equal(bookings.length,1);assert(!('code' in bookings[0]));assert(!('approachLat' in bookings[0]));
+ let controls=(await request('/api/admin?section=service',null,rootCookie)).data.service;
+ await request('/api/admin',{action:'service-save',requests_paused:true,pickups_paused:true,message:'LOCAL PAUSE',updated:controls.updated,reason:'Local pause'},rootCookie);
+ await request('/api/app',{action:'search',medicine:'Doliprane',city:'algiers',night:false,token:randomUUID()},sessions[recipient.id],409);
+ await request('/api/app',{action:'collect',reservation:booking.id,pharmacy,code:booking.code,checked:true},sessions[other.id],409);
+ assert.throws(()=>sql(`UPDATE reservations SET status='collected' WHERE id=${quote(booking.id)}`),'Database blocks an in-flight/older client pickup');
+ await request('/api/admin',{action:'service-save',requests_paused:false,pickups_paused:false,message:'',updated:controls.updated,reason:'Stale control update'},rootCookie,409);
+ controls=(await request('/api/admin?section=service',null,rootCookie)).data.service;
+ await request('/api/admin',{action:'service-save',requests_paused:false,pickups_paused:false,message:'',updated:controls.updated,reason:'Local resume'},rootCookie);
+ await request('/api/admin',{action:'request-stop',id:requestId,reason:'Local safety stop'},rootCookie);
+ assert.equal((await request('/api/app',null,sessions[recipient.id])).data.reservations.find(b=>b.id===booking.id).status,'cancelled');
+ assert.equal(sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation=${quote(booking.id)}`)[0].results[0].n,0);
+ await request('/api/app',{action:'reserve',request:requestId,pharmacy,consent:true},sessions[recipient.id],409);
+ await request('/api/app',{action:'reply',request:requestId,pharmacy,available:true},sessions[other.id],409);
+ await request('/api/admin',{action:'reservation-cancel',id:booking.id,reason:'Already cancelled'},rootCookie,409);
+ const secondRequest=randomUUID();await request('/api/app',{action:'search',medicine:'Doliprane 1000 mg',city:'algiers',night:false,token:secondRequest},sessions[recipient.id]);
+ await request('/api/app',{action:'reply',request:secondRequest,pharmacy,available:true},sessions[other.id]);
+ const secondBooking=(await request('/api/app',{action:'reserve',request:secondRequest,pharmacy,consent:true},sessions[recipient.id])).data.reservations.find(b=>b.request===secondRequest);
+ await request('/api/admin',{action:'reservation-cancel',id:secondBooking.id,reason:'Local reservation cancellation'},rootCookie);
+ assert.equal((await request('/api/app',null,sessions[recipient.id])).data.reservations.find(b=>b.id===secondBooking.id).status,'cancelled');
+ await request('/api/admin',{action:'pharmacy-create',owner:recipient.id,name:'LOCAL CREATED PHARMACY',address:'LOCAL ADDRESS NOT REAL',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000001',license:'LOCAL-NOT-VALID',hours:'08:00 - 20:00',duty:false,reason:'Local creation'},rootCookie);
+ const createdPharmacy=(await request('/api/app',null,sessions[recipient.id])).data.ownPharmacy;createdPharmacies.push(createdPharmacy.id);assert.equal(createdPharmacy.status,'pending');
+ await request('/api/admin',{action:'pharmacy-remove',id:createdPharmacy.id,reason:'Local archive'},rootCookie);
+ assert.equal((await request('/api/app',null,sessions[recipient.id])).data.ownPharmacy.status,'suspended');
+ const overview=(await request('/api/admin?section=overview',null,rootCookie)).data;assert.equal(overview.daily.length,14);assert(overview.metrics.searches30>=1);assert(overview.metrics.cancelled>=1);
+ await request('/api/admin?section=accounts&page=-1',null,rootCookie,400);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:true,reason:'Local permission test'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['audit']},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts']},sessions[delegate.id],403);
@@ -75,6 +125,10 @@ try{
  await request('/api/app',{action:'admin-review',pharmacy,status:'suspended'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-pharmacy-edit',pharmacy,name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',phone:'0550000000',hours:'08:00 - 20:00'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts','analytics']},rootCookie);
+ await request('/api/admin?section=requests',null,sessions[delegate.id],403);
+ await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts','analytics','operations']},rootCookie);
+ await request('/api/admin?section=requests',null,sessions[delegate.id]);
+ await request('/api/admin?section=service',null,sessions[delegate.id],403);
  await request('/api/app',{action:'admin-account',owner:owner.id,suspended:true,reason:'Local permission test'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:true,reason:'Local permission test'},sessions[delegate.id]);await request('/api/app',null,sessions[other.id],403);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:false,reason:'Local permission test'},rootCookie);
@@ -91,6 +145,6 @@ try{
  }
 }finally{
  const ids=users.slice(1).map(u=>quote(u.id)).join(','),pharmacies=createdPharmacies.map(quote).join(',');
- sql(`${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
+ sql(`UPDATE service_controls SET requests_paused=0,pickups_paused=0,message='',updated=0 WHERE id=1;DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner IN (${ids}));DELETE FROM reservations WHERE owner IN (${ids});DELETE FROM responses WHERE request IN (SELECT id FROM requests WHERE owner IN (${ids}));DELETE FROM requests WHERE owner IN (${ids});${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
  auth.closeAllConnections();await new Promise(resolve=>auth.close(resolve));
 }

@@ -100,6 +100,7 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
     };
   }
   return {
+    service: await db.prepare("SELECT requests_paused, pickups_paused, message, updated FROM service_controls WHERE id=1").first() as AppData["service"],
     profile: results[0].results[0] as AppData["profile"],
     requests: (results[1].results as RequestRecord[]).filter((r) => !sampleRequests.has(r.id)), responses: (results[2].results as Reply[]).filter((r) => !sampleIds.has(r.pharmacy)),
     reservations: (results[3].results as Booking[]).filter((b) => !sampleIds.has(b.pharmacy)), notifications: results[5].results as Notice[],
@@ -121,6 +122,11 @@ export async function POST(request: Request) {
     const owner = user.userId, db = database(), now = Date.now(), ownerHash = await tokenHash(user.userId);
     await rateLimit(owner, input.action === "collect" ? "pickup-attempt" : "mutation", input.action === "collect" ? 10 : 90);
     const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, ?, ?, ?, 0 WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ?)").bind(crypto.randomUUID(), recipient, title, now, recipient);
+    if (["search", "reserve", "collect"].includes(input.action)) {
+      const controls = await db.prepare("SELECT requests_paused,pickups_paused FROM service_controls WHERE id=1").first<{requests_paused:number;pickups_paused:number}>();
+      if (input.action === "collect" ? controls?.pickups_paused : controls?.requests_paused) throw new HttpError("الخدمة متوقفة مؤقتاً بقرار الإدارة. / Service temporarily paused by administration.", 409);
+    }
+    if ((input.action === "reply" || input.action === "reserve") && await db.prepare("SELECT request FROM request_controls WHERE request=?").bind(input.request).first()) throw new HttpError("أوقفت الإدارة هذا الطلب. / This request was stopped by administration.", 409);
     // Old clients cannot create or operate fictional bookings.
     if ("pharmacy" in input && legacySampleIds.has(input.pharmacy)) throw new HttpError("الصيدلية غير موجودة.", 404);
     if ("pharmacy" in input && input.action !== "admin-review" && !legacySampleIds.has(input.pharmacy)) {
@@ -212,6 +218,13 @@ export async function POST(request: Request) {
       const affectedPharmacy = await db.prepare("SELECT id FROM registered_pharmacies WHERE owner = ?").bind(input.owner).first<{id:string}>();
       await db.batch([
         ...(input.suspended && affectedPharmacy ? [db.prepare("UPDATE registered_pharmacies SET status = 'suspended', updated = ? WHERE id = ?").bind(now, affectedPharmacy.id), ...stopPharmacyBookings(affectedPharmacy.id, now)] : []),
+        ...(input.suspended ? [
+          db.prepare("DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner=?)").bind(input.owner),
+          db.prepare("INSERT INTO notifications (id,owner,title,created,read) SELECT lower(hex(randomblob(16))),p.owner,'LQADWA: reservation cancelled after account suspension.',?,0 FROM registered_pharmacies p WHERE p.id IN (SELECT pharmacy FROM reservations WHERE owner=? AND status='active')").bind(now,input.owner),
+          db.prepare("UPDATE reservations SET status='cancelled' WHERE owner=? AND status='active'").bind(input.owner),
+          db.prepare("INSERT INTO request_controls (request) SELECT id FROM requests WHERE owner=? ON CONFLICT(request) DO NOTHING").bind(input.owner),
+          db.prepare("UPDATE responses SET status='no',updated=? WHERE request IN (SELECT id FROM requests WHERE owner=?)").bind(now,input.owner),
+        ] : []),
         db.prepare("INSERT INTO account_controls (owner, suspended, reason) VALUES (?, ?, ?) ON CONFLICT(owner) DO UPDATE SET suspended = excluded.suspended, reason = excluded.reason").bind(input.owner, Number(input.suspended), input.reason),
         db.prepare("DELETE FROM mobile_sessions WHERE owner = ?").bind(input.owner),
         audit(owner, input.suspended ? "account-suspend" : "account-reactivate", input.owner, input.reason),

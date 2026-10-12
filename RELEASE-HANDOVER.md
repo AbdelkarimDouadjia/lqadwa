@@ -10,6 +10,14 @@ GitHub visibility was found public during verification, contrary to earlier docu
 
 ## Changes and verification in 1.0.6
 
+### Management expansion — 12 October 2026
+
+The private dashboard now has paginated Users, Pharmacies, Inventory, Requests, Reservations and Audit sections; real service totals and a 14-day UTC trend; profile editing, pharmacy creation/editing/review/suspension, inventory CRUD, request stopping, reservation cancellation, and owner-only pause/announcement controls. Only owners automatically receive the new `operations` permission. Delegated grants remain explicit. The UX review guided progressive sections, required reasons and labelled confirmations; obsolete limited record panels were replaced rather than duplicated.
+
+Accounts/pharmacies are suspended rather than destructively erasing history. Passwords, sign-in identities, pickup codes, raw prescriptions and patient GPS remain protected; the audit trail is read-only. Signup remains verified self-service. The app still has no online medicine sales or payment processing. See the expanded management instructions in `OPERATIONS.md`.
+
+Migration `0010_service_controls` was applied after a private database export; eleven migrations are now installed. Both production pause flags were verified off. Isolated integration checks cover CRUD, unauthorized/scoped access, stale edits, request/booking cancellation, notifications/location cleanup, and direct database enforcement of pickup pauses. Browser review confirmed owner navigation, live fixture statistics, the user-edit dialog and service controls. The observed mobile layout had no horizontal overflow. Screenshot capture timed out, so pixel-perfect visual acceptance is not claimed. No live user record was edited to test these controls. Android binaries remain 1.0.6; authorized Android admins already open this protected web dashboard.
+
 - Guests see onboarding, not disabled workspaces. Clients have Search, Requests, Map and Account; pharmacy users have Pharmacy and Account; administrators have Operations and Account. Pharmacy onboarding is a deliberate secondary action for clients. Native administration opens the protected web dashboard from an authorized account.
 - Approved pharmacy work is divided into Requests, Pickups and Stock on web and Android. Pending/suspended applications show their status, not a resubmission form. The API also rejects changes to pending/approved/suspended applications, including a concurrent-approval race.
 - Administration filters applications by status. Permission-specific dialogs close or disappear when access changes. Empty filtered lists explain that there are no matching records.

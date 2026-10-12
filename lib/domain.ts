@@ -22,6 +22,7 @@ export type StaffRequest = { id: string; pharmacy: string; medicine: string; cre
 export type StaffBooking = Omit<Booking, "code"> & { approachLat?: number | null; approachLng?: number | null; approachUpdated?: number | null };
 export type StockItem = { id: string; pharmacy: string; name: string; quantity: number; updated: number };
 export type AppData = {
+  service?: { requests_paused: number; pickups_paused: number; message: string; updated: number };
   profile: { name: string; city: string }; pharmacies: Pharmacy[];
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;

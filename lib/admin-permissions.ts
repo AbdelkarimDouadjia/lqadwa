@@ -1,4 +1,4 @@
-export const adminPermissions = ["pharmacies", "accounts", "audit", "analytics"] as const;
+export const adminPermissions = ["pharmacies", "accounts", "audit", "analytics", "operations"] as const;
 export type AdminPermission = typeof adminPermissions[number];
 export function parseAdminPermissions(value: string): AdminPermission[] {
   try {
