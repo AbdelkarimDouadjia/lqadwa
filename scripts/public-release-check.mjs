@@ -4,8 +4,11 @@ import {readFileSync} from 'node:fs';
 
 // Public checks use reads and rejected requests only. Never seed or delete live accounts.
 const base='https://lqadwa.lqadwa-dz.workers.dev';
-const get=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
-const health=await get('/api/health');assert.equal(health.status,200);assert.equal((await health.json()).release,'1.0.5');
+const get=(path,options={})=>{
+ console.log('Checking',path);
+ return fetch(base+path,{...options,signal:AbortSignal.timeout(path.startsWith('/downloads/')?120000:30000)});
+};
+const health=await get('/api/health');assert.equal(health.status,200);assert.equal((await health.json()).release,'1.0.6');
 for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
  const response=await get(path);assert.equal(response.status,200,path);
  assert.equal(response.headers.get('x-frame-options'),'DENY',path);

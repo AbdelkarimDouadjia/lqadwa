@@ -193,11 +193,12 @@ export async function POST(request: Request) {
       await db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, city = excluded.city").bind(owner, input.name, input.city, ownerHash).run();
     } else if (input.action === "register-pharmacy") {
       const prior = await db.prepare("SELECT id, status FROM registered_pharmacies WHERE owner = ?").bind(owner).first<{ id: string; status: string }>();
-      if (prior?.status === "approved" || prior?.status === "suspended") throw new HttpError("تواصل مع الإدارة لتعديل ملف الصيدلية المعتمدة.", 409);
-      await db.prepare(`INSERT INTO registered_pharmacies (id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated)
+      if (prior && prior.status !== "rejected") throw new HttpError("تواصل مع الإدارة لتعديل ملف الصيدلية المعتمدة.", 409);
+      const saved = await db.prepare(`INSERT INTO registered_pharmacies (id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated)
         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, '08:00 — 20:00', ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?)
-        ON CONFLICT(owner) DO UPDATE SET name = excluded.name, address = excluded.address, city = excluded.city, latitude = excluded.latitude, longitude = excluded.longitude, phone = excluded.phone, license = excluded.license, status = 'pending', updated = excluded.updated`)
+        ON CONFLICT(owner) DO UPDATE SET name = excluded.name, address = excluded.address, city = excluded.city, latitude = excluded.latitude, longitude = excluded.longitude, phone = excluded.phone, license = excluded.license, status = 'pending', updated = excluded.updated WHERE registered_pharmacies.status = 'rejected'`)
         .bind(prior?.id || crypto.randomUUID(), owner, input.name, input.address, input.city, Math.round(input.latitude * 1e6), Math.round(input.longitude * 1e6), input.phone, input.license, now, now, ownerHash).run();
+      if (!saved.meta.changes) throw new HttpError("ملف الصيدلية قيد المراجعة أو معتمد. تواصل مع الإدارة.", 409);
       await notify("وصل طلب انضمام صيدليتك؛ ستظهر للمرضى بعد تحقق الإدارة.").run();
     } else if (input.action === "admin-review") {
       if (!await hasAdminPermission(owner, "pharmacies", db)) throw new HttpError("صلاحية إدارة الصيدليات مطلوبة.", 403);

@@ -43,6 +43,11 @@
   "exclude": [
     "node_modules",
     "examples",
+    ".sites-runtime",
+    ".cloudflare",
+    ".wrangler",
+    "android",
+    "dist",
     "supabase/functions"
   ]
 }

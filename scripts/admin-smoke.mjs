@@ -55,7 +55,17 @@ try{
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],409);
  const d=await request('/api/auth',{action:'admin-login',identifier:delegate.email,password});assert.equal(d.data.redirect,'/operations');sessions[delegate.id]=cookie(d.response);
  const registration=await request('/api/app',{action:'register-pharmacy',name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000000',license:'LOCAL-NOT-VALID'},sessions[other.id]);const pharmacy=registration.data.ownPharmacy.id;createdPharmacies.push(pharmacy);
+ assert.equal(registration.data.role,'pharmacist');
+ assert.equal(registration.data.staffRequests.length,0);
+ await request('/api/app',{action:'register-pharmacy',name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000000',license:'LOCAL-NOT-VALID'},sessions[other.id],409);
+ await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:1},sessions[other.id],403);
  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},sessions[delegate.id]);
+ await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:1},sessions[recipient.id],403);
+ await request('/api/app',{action:'duty',pharmacy,enabled:true},sessions[recipient.id],403);
+ await request('/api/app',{action:'admin-review',pharmacy,status:'suspended'},sessions[recipient.id],403);
+ const stocked=await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:1},sessions[other.id]);
+ assert.equal(stocked.data.stock.length,1);
+ assert.equal((await request('/api/app',null,sessions[recipient.id])).data.stock.length,0);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:true,reason:'Local permission test'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['audit']},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts']},sessions[delegate.id],403);
@@ -68,10 +78,17 @@ try{
  await request('/api/app',{action:'admin-account',owner:owner.id,suspended:true,reason:'Local permission test'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:true,reason:'Local permission test'},sessions[delegate.id]);await request('/api/app',null,sessions[other.id],403);
  await request('/api/app',{action:'admin-account',owner:other.id,suspended:false,reason:'Local permission test'},rootCookie);
+ const suspended=await request('/api/app',null,sessions[other.id]);assert.equal(suspended.data.ownPharmacy.status,'suspended');assert.equal(suspended.data.staffBookings.length,0);
+ await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:2},sessions[other.id],403);
  await request('/api/app',{action:'admin-revoke',owner:delegate.id},rootCookie);assert.equal((await request('/api/app',null,sessions[delegate.id])).data.admin,null);
  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},sessions[delegate.id],403);
  const pending=await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['analytics']},rootCookie);await request('/api/app',{action:'admin-invites-revoke'},rootCookie);await request('/api/app',{action:'admin-invite-redeem',token:pending.data.invite},sessions[recipient.id],409);
  console.log('PASS: owner alias/password verification, verified-email invitation binding, single use, editable metadata denial, scoped reads/writes, immediate permission updates, protected owner and revoked access. Fixtures are LOCAL only.');
+ if (process.argv.includes('--review')) {
+  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},rootCookie);
+  console.log('LOCAL UI review ready: owner@example.invalid (owner), recipient@example.invalid (client), other@example.invalid (pharmacy). Press Enter to remove these local fixtures.');
+  await new Promise(resolve=>{process.stdin.resume();process.stdin.once('data',()=>{process.stdin.pause();resolve();});});
+ }
 }finally{
  const ids=users.slice(1).map(u=>quote(u.id)).join(','),pharmacies=createdPharmacies.map(quote).join(',');
  sql(`${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);

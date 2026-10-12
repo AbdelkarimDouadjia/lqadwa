@@ -1,11 +1,12 @@
 # LQADWA release checklist
 
-Release 1.0.5 is published on Cloudflare with signed native Android downloads and source in the owner's private GitHub repository. This checklist separates completed engineering checks from the acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
+Release 1.0.6 is published on Cloudflare with signed native Android downloads. Source is maintained in the owner's private GitHub repository. This checklist separates completed engineering checks from the acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
 
 ## Completed verification
 
 - TypeScript, production web build and production npm audit pass.
-- GitHub web and Android CI jobs pass, including local authentication/role isolation, owner/delegated permissions, CSRF/input limits, privacy, reservation/stock flows and account closure.
+- Local checks pass for authentication/role isolation, owner/delegated permissions, CSRF/input limits, privacy, reservation/stock flows and account closure. GitHub CI evidence is recorded per release in the handover.
+- Guest, client, pharmacy and admin navigation is separated on web/native. Pharmacy requests, pickups and stock have separate tabs; application resubmission is restricted by server-side status checks.
 - Actual browser OCR engine reads a synthetic printed prescription and matches both catalog brands. The patient must review the result and select the correct medicine/strength.
 - Signed Android APKs/AAB build; full native lint has zero errors. APK signatures, ARM64 zip alignment and six ARM64/x86_64 native-library 16 KB ELF checks pass.
 - Public HTTPS pages, security headers, private admin redirect, catalog and exact hosted APK hashes pass. APK buttons follow the release version and downloads require cache revalidation.

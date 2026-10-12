@@ -1,6 +1,21 @@
-# LQADWA 1.0.5 release handover
+# LQADWA 1.0.6 release handover
 
-2 October 2026. Web and signed native Android release 1.0.5, versionCode 10. This release includes authentication layout polish, safer prescription matching, native Android compatibility fixes and repeatable CI checks. No store submission.
+12 October 2026. Web and signed native Android release 1.0.6, versionCode 11. This release separates guest, client, pharmacy and administrative journeys. No store submission or paid service was enabled.
+
+Cloudflare deployment version: `19aa064f-0d19-45d5-bdf9-7e6e324b2613`. The production deployment uses the real Supabase configuration, not the local authentication fixtures. No database migration was needed for this release.
+
+## Changes and verification in 1.0.6
+
+- Guests see onboarding, not disabled workspaces. Clients have Search, Requests, Map and Account; pharmacy users have Pharmacy and Account; administrators have Operations and Account. Pharmacy onboarding is a deliberate secondary action for clients. Native administration opens the protected web dashboard from an authorized account.
+- Approved pharmacy work is divided into Requests, Pickups and Stock on web and Android. Pending/suspended applications show their status, not a resubmission form. The API also rejects changes to pending/approved/suspended applications, including a concurrent-approval race.
+- Administration filters applications by status. Permission-specific dialogs close or disappear when access changes. Empty filtered lists explain that there are no matching records.
+- Location remains opt-in. Web arrival sharing stops when the page is hidden or left; stale arrival markers expire locally. Late native location callbacks are ignored after navigation or logout. Expired staff bookings do not offer pickup, and stock deletion requires confirmation.
+- Rounded logo sizing, less installation text, role-specific page titles, and fewer repeated navigation controls follow the UX review. No framework migration or new dependency was needed for these changes.
+- TypeScript, source security checks, role navigation matrix, booking/auth/admin integration and production web build pass. Actual printed OCR passed on 11 October; this is not handwriting or phone-camera acceptance. Android release build and lint: zero errors, eight warnings. Signatures, ARM64 alignment and six native-library 16 KB checks pass.
+- Local browser sign-in and navigation were exercised for client, pharmacy and owner. Mobile client/pharmacy layouts had no horizontal overflow. Browser screenshot capture timed out, so no fresh pixel-based visual acceptance is claimed. Temporary fixtures stayed local.
+- Production dependency audit reports zero vulnerabilities after updating sharp to 0.35.5 and source-map-js to 1.2.2. Upstream advisories: [sharp](https://github.com/advisories/GHSA-wq5f-xc86-pv6w), [source-map-js](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+
+The older verification details below are retained as historical evidence, not as a substitute for physical-device, email-delivery or legal acceptance. Those outstanding operator tasks remain at the end of this document.
 
 ## Published links
 
@@ -40,7 +55,7 @@ Permissions separately govern pharmacies/inventory, account moderation, audit hi
 
 Before migration, live D1 contained zero delegated admins and invitations. An ignored local SQL backup was saved at `.cloudflare/backups/pre-admin-1.0.4.sql`; the migration only adds permission/email columns. No live records were deleted. The production configuration was checked to exclude the local Auth fixture server.
 
-## Verified
+## Previous release verification (1.0.5)
 
 - Authentication branding uses rounded, bordered logo tiles with consistent spacing on web/native screens. Signed-out public navigation does not show an account menu. Mobile web inputs are 48 pixels high with 16-pixel text.
 - `scripts/ocr-smoke.mjs` checks exact whole-brand matching, punctuation, duplicate removal, unrecognized text and multi-medicine prescriptions without silently selecting a strength or dropping later brands. `scripts/ocr-engine-smoke.mjs` runs the actual Arabic/French/English Tesseract worker on a synthetic printed prescription and finds both real catalog brands. This does not prove handwriting, camera or physical-phone recognition.
@@ -66,9 +81,9 @@ Before migration, live D1 contained zero delegated admins and invitations. An ig
 
 | Artifact | SHA-256 |
 | --- | --- |
-| ARM64 APK | `a4a66440f41acd6e84e7a3e26afb19b5ab30710fe1ee095119f19e8c383b0309` |
-| ARMv7 APK | `58861cc444a2655f8e288891639e4e85c622ddcbfe7ca5926bb109dea39c39fd` |
-| Store AAB | `d308b714103aecc659f40952c54ee99eb07b02eaf2c2919bd8ed3adb8ecc19eb` |
+| ARM64 APK | `22a31f047b0ff8f7e3864fb069cc414ea010507902158f4c6f39776be38348bb` |
+| ARMv7 APK | `9ac400dffd034ea9ed2ebbddb151269fb0a22112331683aab2839f7ab54800ab` |
+| Store AAB | `cc5a474a6ccc0ef33165720b4f72372bc62f5ed809a4c42fa89ac9a49fb6aa02` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
 The signed AAB is local at `android/app/build/outputs/bundle/release/app-release.aab`. Protected signing material remains outside the repository. Previous signed APKs are recoverable under ignored `.cloudflare/previous-apks/`.

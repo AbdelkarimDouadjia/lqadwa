@@ -1,6 +1,6 @@
 {
   "name": "lqadwa-dz",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -12,7 +12,7 @@
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "check": "tsc --noEmit && node scripts/source-security-check.mjs && node scripts/branding-smoke.mjs && node scripts/map-auth-check.mjs && node scripts/ocr-smoke.mjs",
+    "check": "tsc --noEmit && node scripts/source-security-check.mjs && node scripts/branding-smoke.mjs && node scripts/map-auth-check.mjs && node scripts/workspace-smoke.mjs && node scripts/ocr-smoke.mjs",
     "test:integration": "node scripts/ci-smoke.mjs",
     "test:ocr": "node scripts/ocr-engine-smoke.mjs"
   },
@@ -79,7 +79,7 @@
       "esbuild": "0.28.1"
     },
     "miniflare": {
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     }
   }
 }
