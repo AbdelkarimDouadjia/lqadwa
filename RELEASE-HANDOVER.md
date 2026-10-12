@@ -2,7 +2,7 @@
 
 12 October 2026. Web and signed native Android release 1.0.6, versionCode 11. This release separates guest, client, pharmacy and administrative journeys. No store submission or paid service was enabled.
 
-Cloudflare deployment version: `19aa064f-0d19-45d5-bdf9-7e6e324b2613`. The production deployment uses the real Supabase configuration, not the local authentication fixtures. No database migration was needed for this release.
+Current Cloudflare deployment version: `ec63e22c-ab15-4ada-adcb-9a3619cdf06b`, including the management expansion and migration below. The production deployment uses the real Supabase configuration, not the local authentication fixtures. The preceding journey-only deployment was `19aa064f-0d19-45d5-bdf9-7e6e324b2613`.
 
 Post-deployment public checks passed on 12 October: release 1.0.6, HTTPS/security headers, public wording, protected administration redirect, rejected forged identity, real medicine catalog, and both hosted APKs matching the signed local SHA-256 hashes. Download checks allow two minutes for each approximately 20 MB package; the initial 30-second check timed out on a download before this adjustment.
 
@@ -11,6 +11,8 @@ GitHub visibility was found public during verification, contrary to earlier docu
 ## Changes and verification in 1.0.6
 
 ### Management expansion — 12 October 2026
+
+Deployed source commit `639931e9ef39f586ce4344e4db2dc111967f4101`. Both web and Android jobs passed in [CI run 38306983314](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38306983314), including integration, OCR, dependency audit, build and Android lint checks. Post-deployment `scripts/public-release-check.mjs` passed: the management release marker, protected admin API, HTTPS/security headers, authentication isolation, catalog and both signed APK download hashes were verified. No APK reinstall is required for this web dashboard expansion.
 
 The private dashboard now has paginated Users, Pharmacies, Inventory, Requests, Reservations and Audit sections; real service totals and a 14-day UTC trend; profile editing, pharmacy creation/editing/review/suspension, inventory CRUD, request stopping, reservation cancellation, and owner-only pause/announcement controls. Only owners automatically receive the new `operations` permission. Delegated grants remain explicit. The UX review guided progressive sections, required reasons and labelled confirmations; obsolete limited record panels were replaced rather than duplicated.
 
@@ -42,7 +44,7 @@ The active deployment is in the owner's Cloudflare account. No paid plan, paid A
 
 ## Hosting and identity
 
-- Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, ten applied migrations through `0009_admin_permissions`.
+- Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, eleven applied migrations through `0010_service_controls`.
 - Supabase project `iqbqqlwappehjppupzde`: Authentication and protected sign-in-record deletion. Application data stays in D1.
 - Email/password authentication replaces host identity headers. Email confirmation remains required. The verified account for the supplied support email is configured as owner in `APP_ADMIN_IDS`; that configuration is server-only.
 - Native Android uses Java/Material views, MapLibre, on-device OCR/QR and encrypted Android Keystore session storage. Email/password sign-in runs inside the app. Account creation/confirmation, recovery and optional device linking use the browser.
@@ -63,7 +65,7 @@ The owner password was not changed. The numeric value shared in chat was not ins
 
 The owner appears at the top with full administrative permissions. In **Admin team**, enter an administrator's email, select permissions, create a single-use invitation and share the link directly with that recipient. The recipient registers or signs in with that same verified email and their own password. Invitations expire after seven days and cannot grant ownership. The owner can change an admin's permissions, revoke access and invalidate unused invitations.
 
-Permissions separately govern pharmacies/inventory, account moderation, audit history and service totals. The backend checks both reads and writes on every request; changing permissions affects the next request without waiting for JWT refresh. Delegated admins cannot appoint other admins, change their own access, suspend the owner or access prescription images/full text/personal live locations. No new live admin was appointed during implementation.
+Permissions separately govern pharmacies/inventory, account moderation, audit history, service totals and request/reservation operations. Global service pauses remain owner-only. The backend checks both reads and writes on every request; changing permissions affects the next request without waiting for JWT refresh. Delegated admins cannot appoint other admins, change their own access, suspend the owner or access prescription images/full text/personal live locations. No new live admin was appointed during implementation.
 
 Before migration, live D1 contained zero delegated admins and invitations. An ignored local SQL backup was saved at `.cloudflare/backups/pre-admin-1.0.4.sql`; the migration only adds permission/email columns. No live records were deleted. The production configuration was checked to exclude the local Auth fixture server.
 
