@@ -1,6 +1,6 @@
 # LQADWA release checklist
 
-Release 1.0.6 is published on Cloudflare with signed native Android downloads. Source is maintained in the owner's private GitHub repository. This checklist separates completed engineering checks from the acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
+Release 1.0.6 is published on Cloudflare with signed native Android downloads. Source is maintained in the owner's GitHub repository. This checklist separates completed engineering checks from the acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
 
 ## Completed verification
 

@@ -12,7 +12,7 @@ There is no medicine checkout, delivery, commission or guaranteed synchronized s
 - [Android ARM64 APK](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release.apk)
 - [Android ARMv7 APK](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release-armv7.apk)
 
-Hosting uses the owner's Cloudflare Worker and D1 database on free plans. Supabase provides authentication. No ChatGPT login or hosting is used. Source is held in the owner's [private GitHub repository](https://github.com/AbdelkarimDouadjia/lqadwa).
+Hosting uses the owner's Cloudflare Worker and D1 database on free plans. Supabase provides authentication. No ChatGPT login or hosting is used. Source is held in the owner's [GitHub repository](https://github.com/AbdelkarimDouadjia/lqadwa). Repository visibility is independent of protected application access.
 
 ## Roles and privacy
 

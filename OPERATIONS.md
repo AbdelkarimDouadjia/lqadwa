@@ -56,7 +56,7 @@ Keep the lockfile, review advisories and rerun tests after updates. Focused over
 
 ## Private repository and CI
 
-Source is held at https://github.com/AbdelkarimDouadjia/lqadwa as a private repository. Keys, environment files, database exports and local runtime state are excluded. The common-credential scan checks publishable source; `node scripts/source-security-check.mjs --history` also checks committed patches. This is a useful leak check, not exhaustive secret detection.
+Source is held in the private repository https://github.com/AbdelkarimDouadjia/lqadwa. On 12 October 2026, a check found it public despite earlier documentation; it was changed to private with explicit owner approval and GitHub confirmed `isPrivate: true`. This does not recall any copies made while it was public. Cloudflare website and APK access remain public. Repository visibility does not authorize application administration. Keys, environment files, database exports and local runtime state are excluded. The common-credential scan checks publishable source; `node scripts/source-security-check.mjs --history` also checks committed patches. This is a useful leak check, not exhaustive secret detection.
 
 The Release checks workflow runs on main-branch pushes, pull requests and manual dispatch. It validates web source, dependency audit, local authentication/role isolation, actual printed OCR and native Android build/lint. GitHub Actions use pinned versions and read-only repository permissions. Signed distribution packages remain built under owner-controlled key custody, not from unsigned CI output.
 

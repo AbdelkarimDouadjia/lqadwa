@@ -4,6 +4,10 @@
 
 Cloudflare deployment version: `19aa064f-0d19-45d5-bdf9-7e6e324b2613`. The production deployment uses the real Supabase configuration, not the local authentication fixtures. No database migration was needed for this release.
 
+Post-deployment public checks passed on 12 October: release 1.0.6, HTTPS/security headers, public wording, protected administration redirect, rejected forged identity, real medicine catalog, and both hosted APKs matching the signed local SHA-256 hashes. Download checks allow two minutes for each approximately 20 MB package; the initial 30-second check timed out on a download before this adjustment.
+
+GitHub visibility was found public during verification, contrary to earlier documentation. With explicit owner approval, the repository was made private on 12 October and `isPrivate: true` was verified. Website and APK access remain public through Cloudflare. Previously downloaded public source cannot be recalled. No paid plan was enabled; private-repository CI remains subject to the account's free Actions allowance.
+
 ## Changes and verification in 1.0.6
 
 - Guests see onboarding, not disabled workspaces. Clients have Search, Requests, Map and Account; pharmacy users have Pharmacy and Account; administrators have Operations and Account. Pharmacy onboarding is a deliberate secondary action for clients. Native administration opens the protected web dashboard from an authorized account.
@@ -90,7 +94,7 @@ The signed AAB is local at `android/app/build/outputs/bundle/release/app-release
 
 ## Source and release automation
 
-The owner-authorized private repository is https://github.com/AbdelkarimDouadjia/lqadwa. Source/history and the signed public download packages are included; private signing credentials and database exports are not. Both web and Android jobs passed in the [verified GitHub CI run](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/36972787792). Gates include the web build, production dependency audit, local authentication/role isolation, actual printed OCR and Android build/lint, using pinned actions and read-only repository permissions. The initial Android SDK-discovery issue was corrected by using the Ubuntu 24.04 runner's preinstalled SDK. [Runner SDK inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
+The owner-authorized private repository is https://github.com/AbdelkarimDouadjia/lqadwa. Source/history and the signed public download packages are included; private signing credentials and database exports are not. Release 1.0.6 source commit `6b61b92` passed both web and Android jobs in the [verified GitHub CI run](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38250757816). Gates include the web build, production dependency audit, local authentication/role isolation, actual printed OCR and Android build/lint, using pinned actions and read-only repository permissions. The initial Android SDK-discovery issue was corrected by using the Ubuntu 24.04 runner's preinstalled SDK. [Runner SDK inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
 
 Manual web deployment automation is included but Cloudflare repository secrets are not configured. A separate least-privilege deployment token must be entered by the owner; the local OAuth session was not copied into GitHub. The workflow does not apply D1 migrations or sign Android packages. No paid plan, paid overage or store publication was enabled.
 
