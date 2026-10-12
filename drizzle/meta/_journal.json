@@ -78,6 +78,13 @@
       "when": 1791809993441,
       "tag": "0010_service_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791838870960,
+      "tag": "0011_profile_details",
+      "breakpoints": true
     }
   ]
 }

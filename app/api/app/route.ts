@@ -3,6 +3,7 @@ import { stopPharmacyBookings } from "@/lib/pharmacy-status";
 import { limitedJson, requireMutationOrigin, rateLimit, maintainEphemeralData } from "@/lib/http-security";
 import { identity, HttpError, isAdmin, isRootAdmin, rootAdminIds, adminAccess, hasAdminPermission, tokenHash, audit } from "@/lib/access";
 import { adminPermissions, parseAdminPermissions } from "@/lib/admin-permissions";
+import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
 import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
@@ -18,7 +19,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancel"), reservation: id }),
   z.object({ action: z.literal("collect"), reservation: id, pharmacy: id, code: z.string().regex(/^DZ-[A-F0-9]{8}$/), checked: z.literal(true) }),
   z.object({ action: z.literal("duty"), pharmacy: id, enabled: z.boolean() }),
-  z.object({ action: z.literal("profile"), name: z.string().trim().min(2).max(60), city: cityId }),
+  z.object({ action: z.literal("profile"), name: z.string().trim().min(2).max(121), city: cityId }),
   z.object({ action: z.literal("register-pharmacy"), name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city: cityId, latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/), license: z.string().trim().min(5).max(100) }),
   z.object({ action: z.literal("admin-review"), pharmacy: id, status: z.enum(["approved", "rejected", "suspended"]) }),
   z.object({ action: z.literal("admin-invite-create"), email: adminEmail, permissions }),
@@ -196,7 +197,10 @@ export async function POST(request: Request) {
         if (!result.meta.changes) throw new HttpError("لا تملك صلاحية تعديل هذه الصيدلية.", 403);
       }
     } else if (input.action === "profile") {
-      await db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, city = excluded.city").bind(owner, input.name, input.city, ownerHash).run();
+      const current=await db.prepare("SELECT details FROM profiles WHERE id=?").bind(owner).first<{details:string}>();
+      const details=parseDetails(personalSchema,current?.details);
+      const name=[details.firstName,details.lastName].filter(Boolean).join(" ") || input.name;
+      await db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, city = excluded.city").bind(owner, name, input.city, ownerHash).run();
     } else if (input.action === "register-pharmacy") {
       const prior = await db.prepare("SELECT id, status FROM registered_pharmacies WHERE owner = ?").bind(owner).first<{ id: string; status: string }>();
       if (prior && prior.status !== "rejected") throw new HttpError("تواصل مع الإدارة لتعديل ملف الصيدلية المعتمدة.", 409);

@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { env } from "cloudflare:workers";
 import { database } from "@/db";
 import { adminAccess, audit, HttpError, identity, isAdmin, isRootAdmin } from "@/lib/access";
 import { limitedJson, privateHeaders, rateLimit, requireMutationOrigin } from "@/lib/http-security";
 import { cities } from "@/lib/domain";
-import type { AdminPermission } from "@/lib/admin-permissions";
+import { adminPermissions, type AdminPermission } from "@/lib/admin-permissions";
 import type { ManagementRow, ServiceControls } from "@/lib/admin-management";
 import { stopPharmacyBookings } from "@/lib/pharmacy-status";
+import { personalSchema, healthSchema, pharmacyDetailsSchema, parseDetails } from "@/lib/profile-details";
 
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: privateHeaders });
@@ -15,7 +17,8 @@ const pharmacyFields = { name: z.string().trim().min(3).max(100), address: z.str
   latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/),
   license: z.string().trim().min(5).max(100), hours: z.string().trim().min(3).max(100), duty: z.boolean() };
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("account-edit"), id, name: z.string().trim().min(2).max(60), city, reason }),
+  z.object({ action: z.literal("account-edit"), id, name: z.string().trim().min(2).max(121), city, details: personalSchema.optional(), reason }),
+  z.object({ action: z.literal("pharmacy-details"), id, details: pharmacyDetailsSchema, reason }),
   z.object({ action: z.literal("pharmacy-create"), owner: id, ...pharmacyFields, reason }),
   z.object({ action: z.literal("pharmacy-edit"), id, updated: z.number().int(), ...pharmacyFields, reason }),
   z.object({ action: z.literal("pharmacy-remove"), id, reason }),
@@ -56,8 +59,8 @@ export async function GET(request: Request) {
     }
     // Only server-owned SQL fragments; filter text and pagination remain bound values.
     const queries = {
-      accounts: "SELECT p.id,p.name,p.city,COALESCE(c.suspended,0) AS suspended,COALESCE(c.reason,'') AS reason,CASE WHEN a.owner IS NOT NULL THEN 'admin' WHEN f.id IS NOT NULL THEN 'pharmacist' ELSE 'client' END AS role FROM profiles p LEFT JOIN account_controls c ON c.owner=p.id LEFT JOIN admin_members a ON a.owner=p.id LEFT JOIN registered_pharmacies f ON f.owner=p.id",
-      pharmacies: "SELECT id,owner,name,address,city,latitude/1000000.0 AS latitude,longitude/1000000.0 AS longitude,phone,license,status,duty,hours,created,updated FROM registered_pharmacies",
+      accounts: "SELECT p.id,p.name,p.city,p.details,p.health,a.email,a.permissions,a.invited_by AS invitedBy,a.created AS adminSince,COALESCE(c.suspended,0) AS suspended,COALESCE(c.reason,'') AS reason,CASE WHEN a.owner IS NOT NULL THEN 'admin' WHEN f.id IS NOT NULL THEN 'pharmacist' ELSE 'client' END AS role FROM profiles p LEFT JOIN account_controls c ON c.owner=p.id LEFT JOIN admin_members a ON a.owner=p.id LEFT JOIN registered_pharmacies f ON f.owner=p.id",
+      pharmacies: "SELECT id,owner,name,address,city,latitude/1000000.0 AS latitude,longitude/1000000.0 AS longitude,phone,license,status,duty,hours,created,updated,details FROM registered_pharmacies",
       inventory: "SELECT s.id,s.pharmacy,s.name,s.quantity,s.updated,p.name AS pharmacyName FROM stock_items s JOIN registered_pharmacies p ON p.id=s.pharmacy",
       requests: "SELECT r.id,r.owner,r.medicine AS name,r.city,r.created,CASE WHEN c.request IS NOT NULL THEN 'stopped' WHEN r.created <= ? THEN 'expired' ELSE 'active' END AS status FROM requests r LEFT JOIN request_controls c ON c.request=r.id",
       reservations: "SELECT b.id,b.owner,b.request,b.pharmacy,p.name AS pharmacyName,r.medicine AS name,b.created,b.expires,CASE WHEN b.status='active' AND b.expires<=? THEN 'expired' ELSE b.status END AS status FROM reservations b JOIN requests r ON r.id=b.request LEFT JOIN registered_pharmacies p ON p.id=b.pharmacy",
@@ -72,6 +75,15 @@ export async function GET(request: Request) {
       db.prepare(`SELECT count(*) AS n FROM (${inner})${filter}`).bind(...bindings, query),
     ]);
     const rows = results[0].results as ManagementRow[];
+    for (const row of rows) {
+      if (section === "accounts") {
+        Object.assign(row, parseDetails(personalSchema,row.details)); delete row.details;
+        const health = parseDetails(healthSchema,row.health); delete row.health;
+        if (actor.isOwner && health.shareWithOwner) Object.assign(row,{conditions:health.conditions,chronicConditions:health.chronicConditions,allergies:health.allergies});
+        if (!actor.isOwner) { delete row.email; delete row.permissions; delete row.invitedBy; delete row.adminSince; }
+        else if (isRootAdmin(String(row.id))) { row.email=env.APP_OWNER_EMAIL || ""; row.permissions=JSON.stringify(adminPermissions); }
+      } else if (section === "pharmacies") { Object.assign(row,parseDetails(pharmacyDetailsSchema,row.details)); delete row.details; }
+    }
     if (section === "accounts") for (const row of rows) { row.protected = row.id === actor.owner || isRootAdmin(String(row.id)) || (!actor.isOwner && row.role === "admin"); if (isRootAdmin(String(row.id))) row.role = "owner"; }
     return json({ rows, total: (results[1].results[0] as {n:number}).n, page });
   } catch (error) { return failure(error); }
@@ -90,7 +102,11 @@ export async function POST(request: Request) {
     if (input.action === "account-edit") {
       if (isRootAdmin(input.id) || input.id === actor.owner || (!actor.isOwner && await isAdmin(input.id))) throw new HttpError("Protected account; use its own profile settings", 403);
       if (!await db.prepare("SELECT id FROM profiles WHERE id=?").bind(input.id).first()) throw new HttpError("Account not found", 404);
-      await db.batch([db.prepare("UPDATE profiles SET name=?,city=? WHERE id=?").bind(input.name,input.city,input.id),log]);
+      const name=input.details ? [input.details.firstName,input.details.lastName].filter(Boolean).join(" ") || input.name : input.name;
+      await db.batch([db.prepare("UPDATE profiles SET name=?,city=?,details=COALESCE(?,details) WHERE id=?").bind(name,input.city,input.details?JSON.stringify(input.details):null,input.id),log]);
+    } else if (input.action === "pharmacy-details") {
+      const result=await db.batch([db.prepare("UPDATE registered_pharmacies SET details=?,updated=MAX(updated+1,?) WHERE id=?").bind(JSON.stringify(input.details),now,input.id),changedLog]);
+      if(!result[0].meta.changes)throw new HttpError("Pharmacy not found",404);
     } else if (input.action === "pharmacy-create") {
       if (!actor.permissions.includes("accounts")) throw new HttpError("Account-management permission required",403);
       if (!actor.isOwner && await isAdmin(input.owner)) throw new HttpError("Protected account",403);

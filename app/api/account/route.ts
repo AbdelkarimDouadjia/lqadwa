@@ -20,10 +20,10 @@ export async function GET(request: Request) {
     const page = z.coerce.number().int().min(0).max(10000).parse(new URL(request.url).searchParams.get("page") || "0");
     const limit = 1000, offset = page * limit;
     const rows = await db.batch([
-      db.prepare("SELECT name, city FROM profiles WHERE id = ?").bind(owner),
+      db.prepare("SELECT name, city, details, health FROM profiles WHERE id = ?").bind(owner),
       db.prepare("SELECT id, medicine, city, created FROM requests WHERE owner = ? ORDER BY created, id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT b.id, b.request, b.pharmacy, b.created, b.expires, b.status FROM reservations b WHERE b.owner = ? ORDER BY b.created, b.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
-      db.prepare("SELECT name, address, city, latitude, longitude, phone, license, status, hours, created FROM registered_pharmacies WHERE owner = ?").bind(owner),
+      db.prepare("SELECT name, address, city, latitude, longitude, phone, license, status, hours, created, details FROM registered_pharmacies WHERE owner = ?").bind(owner),
       db.prepare("SELECT s.name, s.quantity, s.updated FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? ORDER BY s.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT title, created, read FROM notifications WHERE owner = ? ORDER BY created, id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT s.request, s.pharmacy, s.status, s.updated FROM responses s JOIN requests r ON r.id = s.request WHERE r.owner = ? ORDER BY s.request, s.pharmacy LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),

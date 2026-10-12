@@ -2,6 +2,10 @@
 
 ## Expanded management dashboard (12 October 2026)
 
+Release 1.0.7 adds separate first/last names, optional phone, commune, home address, age (0–120 years) and profession/job title. Users edit their own details in Account, on the web and in native Android. Existing names are preserved; names are not guessed or split automatically. Age is self-reported and must be kept current. Pharmacy contact person/email, commune, access notes and wheelchair access can be edited by their registered operator or authorized pharmacy admins. Admin records show invitation provenance, verified invitation email, grants and membership date to the owner.
+
+Client health notes, chronic conditions and allergies are optional and never gate search or booking. They are private by default. Only the owner may view notes when the client explicitly opts in; delegated admins and pharmacies cannot read them. Consent can be withdrawn or fields cleared and saved. Admin profile editing never writes health notes/consent. Audit entries omit those field values. Account export includes optional fields and account deletion erases them with the profile. Migration `0011_profile_details.sql` adds empty JSON columns without populating personal/medical records. Back up D1 before applying it; private exports must stay outside Git/public assets.
+
 Use `/operations` with an authorized account. The owner has every management permission. Delegated admins only see granted sections; grants are checked again server-side on every request. The new `operations` permission is required for request/reservation lists and interventions. Existing delegates do not receive it automatically. Service-wide settings remain owner-only.
 
 - **Overview:** current registered profiles, approved/pending pharmacies, suspended accounts, requests and reservations in the last 30 days, reservation outcomes, stock entries, and a 14-day UTC activity table with proportional bars. Live database aggregates, not fabricated analytics or sales revenue.

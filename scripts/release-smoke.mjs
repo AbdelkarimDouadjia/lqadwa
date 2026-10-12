@@ -73,8 +73,9 @@ const closed=await(await fetch('/api/account?export=1',{headers:session(patient)
 await call({action:'reopen',confirmation:'LQADWA'},session(patient),403,'/api/account');
 assert.equal((await snapshot(other)).profile.name,'FICTIONAL RELEASE TEST');
 assert.equal((await snapshot(secondPharmacist)).ownPharmacy.id,b);
-const bucket=Math.floor(Date.now()/60000),key=hash(`pickup-attempt:${secondPharmacist.id}:${bucket}`);
-sql(`INSERT INTO rate_limits(key,count,expires) VALUES('${key}',10,${(bucket+1)*60000}) ON CONFLICT(key) DO UPDATE SET count=10;`);
+const bucket=Math.floor(Date.now()/60000);
+// The local SQL CLI may cross a minute boundary before the HTTP assertion.
+sql([bucket,bucket+1].map(b=>`INSERT INTO rate_limits(key,count,expires) VALUES('${hash(`pickup-attempt:${secondPharmacist.id}:${b}`)}',10,${(b+1)*60000}) ON CONFLICT(key) DO UPDATE SET count=10;`).join(''));
 await call({action:'collect',reservation:booking.id,pharmacy:b,code:booking.code,checked:true},session(secondPharmacist),429);
 await call({action:'delete',confirmation:'LQADWA'},session(other),200,'/api/account');await call({action:'delete',confirmation:'LQADWA'},session(secondPharmacist),200,'/api/account');
 assert.equal((await fetch('/api/health')).status,200);

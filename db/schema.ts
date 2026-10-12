@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "driz
 
 export const profiles = sqliteTable("profiles", {
   id: text("id").primaryKey(), name: text("name").notNull(), city: text("city").notNull().default("algiers"),
+  details: text("details").notNull().default("{}"), health: text("health").notNull().default("{}"),
 });
 export const pharmacySettings = sqliteTable("pharmacy_settings", {
   owner: text("owner").notNull(), pharmacy: text("pharmacy").notNull(), duty: integer("duty").notNull(),
@@ -33,6 +34,7 @@ export const registeredPharmacies = sqliteTable("registered_pharmacies", {
   status: text("status").notNull().default("pending"), duty: integer("duty").notNull().default(0),
   hours: text("hours").notNull().default("08:00 — 20:00"),
   created: integer("created").notNull(), updated: integer("updated").notNull(),
+  details: text("details").notNull().default("{}"),
 }, (t) => [index("idx_registered_pharmacies_city_status").on(t.city, t.status), index("idx_pharmacies_status_name").on(t.status, t.name)]);
 
 export const stockItems = sqliteTable("stock_items", {

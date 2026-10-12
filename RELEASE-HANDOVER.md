@@ -1,4 +1,10 @@
-# LQADWA 1.0.6 release handover
+# LQADWA 1.0.7 release handover
+
+## Profile expansion — 12 October 2026
+
+Web and native Android 1.0.7 (versionCode 12) add separate first/last names, optional phone/commune/home address/age/profession, client health notes/long-term conditions/allergies, pharmacy contact/accessibility details and owner-visible admin membership details. Health notes are private unless the client explicitly consents to owner access; delegated admins and pharmacies cannot see them. Optional notes can be erased and consent withdrawn. Basic admin edits cannot change medical notes or consent. Export/deletion cover the new fields. Migration `0011_profile_details.sql` is additive and initializes empty values, with no invented user information. Native signed APKs and AAB were built with the unchanged owner-held signing certificate; Android lint and APK signature/alignment checks passed. Physical-phone acceptance has not been performed.
+
+Current 1.0.7 artifact SHA-256 values: ARM64 `b6d8627313d06fe46f66e88b56b338bdebb585171eefa4ff855adbc454594258`; ARMv7 `a1e7a0627c35c174f7a4542746cfe68242d4bfe34b2e98aaa60c4a57457d5647`; AAB `5989bb70bed39951c125e71d4cdbe26f11946167de188f2c962d186c177f33f6`. Previous 1.0.6 APKs are preserved under ignored `.cloudflare/previous-apks/1.0.6/`. The older release evidence below is retained as history.
 
 12 October 2026. Web and signed native Android release 1.0.6, versionCode 11. This release separates guest, client, pharmacy and administrative journeys. No store submission or paid service was enabled.
 
