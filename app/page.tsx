@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Bell, BookmarkCheck, Camera, Check, CheckCheck, Clock3, Copy, FileCheck2, Globe2, LocateFixed, MapPin, Moon, MoonStar, Navigation, Package, QrCode, RefreshCw, Search, ShieldCheck, Store, Sun, Trash2, UserRound, WifiOff, X } from "lucide-react";
+import { Bell, BookmarkCheck, Camera, Check, CheckCheck, Clock3, Copy, FileCheck2, LocateFixed, MapPin, MoonStar, Navigation, Package, QrCode, RefreshCw, Search, ShieldCheck, Store, Trash2, UserRound, WifiOff, X } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProfileDetails } from "@/components/profile-details";
 import { LandingPage } from "@/components/landing-page";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { InventoryWorkspace } from "@/components/inventory-workspace";
 import { ClientTracker } from "@/components/client-tracker";
 import { ClientFilters } from "@/components/client-filters";
@@ -18,7 +20,6 @@ import { Heart } from "lucide-react";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DawaMap } from "@/components/dawa-map";
 import { RouteNavigator } from "@/components/route-navigator";
 import { AppInstall } from "@/components/app-install";
@@ -102,6 +103,7 @@ export default function HomePage({ initialView = "search" }: { initialView?: Vie
     finally { if (sequence === latest.current) setLoading(false); }
   }, [language]);
   useEffect(() => {
+    if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => {});
     queueMicrotask(() => setAppMode(new URLSearchParams(window.location.search).get("app") === "1" || window.matchMedia("(display-mode: standalone)").matches));
     const invite = new URLSearchParams(window.location.search).get("admin_invite");
     if (invite) sessionStorage.setItem("dawa-admin-invite", invite);
@@ -286,13 +288,7 @@ export default function HomePage({ initialView = "search" }: { initialView?: Vie
   if (loading && !error) return <div className="startup-screen" role="status"><img src="/brand/luqya.png" alt="" width="104" height="104" /><strong>LQADWA</strong><p>{t("loadingApp")}</p><span className="startup-loader" /></div>;
   return <div className={`app-shell${signedOut ? " is-signed-out" : ""}${appMode ? " app-mode" : ""}`}>
     <a className="skip-link" href="#main">{t(view)}</a>
-    <header className="topbar"><div className="topbar-inner">
-      <button className="brand" onClick={() => navigate(signedOut ? "search" : homeView)} aria-label="LQADWA"><img src="/brand/luqya.png" alt="" width="55" height="55" /><span><strong>لقى دوا<span className="brand-dot">.</span></strong><small>LQADWA · ALGÉRIE</small></span></button>
-      {!signedOut && <nav className="desktop-nav" aria-label={t("account")}>{navigation.filter(item => item !== "account").map(item => <button key={item} aria-current={view === item ? "page" : undefined} onClick={() => navigate(item)}>{t(item)}</button>)}</nav>}
-      <div className="header-actions"><DropdownMenu><DropdownMenuTrigger asChild><button className="language-trigger" aria-label={t("language")}><Globe2 /><span>{language === "ar" ? "العربية" : language === "fr" ? "Français" : language === "kab" ? "Taqbaylit" : "English"}</span></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="header-menu"><DropdownMenuLabel>{t("language")}</DropdownMenuLabel>{([["ar", "العربية"], ["fr", "Français"], ["en", "English"], ["kab", "Taqbaylit"]] as const).map(([code, label]) => <DropdownMenuItem key={code} onSelect={() => setLanguage(code)}>{language === code ? <Check /> : <span className="menu-spacer" />}{label}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
-      <button className="icon-btn theme-button" onClick={toggleTheme} aria-label={t("theme")}>{dark ? <Sun /> : <Moon />}</button>
-      {!signedOut && <><button className="icon-btn notification-button" onClick={() => { setNotificationsOpen(true); if (unread) void mutate({ action: "read-notifications" }); }} aria-label={t("notifications")}><Bell />{unread > 0 && <span>{unread > 9 ? "9+" : unread}</span>}</button><DropdownMenu><DropdownMenuTrigger asChild><button className="account-button" aria-label={t("account")}><UserRound /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="header-menu account-menu"><DropdownMenuLabel>{data.profile.name || t("account")}</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => navigate("account")}><UserRound />{t("account")}</DropdownMenuItem><DropdownMenuItem asChild><a href="/logout" target="_top">{t("logout")}</a></DropdownMenuItem></DropdownMenuContent></DropdownMenu></>}
-      </div></div></header>
+    <SiteHeader signedOut={signedOut} role={data.role} view={view} language={language} dark={dark} name={data.profile.name} unread={unread} navigate={navigate} onLanguage={setLanguage} onTheme={toggleTheme} onNotifications={()=>{setNotificationsOpen(true);if(unread)void mutate({action:"read-notifications"});}}/>
     {!signedOut && <div className="context-bar"><div className="context-inner"><span className="service-label"><span />{t(data.role === "admin" ? "adminTitle" : data.role === "pharmacist" ? "pharmacyTitle" : "patientSpace")}</span><span className="context-explainer">{t("pickupOnly")}</span></div></div>}
     {offline && <div className="connection-banner" role="status"><WifiOff />{t("offline")}</div>}
     <main id="main" tabIndex={-1} className="main-layout">
@@ -330,8 +326,8 @@ export default function HomePage({ initialView = "search" }: { initialView?: Vie
       {!signedOut && view === "pharmacy" && pharmacyTab === "pickup" && own?.status === "approved" && approaching.length > 0 && <section className="panel approach-panel"><h2>{t("approaching")}</h2><div className="item-stack">{approaching.map((booking) => <div className="approach-row" key={booking.id}><Navigation /><span>{booking.medicine}</span><strong>{localizedDistance(distanceMeters({ lat: booking.approachLat!, lng: booking.approachLng! }, { lat: own.latitude / 1e6, lng: own.longitude / 1e6 }), language)} {t("approx")}</strong></div>)}</div><DawaMap city={own.city} pharmacies={data.pharmacies.filter((p) => p.id === own.id)} position={null} approaches={approaching.map((b) => ({ lat: b.approachLat!, lng: b.approachLng!, label: `${t("approaching")} · ${b.medicine}` }))} onSelect={(pharmacy) => openModal({ kind: "pharmacy", pharmacy })} /></section>}
       {view === "admin" && (data.role === "admin" && data.admin ? <><div className="page-heading"><div className="overline">LQADWA · OPERATIONS</div><h1>{t("adminTitle")}</h1><p>{t("adminSub")}</p></div><AdminIdentity admin={data.admin} language={language} /><AdminManagement key={JSON.stringify(data.admin.access)} admin={data.admin} language={language} mutate={mutate} onChanged={() => void load()} /></> : <div className="panel empty-panel">{t("adminOnly")}</div>)}
       {!signedOut && view === "admin" && data.admin && <AdminControls teamOnly key={JSON.stringify(data.admin.access)} admin={data.admin} language={language} busy={!!busy} mutate={mutate} />}
-      <nav className="service-links" aria-label="Privacy and support"><a href="/privacy">{language === "ar" ? "الخصوصية والدعم" : language === "fr" ? "Confidentialité et assistance" : language === "kab" ? "Tabaḍnit d tallalt" : "Privacy and support"}</a>{!signedOut && <a href="/account-data">{language === "ar" ? "بياناتي وحذف الحساب" : language === "fr" ? "Données et suppression du compte" : language === "kab" ? "Isefka d tukksa n umiḍan" : "My data and account deletion"}</a>}</nav>{(signedOut || view === "account") && <AppInstall language={language} />}
-      <footer className="footer"><span>LQADWA · ALGÉRIE</span><span>{t("pickupOnly")} · {t("noDelivery")}</span></footer>
+      {!signedOut && view === "account" && <AppInstall language={language}/>}
+      <SiteFooter language={language} signedOut={signedOut} role={data.role}/>
     </main>
     {!signedOut && <nav className="mobile-navigation" aria-label={t("account")}>{navigation.map(item => { const Icon = item === "search" ? Search : item === "bookings" ? BookmarkCheck : item === "map" ? MapPin : item === "pharmacy" ? Store : item === "admin" ? ShieldCheck : UserRound; return <button key={item} aria-current={view === item ? "page" : undefined} onClick={() => navigate(item)}><Icon /><span>{t(item)}</span></button>; })}</nav>}
     <Dialog open={!signedOut && !!modal && (modal.kind !== "collect" || staffBookings.some(b => b.id === modal.booking.id))} onOpenChange={(open) => !open && setModal(null)}><DialogContent className="app-dialog" dir={language === "ar" ? "rtl" : "ltr"} showCloseButton={false}><button className="dialog-close icon-btn" onClick={() => setModal(null)} aria-label={t("close")}><X /></button>

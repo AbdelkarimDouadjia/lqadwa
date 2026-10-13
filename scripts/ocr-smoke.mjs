@@ -13,6 +13,7 @@ const many=Array.from({length:22},(_,i)=>['BRANDONE',`${i} MG`,'DCI']);
 assert(prescriptionMatches('BRANDONE; BRANDTWO',[...many,['BRANDTWO','1 G','DCI']]).some(m=>m.name==='BRANDTWO 1 G'),'Later medicines must not disappear behind the first brand’s strengths');
 const source=readFileSync('app/page.tsx','utf8');
 assert.doesNotMatch(source,/matches\[0\]\?\.name \|\| extracted|function scanMedicine/,'Scans must require patient review, not auto-select the first API result');
-assert.match(source, /\{!signedOut && <>[\s\S]*?className="account-button"/, 'Guest header must not expose account actions');
+assert(source.includes('<SiteHeader signedOut={signedOut}'), 'Header receives the authenticated state');
+assert.match(readFileSync('components/site-header.tsx','utf8'), /signedOut\?<Button[\s\S]*?:<>[\s\S]*?className="product-avatar"/, 'Guest header must not expose account actions');
 assert(readFileSync('app/globals.css','utf8').includes('border-radius:16px;box-shadow:0 0 0 1px var(--border)'));
 console.log('PASS: real catalog, punctuation, whole-brand matching, duplicates, multi-medicine prescription, explicit selection and auth branding.');

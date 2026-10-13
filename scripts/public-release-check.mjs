@@ -8,7 +8,7 @@ const get=(path,options={})=>{
  console.log('Checking',path);
  return fetch(base+path,{...options,signal:AbortSignal.timeout(path.startsWith('/downloads/')?120000:30000)});
 };
-const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.8');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');
+const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.9');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');assert.equal(healthData.design,'2026-10-13');
 for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
  const response=await get(path);assert.equal(response.status,200,path);
  assert.equal(response.headers.get('x-frame-options'),'DENY',path);
