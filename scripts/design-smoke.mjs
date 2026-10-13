@@ -6,7 +6,7 @@ function luminance(hex){const rgb=hex.match(/[a-f\d]{2}/gi).map(n=>parseInt(n,16
 for(const selector of [':root','[data-theme=dark]']){
  const block=css.slice(css.indexOf(selector)).split('}')[0];
  const tokens=Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[a-f\d]{6})/gi)].map(m=>[m[1],m[2]]));
- const pairs=[['foreground','background'],['foreground','card'],['muted-foreground','background'],['muted-foreground','card'],['primary-foreground','primary'],['secondary-foreground','secondary'],['blue-ink','blue-soft'],['violet-ink','violet-soft'],['amber-ink','amber-bg'],['destructive','rose-soft']];
+ const pairs=[['foreground','background'],['foreground','card'],['muted-foreground','background'],['muted-foreground','card'],['muted-foreground','blue-soft'],['muted-foreground','violet-soft'],['muted-foreground','amber-bg'],['primary-foreground','primary'],['secondary-foreground','secondary'],['blue-ink','blue-soft'],['violet-ink','violet-soft'],['amber-ink','amber-bg'],['destructive','rose-soft']];
  for(const [front,back] of pairs){assert(tokens[front]&&tokens[back]);const a=luminance(tokens[front]),b=luminance(tokens[back]),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);assert(ratio>=4.5,`${selector}: ${front}/${back}: ${ratio.toFixed(2)} must be at least 4.5`);}
 }
 assert(read('app/layout.tsx').indexOf('./design-refinement.css')>read('app/layout.tsx').indexOf('./luqya.css'),'Refined tokens override legacy styles');
