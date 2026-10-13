@@ -13,7 +13,7 @@ export const medicines = [
   { name: "لانتوس 100 وحدة/مل", latin: "Lantus 100 UI/ml", ingredient: "Insuline glargine" },
   { name: "غلوكوفاج 850 مغ", latin: "Glucophage 850 mg", ingredient: "ميتفورمين · Metformine" },
 ];
-export type RequestRecord = { id: string; medicine: string; city: string; created: number };
+export type RequestRecord = { id: string; medicine: string; city: string; created: number; stopped?: number };
 export type Reply = { request: string; pharmacy: string; status: "pending" | "yes" | "no"; updated: number | null };
 export type Booking = { id: string; request: string; pharmacy: string; code: string; created: number; expires: number; status: "active" | "expired" | "cancelled" | "collected"; medicine: string };
 export type Notice = { id: string; title: string; created: number; read: number };
@@ -23,7 +23,7 @@ export type StaffBooking = Omit<Booking, "code"> & { approachLat?: number | null
 export type StockItem = { id: string; pharmacy: string; name: string; quantity: number; updated: number };
 export type AppData = {
   service?: { requests_paused: number; pickups_paused: number; message: string; updated: number };
-  profile: { name: string; city: string }; pharmacies: Pharmacy[];
+  profile: { id?: string; name: string; city: string }; pharmacies: Pharmacy[];
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;
   staffRequests: StaffRequest[]; staffBookings: StaffBooking[]; stock: StockItem[];

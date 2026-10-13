@@ -57,8 +57,8 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     db.prepare("DELETE FROM reservation_locations WHERE updated < ?").bind(now - 5 * 60_000),
   ]);
   const results = await db.batch([
-    db.prepare("SELECT name, city FROM profiles WHERE id = ?").bind(owner),
-    db.prepare("SELECT id, medicine, city, created FROM requests WHERE owner = ? ORDER BY created DESC LIMIT 100").bind(owner),
+    db.prepare("SELECT id, name, city FROM profiles WHERE id = ?").bind(owner),
+    db.prepare("SELECT r.id,r.medicine,r.city,r.created,COALESCE(c.stopped,0) AS stopped FROM requests r LEFT JOIN request_controls c ON c.request=r.id WHERE r.owner = ? ORDER BY r.created DESC LIMIT 100").bind(owner),
     db.prepare("SELECT s.request, s.pharmacy, s.status, s.updated FROM responses s JOIN requests r ON r.id = s.request WHERE r.owner = ? ORDER BY r.created DESC LIMIT 300").bind(owner),
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.code, b.created, b.expires, b.status, r.medicine FROM reservations b JOIN requests r ON b.request = r.id WHERE b.owner = ? ORDER BY b.created DESC LIMIT 100").bind(owner),
     db.prepare("SELECT pharmacy, duty FROM pharmacy_settings WHERE owner = ?").bind(owner),

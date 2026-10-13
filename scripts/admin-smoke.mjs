@@ -72,6 +72,23 @@ try{
  const stocked=await request('/api/app',{action:'stock-upsert',pharmacy,name:'LOCAL ITEM',quantity:1},sessions[other.id]);
  assert.equal(stocked.data.stock.length,1);
  assert.equal((await request('/api/app',null,sessions[recipient.id])).data.stock.length,0);
+ // Paging, quantity edits and lost-update protection in the pharmacy-owned stock workspace.
+ await request('/api/stock',null,'',401);await request('/api/stock',null,sessions[recipient.id],403);
+ const inventory=(await request('/api/stock?filter=low&threshold=5',null,sessions[other.id])).data;assert.equal(inventory.summary.low,1);assert.equal(inventory.rows[0].quantity,1);
+ const stock=inventory.rows[0];
+ await request('/api/stock',{action:'edit',id:stock.id,updated:stock.updated,name:stock.name,quantity:2},sessions[recipient.id],403);
+ await request('/api/stock',{action:'edit',id:stock.id,updated:stock.updated,name:stock.name,quantity:2},sessions[other.id]);
+ await request('/api/stock',{action:'edit',id:stock.id,updated:stock.updated,name:stock.name,quantity:9},sessions[other.id],409);
+ await request('/api/stock',{action:'delete',id:stock.id,updated:stock.updated},sessions[other.id],409);
+ await request('/api/stock',{action:'create',name:stock.name,quantity:1},sessions[other.id],409);
+ await request('/api/stock',{action:'create',name:'LOCAL EMPTY ENTRY',quantity:0},sessions[other.id]);
+ const empty=(await request('/api/stock?filter=out',null,sessions[other.id])).data.rows[0];assert.equal(empty.quantity,0);
+ await request('/api/stock',{action:'delete',id:empty.id,updated:empty.updated},sessions[other.id]);
+ const localInventory=Array.from({length:51},(_,i)=>({id:randomUUID(),name:'LOCAL PAGED '+String(i).padStart(3,'0')}));
+ sql(localInventory.map(s=>`INSERT INTO stock_items(id,pharmacy,name,quantity,updated) VALUES(${quote(s.id)},${quote(pharmacy)},${quote(s.name)},0,${Date.now()});`).join(''));
+ const firstStockPage=(await request('/api/stock?q=LOCAL%20PAGED&sort=name',null,sessions[other.id])).data,secondStockPage=(await request('/api/stock?q=LOCAL%20PAGED&sort=name&page=1',null,sessions[other.id])).data;assert.equal(firstStockPage.total,51);assert.equal(firstStockPage.rows.length,50);assert.equal(secondStockPage.rows.length,1);assert(!firstStockPage.rows.some(s=>s.id===secondStockPage.rows[0].id));
+ sql(`DELETE FROM stock_items WHERE pharmacy=${quote(pharmacy)} AND name LIKE 'LOCAL PAGED %';`);
+ await request('/api/stock?threshold=0',null,sessions[other.id],400);
  // Full management API remains authenticated, paginated and permission-scoped.
  await request('/api/admin?section=accounts',null,'',401);
  await request('/api/admin?section=accounts',null,sessions[recipient.id],403);

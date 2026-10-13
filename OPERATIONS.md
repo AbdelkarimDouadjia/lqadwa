@@ -1,5 +1,13 @@
 # LQADWA operations — owner handover
 
+## Experience and stock controls (1.0.8)
+
+The public landing page promotes the service through a branded route illustration, workflow, benefits, pharmacy offer, FAQ and Android/account links. It does not sell sponsored pharmacy placement or medicine advertisements. Pharmacy results retain distance ordering. Client filters add distance range, pharmacy name/address and saved pharmacies; current-position permission remains explicit and distances without GPS are approximate. Recent activity has medicine/status/date filters, true booking outcomes, expiry countdowns and access to QR/directions. Stopped request status now comes from the database. Complete history can be exported through Account data.
+
+Approved pharmacy owners use `/api/stock` for 50-row paging, search, sorting, in/out/low-stock views, configurable low-stock threshold, item creation/renaming, quantity updates, deletion and current-page CSV export. Web and native Android use the same API. Every mutation checks pharmacy ownership/approval in the SQL write and requires the last update timestamp for existing entries; a stale edit returns 409. CSV export escapes spreadsheet formula prefixes. Quantity changes are manual inventory corrections, not automatic sales or clinical availability guarantees.
+
+Web/native display preferences include larger text, reduced motion and manual/30/60/120-second refresh. Device-scoped settings and saved pharmacy IDs are separated by authenticated account ID and do not sync between web/Android/devices. Native reduced-motion affects map camera transitions; platform motion preferences remain separate. No additional location/camera/background permissions or paid service was enabled. A schema migration is not required for 1.0.8.
+
 ## Expanded management dashboard (12 October 2026)
 
 Release 1.0.7 adds separate first/last names, optional phone, commune, home address, age (0–120 years) and profession/job title. Users edit their own details in Account, on the web and in native Android. Existing names are preserved; names are not guessed or split automatically. Age is self-reported and must be kept current. Pharmacy contact person/email, commune, access notes and wheelchair access can be edited by their registered operator or authorized pharmacy admins. Admin records show invitation provenance, verified invitation email, grants and membership date to the owner.

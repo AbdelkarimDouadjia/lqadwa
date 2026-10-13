@@ -8,7 +8,7 @@ const get=(path,options={})=>{
  console.log('Checking',path);
  return fetch(base+path,{...options,signal:AbortSignal.timeout(path.startsWith('/downloads/')?120000:30000)});
 };
-const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.7');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');
+const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.8');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');
 for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
  const response=await get(path);assert.equal(response.status,200,path);
  assert.equal(response.headers.get('x-frame-options'),'DENY',path);
@@ -22,6 +22,7 @@ assert.equal((await get('/api/app',{headers:{'oai-authenticated-user-id':'local-
 assert.equal((await get('/api/account/deletion-proof')).status,401);
 assert.equal((await get('/api/admin?section=accounts')).status,401);
 assert.equal((await get('/api/profile')).status,401);
+assert.equal((await get('/api/stock')).status,401);
 const admin=await get('/operations',{redirect:'manual'});assert.equal(admin.status,307);assert.equal(admin.headers.get('location'),'/operations/login');
 assert.equal(admin.headers.get('x-frame-options'),'DENY','private early redirect');
 const medicines=await(await get('/api/medicines?q=doliprane')).json();assert(medicines.items.some(item=>item.brand==='DOLIPRANE'&&item.registration));

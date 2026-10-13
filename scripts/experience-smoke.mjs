@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {filterPharmacies,bookingStatus,requestStatus,csvCell} from '../lib/experience.ts';
+const pharmacies=[{id:'far',name:'Third',area:'North',distance:5000},{id:'near',name:'First',area:'Centre',distance:400},{id:'middle',name:'Second',area:'Centre',distance:1200}];
+assert.deepEqual(filterPharmacies(pharmacies,{radius:3,query:'centre',savedOnly:false},[]).map(p=>p.id),['near','middle']);
+assert.deepEqual(filterPharmacies(pharmacies,{radius:0,query:'',savedOnly:true},['far','near']).map(p=>p.id),['near','far'],'Saved pharmacies retain distance ordering');
+assert.equal(filterPharmacies(pharmacies,{radius:1,query:'Third',savedOnly:false},[]).length,0);
+const now=200000000,booking={status:'active',expires:now};assert.equal(bookingStatus(booking,now),'expired');assert.equal(bookingStatus({...booking,status:'cancelled',expires:now+1},now),'cancelled');
+const request={id:'a',created:now-1000};assert.equal(requestStatus({...request,stopped:1},[{request:'a',status:'yes',updated:now}],now),'stopped');assert.equal(requestStatus(request,[{request:'a',status:'yes',updated:now-1800001}],now),'pending');assert.equal(requestStatus(request,[{request:'a',status:'yes',updated:now}],now),'available');assert.equal(requestStatus({...request,created:now-86400000},[],now),'expired');
+for(const value of ['=1+1',' +SUM(A1:A2)','@formula','-cmd','\tformula'])assert(csvCell(value).startsWith('"\''),'CSV formulas must be escaped');assert.equal(csvCell('a"b'),'"a""b"');assert.equal(csvCell(42),'"42"');
+console.log('PASS: distance/name/saved filters, honest expiry/stopped/fresh-response tracking and spreadsheet formula escaping.');

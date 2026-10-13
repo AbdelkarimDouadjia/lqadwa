@@ -1,4 +1,12 @@
-# LQADWA 1.0.7 release handover
+# LQADWA 1.0.8 release handover
+
+## Experience expansion — 13 October 2026
+
+Web and native Android 1.0.8 (versionCode 13) add client distance/name/saved-pharmacy filters, recent booking/request tracking filters, local display/refresh preferences and an approved-pharmacy inventory workspace. Stock paging searches the complete inventory, with low/out/in-stock filters, sorting, threshold, item rename/quantity/deletion, +1/−1 and current-page CSV export. Existing-entry changes reject stale timestamps and SQL writes recheck approval/ownership. The public landing page has a branded vector/CSS illustration, service workflow/benefits, pharmacy pricing, FAQ and working account/Android links. Public promotion does not change geographic pharmacy ranking or add paid drug/pharmacy advertisements. UI/UX guidance informed progressive controls, mobile targets, semantic theme colors and reduced motion; no raster image generation or additional dependency was needed.
+
+Local integration passed with stock isolation, 51-entry paging, filtering, duplicate rejection and stale quantity/deletion tests. Pure checks cover pharmacy filters, true request/booking states and spreadsheet formula escaping. Signed APK/AAB builds and Android lint passed (zero errors, eight warnings); both APK signatures and ARM64 zip alignment passed. Physical-phone acceptance remains outstanding. Browser capture timed out, so screenshots are not evidence for this release. No live patient/pharmacy fixture was created and no database migration is required.
+
+1.0.8 SHA-256: ARM64 `f545a7ce37d75f89c79adcda4f86cff1a9ebd81083d0d3d0266bd5027c07cdc9`; ARMv7 `ba26edc45bfca3a2d5ffd6ae1ee9d57347ace980be2803f19700cce493804be2`; AAB `d95841bfc9da5a911ab4c28749614bcb276af2e7af9020a4b217b1c8904d319a`. Previous 1.0.7 APKs are preserved under ignored `.cloudflare/previous-apks/1.0.7/`.
 
 ## Profile expansion — 12 October 2026
 
