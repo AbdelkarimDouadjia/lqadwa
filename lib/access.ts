@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { database } from "@/db";
 import { getAppUser } from "@/lib/auth";
+import { initialPersonalDetails } from "@/lib/profile-details";
 import { adminPermissions, parseAdminPermissions, type AdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 
 export class HttpError extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -20,7 +21,7 @@ export async function identity(request?: Request, options: { allowClosed?: boole
   let user = request?.headers.has("x-lqadwa-session") ? null : await getAppUser();
   if (session && /^[0-9a-f-]{73}$/.test(session)) {
     const row = await database().prepare("SELECT s.owner, p.name FROM mobile_sessions s LEFT JOIN profiles p ON p.id = s.owner WHERE s.hash = ? AND s.expires > ?").bind(await tokenHash(session), Date.now()).first<{ owner: string; name: string }>();
-    if (row) user = { userId: row.owner, fullName: row.name, displayName: row.name, email: "" };
+    if (row) user = { userId: row.owner, fullName: row.name, displayName: row.name, email: "", personalDetails:initialPersonalDetails(undefined) };
   }
   if (!user) throw new HttpError("سجّل الدخول لحفظ طلباتك بأمان.", 401);
   if (!options.allowClosed && await database().prepare("SELECT hash FROM closed_accounts WHERE hash = ?").bind(await tokenHash(user.userId)).first()) throw new HttpError("Account deleted. Visit /account-data to join again. / الحساب محذوف.", 410);

@@ -8,6 +8,7 @@ import { HttpError, isAdmin, tokenHash } from "@/lib/access";
 import { adminLoginEmail } from "@/lib/admin-login";
 import { createDeviceSession } from "@/lib/device-session";
 import { oauthProviders } from "@/lib/oauth-providers";
+import { initialPersonalDetails } from "@/lib/profile-details";
 
 export const dynamic = "force-dynamic";
 const email = z.string().trim().email().max(254);
@@ -16,7 +17,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("admin-login"), identifier: z.string().trim().min(1).max(254), password }),
   z.object({ action: z.literal("oauth"), provider: z.enum(["google", "apple"]), returnTo: z.string().max(1000).optional() }),
   z.object({ action: z.literal("login"), email, password: z.string().min(1).max(128), returnTo: z.string().max(1000).optional(), native: z.boolean().default(false) }),
-  z.object({ action: z.literal("register"), email, password, name: z.string().trim().min(2).max(60), returnTo: z.string().max(1000).optional() }),
+  z.object({ action: z.literal("register"), email, password, name: z.string().trim().min(2).max(121).optional(), firstName:z.string().trim().min(1).max(60).optional(), lastName:z.string().trim().min(1).max(60).optional(), returnTo: z.string().max(1000).optional() }),
   z.object({ action: z.literal("recover"), email }),
   z.object({ action: z.literal("update"), password }),
   z.object({ action: z.literal("logout") }),
@@ -58,16 +59,18 @@ export async function POST(request: Request) {
       if (input.native) {
         try {
           const session = await createDeviceSession(data.user.id);
-          await database().prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, 'algiers' WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING")
-            .bind(data.user.id, String(data.user.user_metadata?.full_name || "LQADWA").slice(0, 60), await tokenHash(data.user.id)).run();
+          await database().prepare("INSERT INTO profiles (id, name, city, details) SELECT ?, ?, 'algiers', ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING")
+            .bind(data.user.id, String(data.user.user_metadata?.full_name || "LQADWA").slice(0, 121), JSON.stringify(initialPersonalDetails(data.user.user_metadata)), await tokenHash(data.user.id)).run();
           return json({ ok: true, ...session });
         } finally { await client.auth.signOut({ scope: "local" }); }
       }
       return json({ ok: true, redirect: safeReturnPath(input.returnTo) });
     }
     if (input.action === "register") {
+      if (Boolean(input.firstName)!==Boolean(input.lastName) || (!input.name && !input.firstName)) return json({error:"FIELDS"},400);
+      const name=input.firstName&&input.lastName?`${input.firstName} ${input.lastName}`:input.name!;
       const callback = `${origin}/auth/callback?next=${encodeURIComponent(safeReturnPath(input.returnTo))}`;
-      const { error } = await client.auth.signUp({ email: input.email, password: input.password, options: { data: { full_name: input.name }, emailRedirectTo: callback } });
+      const { error } = await client.auth.signUp({ email: input.email, password: input.password, options: { data: { full_name:name,...(input.firstName?{first_name:input.firstName,last_name:input.lastName}:{}) }, emailRedirectTo: callback } });
       if (error && error.code !== "user_already_exists") return json({ error: error.code === "email_address_not_authorized" || error.code === "over_email_send_rate_limit" ? "EMAIL_DELIVERY" : "UNAVAILABLE" }, 503);
       return json({ ok: true, message: "CHECK_EMAIL" });
     }

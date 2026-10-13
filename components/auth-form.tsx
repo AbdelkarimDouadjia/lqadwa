@@ -9,12 +9,13 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { authText, type AuthCopyKey } from "@/lib/auth-copy";
 import { safeReturnPath } from "@/lib/auth-redirect";
 import type { Language } from "@/lib/i18n";
+import { profileText } from "@/lib/profile-labels";
 
 type Mode = "login" | "register" | "recover" | "update" | "logout";
 export function AuthForm({ initialMode = "login", administration = false }: { initialMode?: Mode; administration?: boolean }) {
   const [language, setLanguage] = useState<Language>("ar"), [mode, setMode] = useState<Mode>(initialMode);
   const [message, setMessage] = useState<AuthCopyKey | "">(""), [show, setShow] = useState(false), [returnTo, setReturnTo] = useState("/");
-  const form = useForm({ defaultValues: { name: "", email: "", password: "" }, shouldUnregister: true });
+  const form = useForm({ defaultValues: { firstName: "", lastName: "", email: "", password: "" }, shouldUnregister: true });
   const [providers, setProviders] = useState({ google: false, apple: false }), [oauthBusy, setOauthBusy] = useState(false);
   const t = (key: AuthCopyKey) => authText(language, key);
   useEffect(() => {
@@ -50,7 +51,7 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
     } catch { setMessage("UNAVAILABLE"); }
     setOauthBusy(false);
   }
-  async function submit(values: { name: string; email: string; password: string }) {
+  async function submit(values: { firstName: string; lastName: string; email: string; password: string }) {
     setMessage("");
     try {
       const body = administration && mode === "login" ? {action:"admin-login",identifier:values.email,password:values.password} : {...values,action:mode,returnTo};
@@ -61,14 +62,14 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
       setMessage("CHECK_EMAIL"); form.resetField("password");
     } catch { setMessage("UNAVAILABLE"); }
   }
-  const fields = mode === "register" ? ["name", "email", "password"] as const : mode === "recover" ? ["email"] as const : mode === "update" ? ["password"] as const : mode === "logout" ? [] : ["email", "password"] as const;
+  const fields = mode === "register" ? ["firstName", "lastName", "email", "password"] as const : mode === "recover" ? ["email"] as const : mode === "update" ? ["password"] as const : mode === "logout" ? [] : ["email", "password"] as const;
   return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-title">
     <div className="auth-top"><a className="auth-brand" href="/" aria-label="LQADWA"><img src="/brand/luqya.png" alt="" width="64" height="64" /><strong>LQADWA<span>لقى دوا</span></strong></a><NativeSelect aria-label="Language / اللغة" value={language} onChange={e=>setLanguage(e.target.value as Language)}>{[["ar","العربية"],["fr","Français"],["en","English"],["kab","Taqbaylit"]].map(([code,label])=><NativeSelectOption key={code} value={code}>{label}</NativeSelectOption>)}</NativeSelect></div>
     <span className="auth-emblem"><ShieldCheck aria-hidden="true" /></span><h1 id="auth-title">{mode === "login" ? t(administration ? "adminTitle" : "title") : t(mode)}</h1><p className="muted">{t(administration ? "adminIntro" : "intro")}</p>
     {!administration && mode !== "logout" && mode !== "update" && <div className="auth-tabs">{(["login","register"] as const).map(item=><Button key={item} type="button" variant={mode===item?"default":"outline"} aria-pressed={mode===item} disabled={busy} onClick={()=>changeMode(item)}>{t(item)}</Button>)}</div>}
     {(mode === "login" || mode === "register") && (providers.google || providers.apple) && <div className="auth-providers">{(["google", "apple"] as const).filter(p=>providers[p]).map(p=><Button key={p} type="button" variant="outline" disabled={busy} onClick={()=>void signInProvider(p)}>{oauthBusy && <LoaderCircle className="spin" aria-hidden="true"/>}{t(p)}</Button>)}<p className="auth-help">{t("emailAlternative")}</p></div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="auth-fields" aria-busy={busy}>
-      {fields.map(name=><FormField key={name} control={form.control} name={name} rules={{ required:t("FIELDS"), ...(name==="name"?{minLength:{value:2,message:t("FIELDS")},maxLength:60}:name==="email"?{...(administration && mode==="login" ? {} : {pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:t("FIELDS")}}),maxLength:254}:{minLength:{value:mode==="login"&&!administration?1:12,message:t("PASSWORD")},maxLength:128}) }} render={({field})=><FormItem><FormLabel>{t(name==="email"&&administration&&mode==="login"?"adminIdentifier":name)}</FormLabel><div className="auth-input"><FormControl><Input {...field} disabled={busy} type={name==="password"?(show?"text":"password"):name==="email"&&!(administration&&mode==="login")?"email":"text"} dir={name==="name"?undefined:"ltr"} autoComplete={name==="name"?"name":name==="email"?administration&&mode==="login"?"username":"email":mode==="login"?"current-password":"new-password"} autoCapitalize="none" spellCheck={name==="name"} /></FormControl>{name==="password"&&<button type="button" className="auth-eye" aria-label={t(show?"hide":"show")} onClick={()=>setShow(!show)}>{show?<EyeOff/>:<Eye/>}</button>}</div>{name==="password"&&(mode!=="login"||administration)&&<p className="auth-help">{t("passwordHelp")}</p>}<FormMessage/></FormItem>}/>)}
+      {fields.map(name=><FormField key={name} control={form.control} name={name} rules={{ required:t("FIELDS"), ...((name==="firstName"||name==="lastName")?{minLength:{value:1,message:t("FIELDS")},maxLength:60}:name==="email"?{...(administration && mode==="login" ? {} : {pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:t("FIELDS")}}),maxLength:254}:{minLength:{value:mode==="login"&&!administration?1:12,message:t("PASSWORD")},maxLength:128}) }} render={({field})=><FormItem><FormLabel>{name==="firstName"||name==="lastName"?profileText(language,name):t(name==="email"&&administration&&mode==="login"?"adminIdentifier":name)}</FormLabel><div className="auth-input"><FormControl><Input {...field} disabled={busy} type={name==="password"?(show?"text":"password"):name==="email"&&!(administration&&mode==="login")?"email":"text"} dir={(name==="firstName"||name==="lastName")?undefined:"ltr"} autoComplete={(name==="firstName"||name==="lastName")?(name==="firstName"?"given-name":"family-name"):name==="email"?administration&&mode==="login"?"username":"email":mode==="login"?"current-password":"new-password"} autoCapitalize="none" spellCheck={(name==="firstName"||name==="lastName")} /></FormControl>{name==="password"&&<button type="button" className="auth-eye" aria-label={t(show?"hide":"show")} onClick={()=>setShow(!show)}>{show?<EyeOff/>:<Eye/>}</button>}</div>{name==="password"&&(mode!=="login"||administration)&&<p className="auth-help">{t("passwordHelp")}</p>}<FormMessage/></FormItem>}/>)}
       {administration && mode==="login" && <p className="auth-help">{t("adminHelp")}</p>}
       {message&&<p className={`auth-message ${message==="CHECK_EMAIL"||message==="changed"?"success":""}`} role="status" aria-live="polite">{t(message)}</p>}
       <Button type="submit" disabled={busy} className="auth-submit">{busy&&<LoaderCircle className="spin" aria-hidden="true"/>}{t(mode)}</Button>

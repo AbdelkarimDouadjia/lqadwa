@@ -13,12 +13,14 @@ const users=[{id:'local-release-owner',email:'owner@example.invalid'},...['deleg
 const [owner,delegate,recipient,other]=users, createdPharmacies=[];
 const quote=v=>"'"+v.replaceAll("'","''")+"'", hash=v=>createHash('sha256').update(v).digest('hex');
 const sql=command=>JSON.parse(execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/wrangler-dist/cli.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to','.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'}));
-const record=u=>({...u,aud:'authenticated',role:'authenticated',is_anonymous:false,email_confirmed_at:'2026-01-01T00:00:00Z',user_metadata:{full_name:'LOCAL FICTIONAL ACCOUNT',role:'owner'},app_metadata:{provider:'email'}});
+const record=u=>({...u,aud:'authenticated',role:'authenticated',is_anonymous:false,email_confirmed_at:'2026-01-01T00:00:00Z',user_metadata:{full_name:'LOCAL FICTIONAL ACCOUNT',role:'owner',...(u.id===recipient.id?{first_name:'LOCAL',last_name:'NEW PERSON'}:{})},app_metadata:{provider:'email'}});
+let signupPayload;
 const jwt=u=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),aud:'authenticated',role:'authenticated'})).toString('base64url'),'local-fixture-not-a-signature'].join('.');
 const auth=createServer(async(req,res)=>{
  res.setHeader('content-type','application/json');
  if(req.url.startsWith('/auth/v1/settings'))return res.end(JSON.stringify({external:{google:false,apple:false}}));
  if(req.url.startsWith('/auth/v1/logout'))return res.end('{}');
+ if(req.url.startsWith('/auth/v1/signup')){let body='';for await(const part of req)body+=part;signupPayload=JSON.parse(body);return res.end(JSON.stringify({user:record(recipient),session:null}));}
  if(req.url.startsWith('/auth/v1/token')){
   let body='';for await(const part of req)body+=part;const input=JSON.parse(body||'{}'),u=users.find(u=>u.email===input.email);
   if(!u||input.password!==password){res.statusCode=400;return res.end(JSON.stringify({code:'invalid_credentials',msg:'Local fixture rejected'}));}
@@ -45,6 +47,10 @@ try{
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
  const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
  const sessions={};for(const u of [delegate,recipient,other]){const login=await request('/api/auth',{action:'login',email:u.email,password});sessions[u.id]=cookie(login.response);await request('/api/app',null,sessions[u.id]);}
+ assert.equal((await request('/api/profile',null,sessions[recipient.id])).data.details.lastName,'NEW PERSON','Verified signup names initialize the profile');
+ await request('/api/auth',{action:'register',email:'fresh@example.invalid',password,firstName:'LOCAL'},'',400);
+ await request('/api/auth',{action:'register',email:'fresh@example.invalid',password,firstName:'LOCAL',lastName:'NEW PERSON'});
+ assert.equal(signupPayload.data.first_name,'LOCAL');assert.equal(signupPayload.data.last_name,'NEW PERSON');assert.equal(signupPayload.data.full_name,'LOCAL NEW PERSON');assert(!('role' in signupPayload.data));
  assert.equal((await request('/api/app',null,sessions[delegate.id])).data.admin,null,'Editable metadata must never grant owner access');
  await request('/api/auth',{action:'admin-login',identifier:delegate.email,password},'',401);
  const create=await request('/api/app',{action:'admin-invite-create',email:delegate.email,permissions:['pharmacies']},rootCookie),token=create.data.invite;assert(token);

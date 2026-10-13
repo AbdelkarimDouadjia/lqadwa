@@ -48,11 +48,11 @@ function errorResponse(error: unknown) {
   console.error("Application request failed", error instanceof Error ? error.name : "unknown");
   return json({ error: "تعذّر الاتصال بالخدمة. بياناتك الحالية محفوظة؛ حاول مجدداً." }, 503);
 }
-async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
+async function snapshot(owner: string, fallbackName: string, initialDetails: unknown = {}): Promise<AppData> {
   const db = database();
   const now = Date.now();
   await db.batch([
-    db.prepare("INSERT INTO profiles (id, name, city) SELECT ?, ?, 'algiers' WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING").bind(owner, fallbackName, await tokenHash(owner)),
+    db.prepare("INSERT INTO profiles (id, name, city, details) SELECT ?, ?, 'algiers', ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING").bind(owner, fallbackName, JSON.stringify(parseDetails(personalSchema,initialDetails)), await tokenHash(owner)),
     db.prepare("UPDATE reservations SET status = 'expired' WHERE owner = ? AND status = 'active' AND expires <= ?").bind(owner, now),
     db.prepare("DELETE FROM reservation_locations WHERE updated < ?").bind(now - 5 * 60_000),
   ]);
@@ -112,7 +112,7 @@ async function snapshot(owner: string, fallbackName: string): Promise<AppData> {
   };
 }
 export async function GET(request: Request) {
-  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك")); }
+  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك", "personalDetails" in user ? user.personalDetails : {})); }
   catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {

@@ -14,6 +14,9 @@ export const pharmacyDetailsSchema = z.object({ contactName: optionalText(120), 
 export type PersonalDetails = z.infer<typeof personalSchema>;
 export type HealthDetails = z.infer<typeof healthSchema>;
 export type PharmacyDetails = z.infer<typeof pharmacyDetailsSchema>;
+export function initialPersonalDetails(metadata: Record<string,unknown> | undefined): PersonalDetails {
+  return parseDetails(personalSchema,{firstName:typeof metadata?.first_name==="string"?metadata.first_name:"",lastName:typeof metadata?.last_name==="string"?metadata.last_name:""});
+}
 export function parseDetails<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   try { return schema.parse(typeof value === "string" ? JSON.parse(value) : value || {}); }
   catch { return schema.parse({}); }
