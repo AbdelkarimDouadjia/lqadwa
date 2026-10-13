@@ -27,6 +27,8 @@ Retained failure log examples: `integration-reused-state-failure.log` and `integ
 
 Final observed Windows run: new discovery suite passed; local query CLI metadata exposed only `duration: 2`, not rows read/written. The complete run exited 1 on `admin-smoke.mjs` stock edit with HTTP 500 and Miniflare `Network connection lost`. That transport failure recurred even with isolated state and is unresolved. The draft must remain unmerged until the exact committed integration gate passes and any platform difference is understood. Source checks/build/OCR/unsigned Android passes do not override it.
 
+First GitHub run [38469834386](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38469834386) on `10161b7`: Android passed; web passed its preceding checks/build but failed discovery fixture setup because a clean checkout had no `.cloudflare` parent directory. The script now explicitly creates that ignored artifact directory before `mkdtemp`. This is a harness fix, not a relaxation of application assertions. A subsequent exact-tree run must still be verified.
+
 ## Artifact and compatibility boundaries
 
 Public 1.0.9 ARM64/ARMv7 APKs and release signing configuration are untouched. This PR keeps `/api/app`, Auth/device/profile/stock/admin paths and pickup code semantics. Native compatibility is checked by opaque-session API integration, source assertions and unsigned compilation; a physical installed-APK pass is still required before rollout. No new signed release or APK upload is claimed.

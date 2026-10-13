@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
-import {mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
 import path from 'node:path';
 import {discoveryQuery} from '../lib/pharmacy-discovery-query.mjs';
 
@@ -9,6 +9,7 @@ import {discoveryQuery} from '../lib/pharmacy-discovery-query.mjs';
 const base='http://localhost:5173',suite='local-discovery-'+randomUUID();
 const owner=suite+'-client',token=randomUUID()+'-'+randomUUID();
 const hash=createHash('sha256').update(token).digest('hex');
+mkdirSync('.cloudflare',{recursive:true});
 const folder=mkdtempSync(path.join('.cloudflare','discovery-'));
 const quote=value=>"'"+String(value).replaceAll("'","''")+"'";
 let sequence=0;
