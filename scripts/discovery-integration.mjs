@@ -36,6 +36,7 @@ try{
  const data=await search.json(),request=data.requests[0];
  assert.equal(data.profile.id,owner,'First native search initializes its own profile');
  assert.equal(data.notifications.length,1,'First native search receives its request notice');
+ assert(!data.notifications.some(n=>n.title.includes('DOLIPRANE')),'Notification previews omit medicine names');
  const replies=data.responses.filter(r=>r.request===request.id);
  assert.equal(replies.length,25);assert(replies.every(r=>r.status==='pending'));
  assert(replies.every(r=>data.pharmacies.some(p=>p.id===r.pharmacy)),'Legacy Android needs directory details for each returned recipient');
@@ -45,6 +46,17 @@ try{
  const q=discoveryQuery({city:'algiers',lat:36.7538,lng:3.0588,night:false,limit:25,excluded:[]});let parameter=0;
  const meta=sql(q.sql.replace(/\?/g,()=>{const value=q.parameters[parameter++];return typeof value==='number'?String(value):quote(value); }))[0].meta;
  console.log('Local CLI selection metadata (not production billing): '+JSON.stringify(meta||{}));
+
+ const retryToken=randomUUID();
+ const retryBody={action:'search',medicine:'DOLIPRANE 500 MG',city:'algiers',night:false,demo:false,token:retryToken};
+ const retries=await Promise.all(Array.from({length:6},()=>fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify(retryBody)})));
+ assert(retries.every(response=>response.status===200),'Concurrent retries with one request UUID must not fail');
+ const storedRetry=sql(`SELECT count(*) AS n FROM responses WHERE request=${quote(retryToken)};`)[0].results[0].n;
+ assert.equal(storedRetry,25,'Concurrent retries do not expand the recipient set');
+ assert.equal(sql(`SELECT count(*) AS n FROM notifications WHERE owner=${quote(owner)};`)[0].results[0].n,2,'One patient notification per request');
+ assert.equal(sql(`SELECT count(*) AS n FROM notifications WHERE substr(owner,1,${suite.length+7})=${quote(suite+'-owner-')};`)[0].results[0].n,50,'One notification per recipient per request');
+ const changedRetry=await fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify({...retryBody,medicine:'DIFFERENT LOCAL MEDICINE'})});
+ assert.equal(changedRetry.status,409,'A request UUID cannot be reused for a different medicine');
 
  const pharmacy=replies[0].pharmacy,pharmacyOwner=pharmacy.replace(suite+'-',suite+'-owner-');
  const pharmacyToken=randomUUID()+'-'+randomUUID(),pharmacyHash=createHash('sha256').update(pharmacyToken).digest('hex');

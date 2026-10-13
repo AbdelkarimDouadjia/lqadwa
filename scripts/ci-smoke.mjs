@@ -28,6 +28,6 @@ try {
   assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);
   assert.match(response.headers.get('strict-transport-security')||'',/max-age=15552000/,path);
  }
- for(const script of ['discovery-integration.mjs','admin-smoke.mjs','auth-smoke.mjs','release-smoke.mjs'])run(['scripts/'+script,...(script==='admin-smoke.mjs'&&process.argv.includes('--review')?['--review']:[])]);
+ for(const script of ['discovery-integration.mjs','admin-smoke.mjs','auth-smoke.mjs','release-smoke.mjs'])run(['scripts/'+script,...(script==='admin-smoke.mjs'?process.argv.filter(arg=>arg==='--review'||arg==='--browser'):[])]);
  console.log('PASS: local integration gate. Fixtures were never deployed.');
 } finally {child.kill('SIGTERM');}

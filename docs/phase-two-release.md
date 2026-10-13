@@ -1,0 +1,42 @@
+# Discovery, public rendering and request integrity
+
+14 October 2026. This document supplements the historical phase-one audit; it does not claim the entire master roadmap or broad patient-launch acceptance is complete. Publication was explicitly requested by the owner. Verification is in progress; deployment receipts will be added after the gates pass.
+
+## Changes
+
+- Root `app/page.tsx` is now a server page. Signed-out content renders without an Auth request; authenticated workspaces remain in `components/lqadwa-app.tsx`. Existing `?space=…`, app fragments and `/operations` authorization are retained. The proxy validates display language and refreshes authenticated root cookies; personalized HTML is private/no-store.
+- Four public language URLs have canonical/hreflang metadata, robots and sitemap. Public approved-pharmacy discovery uses the bounded v1 endpoint with city/duty filters and pagination. Distances are explicitly from the wilaya centre; a listing never implies medicine availability. Requests/reservations still require verified login. Directory links open walking directions in Google Maps without sharing patient coordinates.
+- Request creation uses a five-statement D1 transaction. The first recipient set wins; repeated UUIDs cannot add recipients or duplicate persisted notifications. A UUID with another medicine/city returns 409. The write-time request limit is checked inside the transaction. Notices created by this service omit medicine names. These are durable feed records, **not** an external push/outbox/retry/dead-letter delivery system.
+- Full lint errors are resolved without disabling application rules. Async view resets cancel on teardown, and permission-derived navigation stays restricted. Login preference hydration captures saved language before persistence. Native API paths and signed 1.0.9 APKs are unchanged.
+- Actual browser failures identified client overflow of 22px at 320px, owner overflow of approximately 3px in French, and an unnamed account theme switch. Corrections target grid min-content sizing, favorite/action button widths, wrapping and the accessible name; no document-level overflow hiding is used.
+- CI and manual publication now gate full lint and isolated Chromium/Firefox/WebKit tests. Fake Auth remains responsive while tests run. An ephemeral localhost TLS proxy allows secure cookies in WebKit; only the local fixture certificate is exempted from browser trust checks. Production cookies retain Secure/HttpOnly/SameSite=Lax and public HTTPS checks use normal certificate verification.
+
+## Evidence and boundaries
+
+Ignored logs are under `.cloudflare/release/`; screenshots/results are under `.cloudflare/e2e/`. No local fixtures are deployed. The initial browser run recorded 3 passes/9 failures; it was not declared green. Browser diagnostics reproduced the layout problems. Plain-HTTP WebKit rejected secure cookies; that was a test-environment defect, not a reason to relax production security. The corrected exact-tree run and CI results must be recorded below before release.
+
+- `npm run check`: passes TypeScript and existing source/security/branding/workspace/design/map/OCR assertions.
+- `npm run lint`: zero errors, 19 warnings (remaining hook-dependency/image guidance); not a warning-free result.
+- `npm audit --omit=dev --audit-level=high`: zero reported production-package vulnerabilities; not a penetration test.
+- `npm run build`: successful. vinext still warns that some route classification is unknown.
+- `npm run test:discovery`: index/allowlist/cursor/radius/duty/exclusion regressions at 10/100/300/1,000/10,000 local SQLite rows pass. Timings are not hosted D1 latency or billing.
+- `npm run test:ocr`: actual local Tesseract reads a synthetic printed prescription and matches two catalog brands. No handwriting, clinical verification or real-phone camera acceptance is claimed.
+- `npm run test:e2e`: pending final outcome. Planned layout coverage is 768 role/language/theme/width observations across three engines, plus login/menu/keyboard, secure-cookie, public HTML/directory and automated axe checks. This does not cover every possible app state or establish screen-reader/WCAG certification.
+
+The second Windows browser run passed 9/12 tests; the remaining three stopped on WebKit cookie metadata. Trace inspection shows `Secure; HttpOnly; SameSite=lax` on the actual login response, while Windows WebKit reports `sameSite: None`. An independent minimal HTTPS server setting only a dummy `probe` cookie reproduced that discrepancy, without LQADWA/Supabase code. Assertions now verify all three wire attributes, Secure/HttpOnly browser storage and inaccessibility to `document.cookie`. No app cookie policy was weakened. Real Safari SameSite enforcement is not inferred from the Windows metadata probe. These corrected assertions still require a fresh green run.
+
+Remote `wrangler d1 migrations list DB --remote --config wrangler.jsonc` reports no migrations to apply; no migration was performed. The latest production deployment still points to the recorded previous Worker version until publication is verified.
+
+The >300-directory fixture, concurrent identical request retries, changed-payload conflict, availability/reservation/pickup races, ownership, delegated revocation, stock stale-edit, service pause, consent and deletion checks run against fresh local D1 state. No invasive or synthetic load test runs against production users.
+
+## Rollout and rollback
+
+No new database migration or schema rollback is needed. Existing indexes and all twelve prior migrations are retained. Target: Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, existing Supabase Auth project, existing free-service configuration. Never deploy the fixture Auth URL or local owner. No paid plan, store submission, secret publication or signing-key change is authorized by this release.
+
+Before publication, run exact committed CI, check the production config, retain the previous Worker version and run post-deployment public checks. Previous production Worker version: `dc84e953-d8c1-46cc-8e0d-18d26ba26458`. Roll back application code/version only if necessary; do not restore or delete live patient data. APKs remain byte-identical 1.0.9 distribution artifacts.
+
+## Remaining launch acceptance and roadmap
+
+Real confirmation/recovery mailbox delivery and physical Android behavior are unverified (the owner replied “idk” to acceptance checks). Legal operator identity, Algerian pharmacy/data-protection review, fluent Kabyle review, pharmacy verification and signing-key recovery remain human/operator acceptance. Supabase leaked-password protection was left disabled because the currently documented feature requires Pro; no paid upgrade was enabled.
+
+Still unimplemented from the larger audit: canonical medicine-ID persistence/indexed catalog work, external push outbox/retries, privileged MFA/step-up and mobile rotation improvements, strict CSP investigation, independent staging/load/billing/field-CWV measurement and independent accessibility/security review. Main was observed unprotected; branch-protection/reviewer arrangements and a least-privilege CI deployment token still require operator setup. Local authenticated CLI publication does not create those repository secrets. Do not advertise these items as completed or treat a deployed engineering release as legal/clinical launch certification.

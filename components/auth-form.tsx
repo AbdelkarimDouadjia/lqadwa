@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { Eye, EyeOff, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,11 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
     return ()=>controller.abort();
   }, [administration]);
   useEffect(() => {
+    let active = true;
+    // Capture before the persistence effect writes the initial render's language.
     const stored = localStorage.getItem("dawa-language");
+    queueMicrotask(() => {
+    if (!active) return;
     if (["ar", "fr", "en", "kab"].includes(stored || "")) setLanguage(stored as Language);
     document.documentElement.dataset.theme = localStorage.getItem("dawa-theme") || "light";
     const params = new URLSearchParams(location.search);
@@ -33,6 +38,8 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
     setReturnTo(administration ? "/operations" : safeReturnPath(params.get("return_to")));
     if (params.has("expired")) setMessage("expired");
     if (params.has("changed")) setMessage("changed");
+    });
+    return () => { active = false; };
   }, [initialMode, administration]);
   useEffect(() => {
     document.documentElement.lang = language; document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
@@ -64,7 +71,7 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
   }
   const fields = mode === "register" ? ["firstName", "lastName", "email", "password"] as const : mode === "recover" ? ["email"] as const : mode === "update" ? ["password"] as const : mode === "logout" ? [] : ["email", "password"] as const;
   return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-title">
-    <div className="auth-top"><a className="auth-brand" href="/" aria-label="LQADWA"><img src="/brand/luqya.png" alt="" width="64" height="64" /><strong>LQADWA<span>لقى دوا</span></strong></a><NativeSelect aria-label="Language / اللغة" value={language} onChange={e=>setLanguage(e.target.value as Language)}>{[["ar","العربية"],["fr","Français"],["en","English"],["kab","Taqbaylit"]].map(([code,label])=><NativeSelectOption key={code} value={code}>{label}</NativeSelectOption>)}</NativeSelect></div>
+    <div className="auth-top"><Link className="auth-brand" href="/" aria-label="LQADWA"><img src="/brand/luqya.png" alt="" width="64" height="64" /><strong>LQADWA<span>لقى دوا</span></strong></Link><NativeSelect aria-label="Language / اللغة" value={language} onChange={e=>setLanguage(e.target.value as Language)}>{[["ar","العربية"],["fr","Français"],["en","English"],["kab","Taqbaylit"]].map(([code,label])=><NativeSelectOption key={code} value={code}>{label}</NativeSelectOption>)}</NativeSelect></div>
     <span className="auth-emblem"><ShieldCheck aria-hidden="true" /></span><h1 id="auth-title">{mode === "login" ? t(administration ? "adminTitle" : "title") : t(mode)}</h1><p className="muted">{t(administration ? "adminIntro" : "intro")}</p>
     {!administration && mode !== "logout" && mode !== "update" && <div className="auth-tabs">{(["login","register"] as const).map(item=><Button key={item} type="button" variant={mode===item?"default":"outline"} aria-pressed={mode===item} disabled={busy} onClick={()=>changeMode(item)}>{t(item)}</Button>)}</div>}
     {(mode === "login" || mode === "register") && (providers.google || providers.apple) && <div className="auth-providers">{(["google", "apple"] as const).filter(p=>providers[p]).map(p=><Button key={p} type="button" variant="outline" disabled={busy} onClick={()=>void signInProvider(p)}>{oauthBusy && <LoaderCircle className="spin" aria-hidden="true"/>}{t(p)}</Button>)}<p className="auth-help">{t("emailAlternative")}</p></div>}
@@ -77,6 +84,6 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
       {administration&&mode==="recover"&&<Button type="button" variant="ghost" disabled={busy} onClick={()=>changeMode("login")}>{t("login")}</Button>}
     </form></Form>
     {mode==="register"&&<p className="auth-help">{t("pharmacy")}</p>}
-    <footer><a href="/">{t("back")}</a><a href="/privacy">{t("privacy")}</a></footer>
+    <footer><Link href="/">{t("back")}</Link><a href="/privacy">{t("privacy")}</a></footer>
   </section></main>;
 }

@@ -5,7 +5,8 @@ import { identity, HttpError, isAdmin, isRootAdmin, rootAdminIds, adminAccess, h
 import { adminPermissions, parseAdminPermissions } from "@/lib/admin-permissions";
 import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
-import { discoverPharmacies, pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
+import { pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
+import { createAvailabilityRequest } from "@/lib/request-service";
 import { publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
 import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
@@ -136,21 +137,7 @@ export async function POST(request: Request) {
       if (!registered) throw new HttpError("الصيدلية غير موجودة.", 404);
     }
     if (input.action === "search") {
-      const existing = await db.prepare("SELECT id FROM requests WHERE id = ? AND owner = ?").bind(input.token, owner).first();
-      if (!existing) {
-        const count = await db.prepare("SELECT count(*) AS n FROM requests WHERE owner = ? AND created > ?").bind(owner, now - 60_000).first<{ n: number }>();
-        if ((count?.n || 0) >= 8) throw new HttpError("طلبات كثيرة خلال دقيقة واحدة. انتظر قليلاً ثم حاول.", 429);
-        const targets = (await discoverPharmacies(db, { city: input.city, night: input.night, limit: 25 })).map(pharmacyFromRow);
-        if (!targets.length) throw new HttpError("لا توجد صيدليات مناوبة في النطاق المختار. جرّب جميع الصيدليات.");
-        await db.batch([
-          // A first native request can precede GET /api/app; keep its profile/notice initialization.
-          db.prepare("INSERT INTO profiles (id, name, city, details) SELECT ?, ?, 'algiers', ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING").bind(owner, user.fullName || "مرحباً بك", JSON.stringify(parseDetails(personalSchema, "personalDetails" in user ? user.personalDetails : {})), ownerHash),
-          db.prepare("INSERT INTO requests (id, owner, medicine, city, created) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?)").bind(input.token, owner, input.medicine, input.city, now, ownerHash),
-          ...targets.map((p) => p.pilot ? db.prepare("INSERT INTO responses (request, pharmacy, status, updated) VALUES (?, ?, 'yes', ?)").bind(input.token, p.id, now) : db.prepare("INSERT INTO responses (request, pharmacy, status) VALUES (?, ?, 'pending')").bind(input.token, p.id)),
-          notify(`طلب توفر جديد: ${input.medicine}`),
-          ...targets.filter((p) => !p.pilot).map((p) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, owner, ?, ?, 0 FROM registered_pharmacies WHERE id = ? AND status = 'approved'").bind(crypto.randomUUID(), `طلب توفر جديد: ${input.medicine}`, now, p.id)),
-        ]);
-      }
+      await createAvailabilityRequest(db, owner, ownerHash, input, { name: user.fullName || "مرحباً بك", details: JSON.stringify(parseDetails(personalSchema, "personalDetails" in user ? user.personalDetails : {})) });
     } else if (input.action === "reply") {
       const pilot = legacySampleIds.has(input.pharmacy);
       const permitted = pilot

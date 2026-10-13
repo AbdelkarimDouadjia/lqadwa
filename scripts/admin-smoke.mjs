@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
+import {startUiProxy} from './local-ui-proxy.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
 // APP_OWNER_EMAIL:owner@example.invalid and SUPABASE_URL:http://127.0.0.1:5888.
@@ -191,10 +192,20 @@ try{
  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},sessions[delegate.id],403);
  const pending=await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['analytics']},rootCookie);await request('/api/app',{action:'admin-invites-revoke'},rootCookie);await request('/api/app',{action:'admin-invite-redeem',token:pending.data.invite},sessions[recipient.id],409);
  console.log('PASS: owner alias/password verification, verified-email invitation binding, single use, editable metadata denial, scoped reads/writes, immediate permission updates, protected owner and revoked access. Fixtures are LOCAL only.');
- if (process.argv.includes('--review')) {
+ if (process.argv.includes('--review') || process.argv.includes('--browser')) {
   await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},rootCookie);
-  console.log('LOCAL UI review ready: owner@example.invalid (owner), recipient@example.invalid (client), other@example.invalid (pharmacy). Press Enter to remove these local fixtures.');
-  await new Promise(resolve=>{process.stdin.resume();process.stdin.once('data',()=>{process.stdin.pause();resolve();});});
+  if (process.argv.includes('--browser')) {
+   const closeProxy=await startUiProxy();
+   try {
+    await new Promise((resolve,reject)=>{
+     const browser=spawn(process.execPath,['node_modules/playwright/cli.js','test'],{stdio:'inherit',env:process.env});
+     browser.once('error',reject);browser.once('exit',code=>code===0?resolve():reject(Error('Browser checks failed: '+code)));
+    });
+   } finally {await closeProxy();}
+  } else {
+   console.log('LOCAL UI review ready: owner@example.invalid (owner), delegate@example.invalid (client), other@example.invalid (pharmacy). Press Enter to remove these local fixtures.');
+   await new Promise(resolve=>{process.stdin.resume();process.stdin.once('data',()=>{process.stdin.pause();resolve();});});
+  }
  }
 }finally{
  const ids=users.slice(1).map(u=>quote(u.id)).join(','),pharmacies=createdPharmacies.map(quote).join(',');

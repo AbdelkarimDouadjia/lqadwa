@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
+import { publicLanguage } from "@/lib/public-page";
 import "./globals.css";
 import "./luqya.css";
 import "./design-refinement.css";
@@ -12,6 +14,7 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#ffffff" };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ar" dir="rtl"><body className="antialiased">{children}</body></html>;
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const store = await cookies(), language = publicLanguage((await headers()).get("x-lqadwa-locale"), publicLanguage(store.get("lqadwa-language")?.value));
+  return <html lang={language} dir={language === "ar" ? "rtl" : "ltr"} data-theme={store.get("lqadwa-theme")?.value === "dark" ? "dark" : "light"}><body className="antialiased">{children}</body></html>;
 }

@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   web:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -25,12 +25,19 @@ jobs:
       - run: npm run check
       - name: Discovery unit and scale regression (local SQLite)
         run: npm run test:discovery
-      - name: Lint discovery slice and landing change
-        run: npx --no-install eslint app/api/v1/pharmacies/route.ts lib/pharmacy-discovery.ts lib/pharmacy-discovery-query.mjs scripts/discovery-integration.mjs scripts/discovery-benchmark.mjs components/landing-page.tsx
+      - run: npm run lint
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
-      - run: npm run test:integration
+      - name: Install isolated browser-test engines
+        run: npx --no-install playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e
       - run: npm run test:ocr
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: browser-checks
+          path: .cloudflare/e2e/
+          retention-days: 7
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

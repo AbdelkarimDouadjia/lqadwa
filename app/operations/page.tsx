@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getAppUser } from "@/lib/auth";
 import { isAdmin, identity } from "@/lib/access";
-import HomePage from "@/app/page";
+import HomePage from "@/components/lqadwa-app";
 export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false, follow: false } };
 export default async function OperationsPage() {

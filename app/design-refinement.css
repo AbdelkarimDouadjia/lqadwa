@@ -210,3 +210,19 @@ html[data-large-text=true] .mobile-navigation button { font-size: 1rem; }
 }
 @media(prefers-reduced-motion:reduce) { .phone-art { transform: none; } }
 html[data-less-motion=true] .phone-art { transform: none; }
+/* Public directory: approval is not a medicine-availability claim. */
+.public-directory{max-width:1120px;margin:56px auto;padding:28px 0;scroll-margin-top:100px}
+.public-directory h2{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;margin-bottom:12px}
+.directory-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:24px 0 12px}
+.directory-controls select{min-width:190px;max-width:100%}
+.directory-row{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:24px;background:var(--card);margin:12px 0;border-radius:16px}
+.directory-row h3{font-size:1.15rem;font-weight:700;margin-bottom:8px}
+.directory-row p{color:var(--muted-foreground);overflow-wrap:anywhere}
+.directory-row a{display:flex;align-items:center;gap:8px;min-height:44px;color:var(--foreground);font-weight:600}
+.directory-row svg{width:20px;height:20px}
+.directory-signin{display:inline-block;margin-top:24px;text-decoration:underline;text-underline-offset:4px}
+.pharmacy-row,.pharmacy-action,.operations-panel>*{min-width:0}
+.operations-panel{grid-template-columns:minmax(0,1fr)}
+.operations-panel button{max-width:100%;white-space:normal;height:auto}
+@media(max-width:600px){.pharmacy-action{flex-wrap:wrap}.pharmacy-action>.favorite-button{min-width:44px;width:44px;flex:0 0 44px;margin-inline-start:0}}
+@media(max-width:600px){.public-directory{margin:32px 0}.directory-row{align-items:flex-start;flex-direction:column;padding:18px}}
