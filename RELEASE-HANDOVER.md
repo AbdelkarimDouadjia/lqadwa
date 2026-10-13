@@ -1,5 +1,9 @@
 # LQADWA 1.0.9 release handover
 
+## Current audit status — 13 October 2026
+
+GitHub metadata currently reports the source repository as public. The owner explicitly requested leaving visibility unchanged during this audit. The earlier private-repository verification below is historical, not the present state. No visibility, production configuration, database, signing key or deployment change is part of the phase-one draft PR. See [the phase-one audit](docs/phase-one-audit.md) for current verification and remaining launch blockers.
+
 ## Navigation and visual refinement — 13 October 2026
 
 Deployed Cloudflare version `dc84e953-d8c1-46cc-8e0d-18d26ba26458`, source `7aa41a5596bb00388660b60ac391816e80e49035`. Web and Android jobs passed in [CI run 38433837740](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38433837740). The existing free Cloudflare website, D1 database and Supabase authentication remain in use; no paid service, migration or live fixture was added.

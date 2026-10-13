@@ -82,6 +82,8 @@ html[data-large-text=true] .mobile-navigation button { font-size: 1rem; }
 .illustration-pin.origin { background: var(--violet-ink); color: var(--card); }
 [data-theme=dark] .illustration-pin.origin { color: var(--background); }
 .landing-section { padding-block: 48px; scroll-margin-top: 110px; }
+.landing-actions .landing-secondary-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 16px; color: var(--primary); text-decoration: underline; text-underline-offset: 5px; font-weight: 600; }
+.landing-hero-copy .landing-availability { margin-block: 16px 0; color: var(--muted-foreground); font-size: 1rem; line-height: 1.7; }
 .landing-steps article:nth-child(2) { background: var(--blue-soft); }
 .landing-steps article:nth-child(2)>div { color: var(--blue-ink); }
 .landing-steps article:nth-child(3) { background: var(--violet-soft); }

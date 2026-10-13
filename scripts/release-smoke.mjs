@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 const origin='http://localhost:5173';
 const fetch=(url,options={})=>globalThis.fetch(origin+url,{signal:AbortSignal.timeout(30000),...options,headers:{connection:'close',...options.headers}});
 const hash=v=>createHash('sha256').update(v).digest('hex');
-function sql(command){return execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to','.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'});}
+function sql(command){return execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to',process.env.LQADWA_TEST_STATE||'.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'});}
 const now=Date.now(),users=Array.from({length:4},()=>({id:'release-test-'+randomUUID(),token:randomUUID()+'-'+randomUUID()}));
 sql(users.map(u=>`INSERT INTO profiles(id,name,city) VALUES('${u.id}','FICTIONAL RELEASE TEST','algiers');INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(u.token)}','${u.id}',${now},${now+900000});`).join(''));
 const [patient,other,pharmacist,secondPharmacist]=users;

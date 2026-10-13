@@ -2,12 +2,17 @@
 import {spawn,spawnSync} from 'node:child_process';
 import net from 'node:net';
 import assert from 'node:assert/strict';
+import {mkdirSync,mkdtempSync} from 'node:fs';
+import path from 'node:path';
 const node=process.execPath,cli='./node_modules/wrangler/wrangler-dist/cli.js';
-const env={...process.env,AUTH_OFFLINE:'1'};
+mkdirSync('.wrangler',{recursive:true});
+const testState=mkdtempSync(path.resolve('.wrangler','integration-'));
+const env={...process.env,AUTH_OFFLINE:'1',LQADWA_TEST_STATE:testState};
 function run(args){const r=spawnSync(node,args,{stdio:'inherit',env});if(r.error)throw r.error;if(r.status!==0)throw Error('Check failed: '+args.join(' '));}
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',()=>reject(Error('Port 5173 is occupied. Stop your local preview before integration checks.')));s.listen(5173,()=>s.close(resolve));});
-run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to','.wrangler/state']);
-const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to','.wrangler/state','--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888'],{stdio:'inherit',env});
+console.log('Isolated local integration database: '+testState);
+run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to',testState]);
+const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888'],{stdio:'inherit',env});
 let childExit;child.once('error',e=>{childExit=e;});child.once('exit',code=>{childExit=Error('Worker exited '+code);});
 try {
  let ready=false;
@@ -23,6 +28,6 @@ try {
   assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);
   assert.match(response.headers.get('strict-transport-security')||'',/max-age=15552000/,path);
  }
- for(const script of ['admin-smoke.mjs','auth-smoke.mjs','release-smoke.mjs'])run(['scripts/'+script,...(script==='admin-smoke.mjs'&&process.argv.includes('--review')?['--review']:[])]);
+ for(const script of ['discovery-integration.mjs','admin-smoke.mjs','auth-smoke.mjs','release-smoke.mjs'])run(['scripts/'+script,...(script==='admin-smoke.mjs'&&process.argv.includes('--review')?['--review']:[])]);
  console.log('PASS: local integration gate. Fixtures were never deployed.');
 } finally {child.kill('SIGTERM');}

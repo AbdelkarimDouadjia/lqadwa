@@ -1,6 +1,6 @@
 # LQADWA release checklist
 
-Release 1.0.6 is published on Cloudflare with signed native Android downloads. Source is maintained in the owner's GitHub repository. This checklist separates completed engineering checks from the acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
+The latest recorded release is 1.0.9 on Cloudflare with signed native Android downloads. Source is maintained in the owner's GitHub repository. Historical release checks below are not a fresh production-readiness certification. This checklist separates engineering checks from acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
 
 ## Completed verification
 
@@ -14,7 +14,7 @@ Release 1.0.6 is published on Cloudflare with signed native Android downloads. S
 
 ## Required acceptance before broad patient use
 
-- Enable and save custom SMTP in Supabase, then verify confirmation and password recovery with a non-team address. The latest observed SMTP toggle is off; email delivery is not accepted.
+- Verify confirmation and password recovery with a non-team address, including delivery failures and expired links. Earlier documentation observed SMTP off; the owner subsequently reported configuring it. Current configuration and end-to-end delivery remain unverified in this audit. Do not expose provider credentials.
 - Verify supported physical Android phones: fresh install/upgrade, login, returning from account confirmation/recovery, rotation, camera/gallery, permission denial, GPS/routes, QR pickup, weak networks and process death. No physical-device pass is claimed.
 - Independently verify pharmacy licenses/locations and pharmacist handling of name/strength, stale availability, reservation expiry and original-prescription pickup.
 - Complete fluent Kabyle review. Native OCR supports printed Latin; Arabic/handwritten recognition is not promised. OCR/catalog matching is not clinical advice or prescription verification.

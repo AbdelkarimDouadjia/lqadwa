@@ -12,7 +12,7 @@ const base='http://localhost:5173', password='LOCAL-only-unique-passphrase';
 const users=[{id:'local-release-owner',email:'owner@example.invalid'},...['delegate','recipient','other'].map(name=>({id:'admin-test-'+randomUUID(),email:name+'@example.invalid'}))];
 const [owner,delegate,recipient,other]=users, createdPharmacies=[];
 const quote=v=>"'"+v.replaceAll("'","''")+"'", hash=v=>createHash('sha256').update(v).digest('hex');
-const sql=command=>JSON.parse(execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/wrangler-dist/cli.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to','.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'}));
+const sql=command=>JSON.parse(execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/wrangler-dist/cli.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to',process.env.LQADWA_TEST_STATE||'.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'}));
 const record=u=>({...u,aud:'authenticated',role:'authenticated',is_anonymous:false,email_confirmed_at:'2026-01-01T00:00:00Z',user_metadata:{full_name:'LOCAL FICTIONAL ACCOUNT',role:'owner',...(u.id===recipient.id?{first_name:'LOCAL',last_name:'NEW PERSON'}:{})},app_metadata:{provider:'email'}});
 let signupPayload;
 const jwt=u=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),aud:'authenticated',role:'authenticated'})).toString('base64url'),'local-fixture-not-a-signature'].join('.');
