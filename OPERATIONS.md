@@ -1,5 +1,13 @@
 # LQADWA operations — owner handover
 
+## Navigation, themes and social pages (1.0.9)
+
+The shared public header contains no admin/account actions. Authenticated desktop/mobile navigation is role-specific; server-side permissions remain authoritative. The footer hides pharmacy onboarding from existing pharmacy/admin workspaces. Rounded branding and the last-loaded `app/design-refinement.css` keep colors consistent across light/dark menus, forms, workspaces and public sections. `scripts/design-smoke.mjs` checks real CSS token contrast in both modes as part of CI. Native Android has a DayNight theme switch, themed cards and active navigation. No new device permission or paid API is needed.
+
+Support email is `abdelkarim.douadjia@gmail.com`. Footer social settings are in `lib/site-information.ts`; leave fields empty until the operator creates and verifies ownership of the accounts. Proposed `@lqadwa.dz`, `@getlqadwa` and `@lqadwa_sante` are not verified available: search indexing is not an authoritative availability check and direct platform checks were blocked. Do not publish guessed social URLs, business addresses, registration numbers or support hours.
+
+Web and native 1.0.9 use the existing accounts/database. APK signing certificate is unchanged, versionCode is 14 and older signed packages are preserved under ignored `.cloudflare/previous-apks/1.0.8/`. The private repository remains private; the public website and signed APK links stay on Cloudflare. See the release handover for deployment/CI IDs, hashes and outstanding operator acceptance.
+
 ## Experience and stock controls (1.0.8)
 
 The public landing page promotes the service through a branded route illustration, workflow, benefits, pharmacy offer, FAQ and Android/account links. It does not sell sponsored pharmacy placement or medicine advertisements. Pharmacy results retain distance ordering. Client filters add distance range, pharmacy name/address and saved pharmacies; current-position permission remains explicit and distances without GPS are approximate. Recent activity has medicine/status/date filters, true booking outcomes, expiry countdowns and access to QR/directions. Stopped request status now comes from the database. Complete history can be exported through Account data.

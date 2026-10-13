@@ -1,4 +1,22 @@
-# LQADWA 1.0.8 release handover
+# LQADWA 1.0.9 release handover
+
+## Navigation and visual refinement — 13 October 2026
+
+Deployed Cloudflare version `dc84e953-d8c1-46cc-8e0d-18d26ba26458`, source `7aa41a5596bb00388660b60ac391816e80e49035`. Web and Android jobs passed in [CI run 38433837740](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38433837740). The existing free Cloudflare website, D1 database and Supabase authentication remain in use; no paid service, migration or live fixture was added.
+
+The public navbar now has service links, language/theme controls and sign-in only. Authenticated navigation follows the existing server-authorized role, with account actions in a desktop menu and a localized mobile menu. Account/notification controls are absent for guests. Mobile menus include language, appearance and account actions without squeezing them into the top bar. Footer pharmacy signup is shown only to guests/clients; authenticated home links respect the workspace. Original authorization and private admin URLs remain unchanged.
+
+The last-loaded semantic palette fixes the legacy body/navbar color overrides. Light surfaces use teal with blue, violet and amber accents; dark surfaces use charcoal/navy, readable pale text and mint actions. Automated contrast checks require 4.5:1 for normal text/actions and colored information panels in both themes. Landing sections add everyday use cases, role-specific journeys and Android promotion. Footer contains the actual support email, pharmacy participation scope, pickup-only reminder, privacy/account-data links and versioned APK links. No fabricated statistics, accounts, testimonials or social URLs were published. UI/UX guidance informed navigation hierarchy, touch targets, theme pairing and progressive disclosure; existing components were reused without new dependencies or raster assets.
+
+Native Android 1.0.9 (versionCode 14) uses DayNight resources, a theme switch, rounded branding, themed cards/buttons/notices and clearly selected bottom tabs. Ordinary navigation/query state survives theme recreation; sensitive session tokens are not added to saved instance state. The existing reduced-motion preference now also disables content-entry animation. Maps remain normal OpenStreetMap tiles, not a night-styled basemap.
+
+Checks passed: TypeScript, source/branding/map/navigation/contrast/experience checks, zero reported production dependency audit findings, local role/privacy/stock integration, actual printed-prescription Tesseract matching, signed APK/AAB builds, Android lint (zero errors, eight warnings), both APK signatures, ARM64 16 KB zip alignment and AAB verification. Public HTTPS, protected endpoints, catalog and both exact hosted APK hashes were checked. No physical-phone acceptance or independent security audit is claimed.
+
+Browser checks covered desktop and mobile layouts, Arabic RTL, all four language choices, menu dismissal, account-menu navigation and client/pharmacy navigation using isolated local fixtures. Public mobile inspection reported an actual 375-pixel viewport with no horizontal overflow. Public screenshot evidence is saved under ignored `.cloudflare/qa/design-1.0.9-light-desktop.png` and `design-1.0.9-dark-mobile.png`; these are real browser captures, not generated mockups. Local integration fixtures were cleaned and the preview was stopped.
+
+Proposed social handles: `@lqadwa.dz`, `@getlqadwa`, `@lqadwa_sante`. Exact web searches found no indexed matches, but direct Instagram/Facebook checks were blocked; availability is **unconfirmed** until platform signup. No accounts were created. Add only verified, operator-owned URLs to `lib/site-information.ts` after creation; empty fields render a coming-soon message, never fake links.
+
+Previous signed 1.0.8 APKs remain recoverable under ignored `.cloudflare/previous-apks/1.0.8/`. All remaining operator/acceptance tasks below still apply; improved release presentation is not proof that they have passed.
 
 ## Experience expansion — 13 October 2026
 
@@ -113,13 +131,13 @@ Before migration, live D1 contained zero delegated admins and invitations. An ig
 - Public login DOM/layout inspection confirms no ChatGPT sign-in option or account menu, a 48-pixel rounded logo and 48-pixel inputs at a 375-pixel viewport. Arabic and French had no horizontal overflow. English and Kabyle controls were also inspected. Screenshot capture timed out, so no new screenshot evidence is asserted. This is layout/DOM evidence, not a completed visual screenshot review.
 - Fresh public `/operations/login` inspection confirms the private owner/admin identifier/password controls, owner-only delegation explanation and no signup/social-login buttons. The local English private login fits the observed mobile viewport without horizontal overflow.
 
-## Android artifacts (1.0.8)
+## Android artifacts (1.0.9)
 
 | Artifact | SHA-256 |
 | --- | --- |
-| ARM64 APK | `f545a7ce37d75f89c79adcda4f86cff1a9ebd81083d0d3d0266bd5027c07cdc9` |
-| ARMv7 APK | `ba26edc45bfca3a2d5ffd6ae1ee9d57347ace980be2803f19700cce493804be2` |
-| Store AAB | `d95841bfc9da5a911ab4c28749614bcb276af2e7af9020a4b217b1c8904d319a` |
+| ARM64 APK | `aeffda33bac56c7ff503f524ebee8f4c62bacaa87a7fcecac110661e25b9e0e5` |
+| ARMv7 APK | `473c3d497564ba6ec91eee0c9811670151e7a9c757331b23a6f31aebd56ae74a` |
+| Store AAB | `bf8f033fbc4ed42098989853d0cd45fb6d34ec52c254e5d739ae9b6d3d062775` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
 The signed AAB is local at `android/app/build/outputs/bundle/release/app-release.aab`. Protected signing material remains outside the repository. Previous signed APKs are recoverable under ignored `.cloudflare/previous-apks/`.
