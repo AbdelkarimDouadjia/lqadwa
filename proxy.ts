@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig, authCookieOptions } from "@/lib/supabase-server";
 import { securityHeaders } from "./next.config";
+import { publicLanguage } from "@/lib/public-page";
 
 function secured(response: NextResponse) {
   securityHeaders.forEach(({ key, value }) => response.headers.set(key, value));
@@ -10,9 +11,13 @@ function secured(response: NextResponse) {
 
 // API handlers write cookies directly; protected server-rendered pages need proxy refresh.
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-lqadwa-locale", publicLanguage(request.nextUrl.searchParams.get("lang"), publicLanguage(request.cookies.get("lqadwa-language")?.value)));
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
+  const authRoot = request.nextUrl.pathname === "/" && request.cookies.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+  if (request.nextUrl.pathname === "/") response.headers.set("Cache-Control", "private, no-store");
   // Keep early redirects protected, without refreshing Auth on public/API paths.
-  if (!["/connect", "/operations"].includes(request.nextUrl.pathname)) return secured(response);
+  if (!authRoot && !["/connect", "/operations"].includes(request.nextUrl.pathname)) return secured(response);
   const settings = authConfig();
   const client = createServerClient(settings.url, settings.key, {
     cookieOptions: authCookieOptions,
@@ -21,7 +26,8 @@ export async function proxy(request: NextRequest) {
       getAll: () => request.cookies.getAll(),
       setAll(items, cacheHeaders) {
         items.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        requestHeaders.set("cookie", request.cookies.toString());
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         items.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         Object.entries(cacheHeaders || {}).forEach(([key, value]) => response.headers.set(key, value));
       },

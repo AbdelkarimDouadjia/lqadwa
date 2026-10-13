@@ -9,8 +9,9 @@ import { PublicLanding } from "@/components/public-landing";
 export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<{ lang?: string; space?: string }> };
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const query = await searchParams, language = publicLanguage(query.lang);
-  const privatePage = !!query.space || (await cookies()).getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+  const query = await searchParams, store = await cookies();
+  const language = publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value));
+  const privatePage = !!query.space || store.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
   const languages = { "ar-DZ": publicUrl("ar"), "fr-DZ": publicUrl("fr"), en: publicUrl("en"), kab: publicUrl("kab"), "x-default": publicUrl("ar") };
   return {
     title: `${ex(language, "intro")} | LQADWA`, description: ex(language, "lead"),

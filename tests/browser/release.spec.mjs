@@ -26,6 +26,7 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
     const response = await page.goto('/?lang=' + language);
     const html = await response.text();
     expect(html).toContain('<h1>'); expect(html).toContain('directory-title');
+    expect(html).toMatch(new RegExp(`<html[^>]*lang="${language}"[^>]*dir="${language === 'ar' ? 'rtl' : 'ltr'}"`));
     expect(response.headers()['cache-control']).toContain('no-store');
     await expect(page.locator('html')).toHaveAttribute('lang', language);
     await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
