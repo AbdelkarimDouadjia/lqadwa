@@ -2,6 +2,8 @@
 
 ## Profile expansion — 12 October 2026
 
+Completed deployment on 13 October 2026: Cloudflare version `9e8200cb-7be7-43ce-b2b4-e36fe9582f98`, source commit `7be450e70cecabd7fc4965a180392bc9a4dc3d4a`. Both jobs passed in [CI run 38421472052](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38421472052), including signup name initialization, optional-field validation, consent/owner/delegate isolation, medical-edit rejection, export/erasure, legacy save preservation and pharmacy detail changes. Public release checks passed for HTTPS, protected profile/admin endpoints, catalog and exact signed APK download hashes. Migration `0011_profile_details.sql` is installed (twelve migrations); a private pre-migration export is at `.cloudflare/backups/pre-profile-details-2026-10-12.sql`. No live users or health notes were fabricated or edited for testing. Hosted APKs are 1.0.7; signup/browser/API completion required no further native binary change.
+
 Web and native Android 1.0.7 (versionCode 12) add separate first/last names, optional phone/commune/home address/age/profession, client health notes/long-term conditions/allergies, pharmacy contact/accessibility details and owner-visible admin membership details. Health notes are private unless the client explicitly consents to owner access; delegated admins and pharmacies cannot see them. Optional notes can be erased and consent withdrawn. Basic admin edits cannot change medical notes or consent. Export/deletion cover the new fields. Migration `0011_profile_details.sql` is additive and initializes empty values, with no invented user information. Native signed APKs and AAB were built with the unchanged owner-held signing certificate; Android lint and APK signature/alignment checks passed. Physical-phone acceptance has not been performed.
 
 Public signup asks for separate first and last names in all four languages. Confirmed accounts initialize those fields without splitting legacy display names or overwriting existing profiles. Native email sign-in uses the same metadata initialization. Name metadata is never used to grant roles. The existing Supabase [signup metadata API](https://supabase.com/docs/reference/javascript/auth-signup) is retained; health/address/age data remain solely in the application database.
@@ -10,7 +12,7 @@ Current 1.0.7 artifact SHA-256 values: ARM64 `b6d8627313d06fe46f66e88b56b338bdeb
 
 12 October 2026. Web and signed native Android release 1.0.6, versionCode 11. This release separates guest, client, pharmacy and administrative journeys. No store submission or paid service was enabled.
 
-Current Cloudflare deployment version: `ec63e22c-ab15-4ada-adcb-9a3619cdf06b`, including the management expansion and migration below. The production deployment uses the real Supabase configuration, not the local authentication fixtures. The preceding journey-only deployment was `19aa064f-0d19-45d5-bdf9-7e6e324b2613`.
+Previous 1.0.6 Cloudflare deployment version: `ec63e22c-ab15-4ada-adcb-9a3619cdf06b`, including the management expansion and migration below. The production deployment uses the real Supabase configuration, not the local authentication fixtures. The preceding journey-only deployment was `19aa064f-0d19-45d5-bdf9-7e6e324b2613`.
 
 Post-deployment public checks passed on 12 October: release 1.0.6, HTTPS/security headers, public wording, protected administration redirect, rejected forged identity, real medicine catalog, and both hosted APKs matching the signed local SHA-256 hashes. Download checks allow two minutes for each approximately 20 MB package; the initial 30-second check timed out on a download before this adjustment.
 
@@ -52,7 +54,7 @@ The active deployment is in the owner's Cloudflare account. No paid plan, paid A
 
 ## Hosting and identity
 
-- Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, eleven applied migrations through `0010_service_controls`.
+- Cloudflare Worker `lqadwa`, D1 `lqadwa-production`, twelve applied migrations through `0011_profile_details`.
 - Supabase project `iqbqqlwappehjppupzde`: Authentication and protected sign-in-record deletion. Application data stays in D1.
 - Email/password authentication replaces host identity headers. Email confirmation remains required. The verified account for the supplied support email is configured as owner in `APP_ADMIN_IDS`; that configuration is server-only.
 - Native Android uses Java/Material views, MapLibre, on-device OCR/QR and encrypted Android Keystore session storage. Email/password sign-in runs inside the app. Account creation/confirmation, recovery and optional device linking use the browser.
@@ -99,13 +101,13 @@ Before migration, live D1 contained zero delegated admins and invitations. An ig
 - Public login DOM/layout inspection confirms no ChatGPT sign-in option or account menu, a 48-pixel rounded logo and 48-pixel inputs at a 375-pixel viewport. Arabic and French had no horizontal overflow. English and Kabyle controls were also inspected. Screenshot capture timed out, so no new screenshot evidence is asserted. This is layout/DOM evidence, not a completed visual screenshot review.
 - Fresh public `/operations/login` inspection confirms the private owner/admin identifier/password controls, owner-only delegation explanation and no signup/social-login buttons. The local English private login fits the observed mobile viewport without horizontal overflow.
 
-## Android artifacts
+## Android artifacts (1.0.7)
 
 | Artifact | SHA-256 |
 | --- | --- |
-| ARM64 APK | `22a31f047b0ff8f7e3864fb069cc414ea010507902158f4c6f39776be38348bb` |
-| ARMv7 APK | `9ac400dffd034ea9ed2ebbddb151269fb0a22112331683aab2839f7ab54800ab` |
-| Store AAB | `cc5a474a6ccc0ef33165720b4f72372bc62f5ed809a4c42fa89ac9a49fb6aa02` |
+| ARM64 APK | `b6d8627313d06fe46f66e88b56b338bdebb585171eefa4ff855adbc454594258` |
+| ARMv7 APK | `a1e7a0627c35c174f7a4542746cfe68242d4bfe34b2e98aaa60c4a57457d5647` |
+| Store AAB | `5989bb70bed39951c125e71d4cdbe26f11946167de188f2c962d186c177f33f6` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
 The signed AAB is local at `android/app/build/outputs/bundle/release/app-release.aab`. Protected signing material remains outside the repository. Previous signed APKs are recoverable under ignored `.cloudflare/previous-apks/`.
