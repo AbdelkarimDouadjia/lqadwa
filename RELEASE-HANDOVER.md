@@ -2,9 +2,13 @@
 
 ## Experience expansion — 13 October 2026
 
+Deployed Cloudflare version `f5143068-ed15-442c-b678-36add0fe89c7`, source `8ef54768f0986cef65e1b5adaad813fe53d8d162`. Both web and Android jobs passed in [CI run 38428260172](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38428260172). Public release checks passed for release/experience markers, HTTPS/security headers, protected admin/profile/stock endpoints, catalog and both exact signed APK download hashes. The website and downloads remain on the existing free Cloudflare services.
+
 Web and native Android 1.0.8 (versionCode 13) add client distance/name/saved-pharmacy filters, recent booking/request tracking filters, local display/refresh preferences and an approved-pharmacy inventory workspace. Stock paging searches the complete inventory, with low/out/in-stock filters, sorting, threshold, item rename/quantity/deletion, +1/−1 and current-page CSV export. Existing-entry changes reject stale timestamps and SQL writes recheck approval/ownership. The public landing page has a branded vector/CSS illustration, service workflow/benefits, pharmacy pricing, FAQ and working account/Android links. Public promotion does not change geographic pharmacy ranking or add paid drug/pharmacy advertisements. UI/UX guidance informed progressive controls, mobile targets, semantic theme colors and reduced motion; no raster image generation or additional dependency was needed.
 
 Local integration passed with stock isolation, 51-entry paging, filtering, duplicate rejection and stale quantity/deletion tests. Pure checks cover pharmacy filters, true request/booking states and spreadsheet formula escaping. Signed APK/AAB builds and Android lint passed (zero errors, eight warnings); both APK signatures and ARM64 zip alignment passed. Physical-phone acceptance remains outstanding. Browser capture timed out, so screenshots are not evidence for this release. No live patient/pharmacy fixture was created and no database migration is required.
+
+Browser DOM review caught and removed the obsolete signed-out CSS rule that hid the landing page. Fresh review confirmed the English sections, working Arabic language/FAQ controls, RTL and a single-column mobile layout without horizontal overflow. The requested 375-pixel override reported an actual 416-pixel viewport; this is observed layout evidence, not exact 375-pixel or screenshot acceptance. The local preview was stopped after review and integration fixtures were cleaned up.
 
 1.0.8 SHA-256: ARM64 `f545a7ce37d75f89c79adcda4f86cff1a9ebd81083d0d3d0266bd5027c07cdc9`; ARMv7 `ba26edc45bfca3a2d5ffd6ae1ee9d57347ace980be2803f19700cce493804be2`; AAB `d95841bfc9da5a911ab4c28749614bcb276af2e7af9020a4b217b1c8904d319a`. Previous 1.0.7 APKs are preserved under ignored `.cloudflare/previous-apks/1.0.7/`.
 
@@ -109,13 +113,13 @@ Before migration, live D1 contained zero delegated admins and invitations. An ig
 - Public login DOM/layout inspection confirms no ChatGPT sign-in option or account menu, a 48-pixel rounded logo and 48-pixel inputs at a 375-pixel viewport. Arabic and French had no horizontal overflow. English and Kabyle controls were also inspected. Screenshot capture timed out, so no new screenshot evidence is asserted. This is layout/DOM evidence, not a completed visual screenshot review.
 - Fresh public `/operations/login` inspection confirms the private owner/admin identifier/password controls, owner-only delegation explanation and no signup/social-login buttons. The local English private login fits the observed mobile viewport without horizontal overflow.
 
-## Android artifacts (1.0.7)
+## Android artifacts (1.0.8)
 
 | Artifact | SHA-256 |
 | --- | --- |
-| ARM64 APK | `b6d8627313d06fe46f66e88b56b338bdebb585171eefa4ff855adbc454594258` |
-| ARMv7 APK | `a1e7a0627c35c174f7a4542746cfe68242d4bfe34b2e98aaa60c4a57457d5647` |
-| Store AAB | `5989bb70bed39951c125e71d4cdbe26f11946167de188f2c962d186c177f33f6` |
+| ARM64 APK | `f545a7ce37d75f89c79adcda4f86cff1a9ebd81083d0d3d0266bd5027c07cdc9` |
+| ARMv7 APK | `ba26edc45bfca3a2d5ffd6ae1ee9d57347ace980be2803f19700cce493804be2` |
+| Store AAB | `d95841bfc9da5a911ab4c28749614bcb276af2e7af9020a4b217b1c8904d319a` |
 | Signing certificate | `013d3b8b49f41d51f17358c586ff4e81a1c7471c31a9e31bbcdbca065896fa7c` |
 
 The signed AAB is local at `android/app/build/outputs/bundle/release/app-release.aab`. Protected signing material remains outside the repository. Previous signed APKs are recoverable under ignored `.cloudflare/previous-apks/`.
