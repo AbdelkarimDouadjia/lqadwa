@@ -6,7 +6,7 @@ The shared public header contains no admin/account actions. Authenticated deskto
 
 Support email is `abdelkarim.douadjia@gmail.com`. Footer social settings are in `lib/site-information.ts`; leave fields empty until the operator creates and verifies ownership of the accounts. Proposed `@lqadwa.dz`, `@getlqadwa` and `@lqadwa_sante` are not verified available: search indexing is not an authoritative availability check and direct platform checks were blocked. Do not publish guessed social URLs, business addresses, registration numbers or support hours.
 
-Web and native 1.0.9 use the existing accounts/database. APK signing certificate is unchanged, versionCode is 14 and older signed packages are preserved under ignored `.cloudflare/previous-apks/1.0.8/`. The private repository remains private; the public website and signed APK links stay on Cloudflare. See the release handover for deployment/CI IDs, hashes and outstanding operator acceptance.
+Web and native 1.0.9 use the existing accounts/database. APK signing certificate is unchanged, versionCode is 14 and older signed packages are preserved under ignored `.cloudflare/previous-apks/1.0.8/`. GitHub currently reports the source repository as public; the owner requested leaving visibility unchanged. The public website and signed APK links stay on Cloudflare. See the release handover for deployment/CI IDs, hashes and outstanding operator acceptance.
 
 ## Experience and stock controls (1.0.8)
 

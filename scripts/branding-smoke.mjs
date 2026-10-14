@@ -8,12 +8,13 @@ for (const [language, copy] of Object.entries(languages)) {
   assert.ok(copy.serviceRegion && copy.kabyleLanguage, language);
   assert.ok(copy.demoWarning && copy.demoDisclaimer && copy.catalogCaution, `${language}: safety disclosures`);
 }
-for (const path of ['app/page.tsx','components/app-install.tsx','components/account-data.tsx','components/device-security.tsx','app/privacy/page.tsx','android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java']) {
+for (const path of ['app/page.tsx','components/lqadwa-app.tsx','components/public-landing.tsx','components/app-install.tsx','components/account-data.tsx','components/device-security.tsx','app/privacy/page.tsx','android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java']) {
   assert.doesNotMatch(read(path), /Taqbaylit · Beta|\bRC1\b|Release candidate|نسخة مرشحة للإطلاق/i, path);
 }
-assert.ok(read('app/page.tsx').includes('"patientSpace"'));
-assert.ok(read('app/page.tsx').includes('t("pickupOnly")'));
-assert.doesNotMatch(read('app/page.tsx'), /setDemoMode|demo-toggle/);
+assert.ok(read('components/lqadwa-app.tsx').includes('"patientSpace"'));
+assert.ok(read('components/lqadwa-app.tsx').includes('t("pickupOnly")'));
+assert.doesNotMatch(read('components/lqadwa-app.tsx'), /setDemoMode|demo-toggle/);
+assert.ok(read('app/page.tsx').includes('<PublicLanding'));
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /CheckBox examples|t\("demoMode"\)/);
 assert.ok(read('app/api/app/route.ts').includes('demo: z.literal(false).default(false)'));
 assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un relecteur kabylophone'));

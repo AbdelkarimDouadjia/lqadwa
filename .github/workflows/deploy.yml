@@ -9,7 +9,7 @@ concurrency:
 jobs:
   publish:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: production
     steps:
@@ -22,9 +22,11 @@ jobs:
           cache: npm
       - run: npm run install:ci
       - run: npm run check
+      - run: npm run lint
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
-      - run: npm run test:integration
+      - run: npx --no-install playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e
       - run: npm run test:ocr
       # Fixture overrides are only CLI flags in local checks, never production environment variables.
       # Migrations and Android signing remain deliberate owner-controlled release steps.
@@ -35,5 +37,5 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js deploy --config dist/server/wrangler.json
+          node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js deploy --config dist/server/wrangler.json --keep-vars
       - run: node scripts/public-release-check.mjs

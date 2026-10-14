@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await database().prepare("SELECT 1").first();
-    return Response.json({ status: "ok", release: "1.0.9", management: "2026-10-12", profiles: "2026-10-12", experience: "2026-10-13", design: "2026-10-13" }, { headers: { "Cache-Control": "public, max-age=30", "X-Content-Type-Options": "nosniff" } });
+    return Response.json({ status: "ok", release: "1.0.9", management: "2026-10-12", profiles: "2026-10-12", experience: "2026-10-13", design: "2026-10-13", discovery: "2026-10-14" }, { headers: { "Cache-Control": "public, max-age=30", "X-Content-Type-Options": "nosniff" } });
   } catch {
     return Response.json({ status: "unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

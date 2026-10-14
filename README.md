@@ -35,13 +35,19 @@ Use Node.js 24. Install and run the same web gates used by CI:
 ```sh
 npm run install:ci
 npm run check
+npm run lint
 npm audit --omit=dev --audit-level=high
 npm run build
-npm run test:integration
+npx --no-install playwright install chromium firefox webkit
+npm run test:e2e
 npm run test:ocr
 ```
 
 The integration command applies migrations to local D1, starts an isolated localhost Worker, runs synthetic account/role checks and stops it. Port 5173 must be free. Fixtures never run against production. OCR verification renders a synthetic printed image in memory and runs the shipped Tesseract models; it is not a physical-phone camera test.
+
+`test:e2e` includes those integration checks plus isolated Chromium/Firefox/WebKit tests. Browser artifacts are under ignored `.cloudflare/e2e/`; the Auth stub stays responsive during browser login. The layout matrix covers guest/client/pharmacy/owner, four languages, both themes and eight widths. Axe is an automated check, not screen-reader or WCAG certification. Linux CI installs browser OS dependencies with `--with-deps`. Use `test:integration` for an API-only run.
+
+Guests receive server-rendered landing content and a paginated approved-pharmacy directory without an Auth lookup. `?lang=ar|fr|en|kab` supplies indexable language variants; private `?space=…` and legacy app fragments keep their journeys. Pharmacy distances in the public directory are explicitly approximate from the wilaya centre. No stock availability is inferred from a listing; requests and pickup reservations require a verified account.
 
 For ordinary local development, build once, apply local migrations with `node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js d1 migrations apply DB --local --config dist/server/wrangler.json --persist-to .wrangler/state`, then run `npm run dev`. Configure development authentication separately. Never deploy local fixture identities or the local Auth server URL.
 

@@ -11,7 +11,7 @@ assert.deepEqual(prescriptionMatches('',catalog),[]);
 assert.deepEqual(prescriptionMatches('unrecognized handwriting',catalog),[]);
 const many=Array.from({length:22},(_,i)=>['BRANDONE',`${i} MG`,'DCI']);
 assert(prescriptionMatches('BRANDONE; BRANDTWO',[...many,['BRANDTWO','1 G','DCI']]).some(m=>m.name==='BRANDTWO 1 G'),'Later medicines must not disappear behind the first brand’s strengths');
-const source=readFileSync('app/page.tsx','utf8');
+const source=readFileSync('components/lqadwa-app.tsx','utf8');
 assert.doesNotMatch(source,/matches\[0\]\?\.name \|\| extracted|function scanMedicine/,'Scans must require patient review, not auto-select the first API result');
 assert(source.includes('<SiteHeader signedOut={signedOut}'), 'Header receives the authenticated state');
 assert.match(readFileSync('components/site-header.tsx','utf8'), /signedOut\?<Button[\s\S]*?:<>[\s\S]*?className="product-avatar"/, 'Guest header must not expose account actions');

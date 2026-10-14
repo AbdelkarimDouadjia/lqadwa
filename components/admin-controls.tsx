@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { ShieldCheck, History, Users, Package, Pencil, LockKeyhole, Crown, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,13 +47,13 @@ export function AdminControls({ admin, language, busy, mutate, teamOnly = false 
  const i = language === "ar" ? 0 : language === "fr" ? 1 : language === "en" ? 2 : 3, t = (key: keyof typeof words) => words[key][i];
  const can = (permission: AdminPermission) => admin.access.permissions.includes(permission);
  const tabs = ([ ["accounts", Users], ["team", ShieldCheck], ["inventory", Package], ["audit", History] ] as const).filter(([key]) => key === "team" ? admin.access.isOwner : !teamOnly && can(key === "inventory" ? "pharmacies" : key));
- const [tab, setTab] = useState<"accounts" | "team" | "inventory" | "audit">(admin.access.isOwner ? "team" : tabs[0]?.[0] || "accounts"), [query, setQuery] = useState("");
+ const [requestedTab, setTab] = useState<"accounts" | "team" | "inventory" | "audit">(admin.access.isOwner ? "team" : tabs[0]?.[0] || "accounts"), [query, setQuery] = useState("");
+ const tab = tabs.some(([key]) => key === requestedTab) ? requestedTab : tabs[0]?.[0] || "accounts";
  const [pending, setPending] = useState<Record<string, unknown> | null>(null), [reason, setReason] = useState("");
  const [editing, setEditing] = useState<PharmacyApplication | null>(null);
  const [permissionMember, setPermissionMember] = useState<Admin["members"][number] | null>(null), [grants, setGrants] = useState<AdminPermission[]>([]);
  const [inviteGrants, setInviteGrants] = useState<AdminPermission[]>(["pharmacies"]), [inviteLink, setInviteLink] = useState(""), [copied, setCopied] = useState(false), [copyFailed, setCopyFailed] = useState(false), [inviteRecipient, setInviteRecipient] = useState("");
  const inviteForm = useForm({defaultValues:{email:""}});
- useEffect(() => { if(!tabs.some(([key]) => key === tab)) setTab(tabs[0]?.[0] || "accounts"); }, [admin.access.permissions, admin.access.isOwner, tab]);
  const matches = (v: string) => v.toLocaleLowerCase().includes(query.toLocaleLowerCase());
  const permissionFields = (value: AdminPermission[], change: (v: AdminPermission[]) => void, prefix: string) => <fieldset className="permission-options"><legend>{t("permissions")}</legend>{adminPermissions.map(p => <label key={p} htmlFor={`${prefix}-${p}`}><Checkbox id={`${prefix}-${p}`} checked={value.includes(p)} disabled={busy} onCheckedChange={checked => change(checked === true ? [...value,p] : value.filter(v => v !== p))} /><span>{t(p)}</span></label>)}</fieldset>;
  if (!tabs.length && (teamOnly || !can("pharmacies"))) return null;

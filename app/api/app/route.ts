@@ -5,7 +5,10 @@ import { identity, HttpError, isAdmin, isRootAdmin, rootAdminIds, adminAccess, h
 import { adminPermissions, parseAdminPermissions } from "@/lib/admin-permissions";
 import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
-import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type Pharmacy, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
+import { pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
+import { createAvailabilityRequest } from "@/lib/request-service";
+import { publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
+import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 const cityId = z.enum(cities.map((c) => c.id) as [string, ...string[]]);
@@ -37,10 +40,6 @@ const actionSchema = z.discriminatedUnion("action", [
 ]);
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 type Registered = PharmacyApplication & { owner: string };
-function pharmacyFromRow(row: Registered): Pharmacy {
-  const center = cities.find((city) => city.id === row.city) || cities[0];
-  return { id: row.id, name: row.name, city: row.city, area: row.address, lat: row.latitude / 1e6, lng: row.longitude / 1e6, phone: row.phone, pilot: false, duty: Boolean(row.duty), hours: row.hours, distance: Math.round(Math.hypot(center.lat - row.latitude / 1e6, (center.lng - row.longitude / 1e6) * Math.cos(center.lat * Math.PI / 180)) * 111_000) };
-}
 
 function errorResponse(error: unknown) {
   if (error instanceof HttpError) return json({ error: error.message }, error.status);
@@ -63,7 +62,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.code, b.created, b.expires, b.status, r.medicine FROM reservations b JOIN requests r ON b.request = r.id WHERE b.owner = ? ORDER BY b.created DESC LIMIT 100").bind(owner),
     db.prepare("SELECT pharmacy, duty FROM pharmacy_settings WHERE owner = ?").bind(owner),
     db.prepare("SELECT id, title, created, read FROM notifications WHERE owner = ? ORDER BY created DESC LIMIT 40").bind(owner),
-    db.prepare("SELECT id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated FROM registered_pharmacies WHERE status = 'approved' OR owner = ? ORDER BY name LIMIT 300").bind(owner),
+    db.prepare(`SELECT ${publicPharmacyColumns} FROM registered_pharmacies WHERE status = 'approved' ORDER BY name,id LIMIT 300`),
     db.prepare("SELECT id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated FROM registered_pharmacies WHERE owner = ? LIMIT 1").bind(owner),
     db.prepare("SELECT r.id, s.pharmacy, r.medicine, r.created, r.city, s.status FROM responses s JOIN requests r ON r.id = s.request JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? AND p.status = 'approved' AND r.created > ? AND s.status = 'pending' ORDER BY r.created DESC LIMIT 100").bind(owner, now - 24 * 3600_000),
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.created, b.expires, b.status, r.medicine, l.latitude / 1000.0 AS approachLat, l.longitude / 1000.0 AS approachLng, l.updated AS approachUpdated FROM reservations b JOIN requests r ON r.id = b.request JOIN registered_pharmacies p ON p.id = b.pharmacy LEFT JOIN reservation_locations l ON l.reservation = b.id AND l.updated > ? WHERE p.owner = ? AND p.status = 'approved' AND b.status = 'active' AND b.expires > ? ORDER BY b.created DESC LIMIT 100").bind(now - 60_000, owner, now),
@@ -73,6 +72,9 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   const sampleIds = legacySampleIds;
   const sampleRequests = new Set((results[2].results as Reply[]).filter((r) => sampleIds.has(r.pharmacy)).map((r) => r.request));
   const ownPharmacy = results[7].results[0] as Registered | undefined;
+  const directory = (results[6].results as PublicPharmacyRow[]).filter(p => !sampleIds.has(p.id)).map(pharmacyFromRow);
+  const associatedIds = [...(results[2].results as Reply[]), ...(results[3].results as Booking[])].map(record => record.pharmacy);
+  directory.push(...await relatedPharmacies(db, associatedIds, new Set(directory.map(p => p.id))));
   let admin: AppData["admin"] = null;
   const access = await adminAccess(owner, db);
   if (access) {
@@ -105,7 +107,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     profile: results[0].results[0] as AppData["profile"],
     requests: (results[1].results as RequestRecord[]).filter((r) => !sampleRequests.has(r.id)), responses: (results[2].results as Reply[]).filter((r) => !sampleIds.has(r.pharmacy)),
     reservations: (results[3].results as Booking[]).filter((b) => !sampleIds.has(b.pharmacy)), notifications: results[5].results as Notice[],
-    pharmacies: (results[6].results as Registered[]).filter((p) => p.status === "approved").map(pharmacyFromRow),
+    pharmacies: directory,
     ownPharmacy: ownPharmacy || null,
     staffRequests: results[8].results as StaffRequest[], staffBookings: results[9].results as StaffBooking[], stock: results[10].results as StockItem[],
     role: admin ? "admin" : ownPharmacy ? "pharmacist" : "client", admin,
@@ -135,20 +137,7 @@ export async function POST(request: Request) {
       if (!registered) throw new HttpError("الصيدلية غير موجودة.", 404);
     }
     if (input.action === "search") {
-      const existing = await db.prepare("SELECT id FROM requests WHERE id = ? AND owner = ?").bind(input.token, owner).first();
-      if (!existing) {
-        const count = await db.prepare("SELECT count(*) AS n FROM requests WHERE owner = ? AND created > ?").bind(owner, now - 60_000).first<{ n: number }>();
-        if ((count?.n || 0) >= 8) throw new HttpError("طلبات كثيرة خلال دقيقة واحدة. انتظر قليلاً ثم حاول.", 429);
-        const current = await snapshot(owner, user.fullName || "مرحباً بك");
-        const targets = current.pharmacies.filter((p) => p.city === input.city && (!input.night || p.duty) && p.pilot === input.demo).sort((a, b) => a.distance - b.distance).slice(0, 25);
-        if (!targets.length) throw new HttpError("لا توجد صيدليات مناوبة في النطاق المختار. جرّب جميع الصيدليات.");
-        await db.batch([
-          db.prepare("INSERT INTO requests (id, owner, medicine, city, created) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?)").bind(input.token, owner, input.medicine, input.city, now, ownerHash),
-          ...targets.map((p) => p.pilot ? db.prepare("INSERT INTO responses (request, pharmacy, status, updated) VALUES (?, ?, 'yes', ?)").bind(input.token, p.id, now) : db.prepare("INSERT INTO responses (request, pharmacy, status) VALUES (?, ?, 'pending')").bind(input.token, p.id)),
-          notify(`طلب توفر جديد: ${input.medicine}`),
-          ...targets.filter((p) => !p.pilot).map((p) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, owner, ?, ?, 0 FROM registered_pharmacies WHERE id = ? AND status = 'approved'").bind(crypto.randomUUID(), `طلب توفر جديد: ${input.medicine}`, now, p.id)),
-        ]);
-      }
+      await createAvailabilityRequest(db, owner, ownerHash, input, { name: user.fullName || "مرحباً بك", details: JSON.stringify(parseDetails(personalSchema, "personalDetails" in user ? user.personalDetails : {})) });
     } else if (input.action === "reply") {
       const pilot = legacySampleIds.has(input.pharmacy);
       const permitted = pilot

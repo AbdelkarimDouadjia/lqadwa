@@ -1,5 +1,21 @@
 # LQADWA 1.0.9 release handover
 
+## Discovery and design release — 14 October 2026
+
+See [the current release evidence](docs/phase-two-release.md) and [PR #1](https://github.com/AbdelkarimDouadjia/lqadwa/pull/1) for the final CI and publication receipts. The 13 October entries below describe historical snapshots. The owner subsequently authorized merging and publication; the old draft-only restriction is superseded by that request, subject to green required checks.
+
+This release adds server-rendered public pages in four languages, approved-pharmacy discovery without signup, city/duty filters, transactional deduplicated requests and responsive design refinements. Real requests still require login and pharmacist confirmation. No fictional directory entries, stock claims, patient data, schema change or new Android signing key are published. Existing signed native Android 1.0.9 packages remain unchanged.
+
+The full web and Android jobs passed for application source `d26c382` in [run 38545167820](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38545167820): all 12 cross-browser tests, role/API integration, OCR, lint/build and production dependency audit. Later changes refine local TLS test trust, preserve dashboard variables during CLI publication and document these results. The final required checks and deployed Worker version are recorded in the PR, rather than guessed in advance.
+
+Main now requires an up-to-date pull request and successful `web`/`android` checks from GitHub Actions, including for repository admins. Force pushes and branch deletion are disabled, and conversations must be resolved. CODEOWNERS names the actual repository owner. A second human review is **not** enforced: the sole owner cannot approve their own PR. A scoped GitHub deployment token and independent reviewer still require operator setup; the authenticated local CLI can publish the authorized release in the meantime.
+
+Actual email delivery, physical-phone behavior, operator/legal acceptance and fluent Kabyle review remain unverified. This deployment does not close the entire master roadmap; detailed outstanding engineering work is listed in the release evidence.
+
+## Current audit status — 13 October 2026
+
+GitHub metadata currently reports the source repository as public. The owner explicitly requested leaving visibility unchanged during this audit. The earlier private-repository verification below is historical, not the present state. No visibility, production configuration, database, signing key or deployment change is part of the phase-one draft PR. See [the phase-one audit](docs/phase-one-audit.md) for current verification and remaining launch blockers.
+
 ## Navigation and visual refinement — 13 October 2026
 
 Deployed Cloudflare version `dc84e953-d8c1-46cc-8e0d-18d26ba26458`, source `7aa41a5596bb00388660b60ac391816e80e49035`. Web and Android jobs passed in [CI run 38433837740](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/38433837740). The existing free Cloudflare website, D1 database and Supabase authentication remain in use; no paid service, migration or live fixture was added.

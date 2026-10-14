@@ -9,6 +9,18 @@ const get=(path,options={})=>{
  return fetch(base+path,{...options,signal:AbortSignal.timeout(path.startsWith('/downloads/')?120000:30000)});
 };
 const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.9');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');assert.equal(healthData.design,'2026-10-13');
+assert.equal(healthData.discovery,'2026-10-14');
+for(const lang of ['ar','fr','en','kab']) {
+ const response=await get('/?lang='+lang),html=await response.text();
+ assert.equal(response.status,200);assert.match(html,/<h1>/);assert.match(html,/directory-title/);
+ assert.match(html,new RegExp('lang="'+lang+'"'));assert.match(html,/rel="canonical"/);
+ assert.match(response.headers.get('cache-control')||'',/no-store/);
+}
+assert.equal((await get('/robots.txt')).status,200);assert.equal((await get('/sitemap.xml')).status,200);
+const directory=await(await get('/api/v1/pharmacies?city=algiers&limit=1')).json();
+assert.equal(directory.availability,'not-confirmed');assert.equal(directory.distanceOrigin.type,'wilaya-center');
+assert(Array.isArray(directory.items));assert(directory.items.length<=1);
+for(const item of directory.items){assert(!('owner' in item));assert(!('license' in item));}
 for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
  const response=await get(path);assert.equal(response.status,200,path);
  assert.equal(response.headers.get('x-frame-options'),'DENY',path);
