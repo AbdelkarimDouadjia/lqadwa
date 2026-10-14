@@ -6,13 +6,16 @@ const languages = ['ar', 'fr', 'en', 'kab'];
 const names = { ar: 'العربية', fr: 'Français', en: 'English', kab: 'Taqbaylit' };
 test.beforeEach(async ({ context }) => {
   // Isolated fixtures only. Prevent maps/OAuth/email-provider requests leaving this test.
-  await context.route('**/*', route => {
-    const url = new URL(route.request().url());
-    return ['localhost', '127.0.0.1'].includes(url.hostname) ? route.continue() : route.abort();
-  });
+  await context.route(url => !['localhost', '127.0.0.1'].includes(url.hostname), route => route.abort());
 });
 async function noOverflow(page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  const layout = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth - innerWidth,
+    width: innerWidth, language: document.documentElement.lang, theme: document.documentElement.dataset.theme,
+    styles: document.styleSheets.length,
+  }));
+  expect(layout.styles, JSON.stringify(layout)).toBeGreaterThan(0);
+  expect(layout.overflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
 }
 async function accessible(page) {
   const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
