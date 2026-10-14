@@ -4,6 +4,7 @@ import { createServer } from 'node:https';
 import { request } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createHash, X509Certificate } from 'node:crypto';
 import path from 'node:path';
 
 export async function startUiProxy() {
@@ -13,6 +14,8 @@ export async function startUiProxy() {
   const key = path.join(state, 'ui-key.pem'), cert = path.join(state, 'ui-cert.pem');
   const openssl = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/openssl.exe' : 'openssl';
   execFileSync(openssl, ['req','-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',cert,'-days','1','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' });
+  // Trust only this ephemeral key in Chromium; generic certificate ignoring races on parallel assets.
+  process.env.LQADWA_TEST_TLS_SPKI = createHash('sha256').update(new X509Certificate(readFileSync(cert)).publicKey.export({ type: 'spki', format: 'der' })).digest('base64');
   const server = createServer({ key: readFileSync(key), cert: readFileSync(cert) }, (incoming, outgoing) => {
     const headers = { ...incoming.headers, host: 'localhost:5173' };
     // Local Worker sees HTTP after termination; preserve hostile origins for its CSRF check.

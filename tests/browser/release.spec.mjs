@@ -31,6 +31,7 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
     expect(html).toContain('<h1>'); expect(html).toContain('directory-title');
     expect(html).toMatch(new RegExp(`<html[^>]*lang="${language}"[^>]*dir="${language === 'ar' ? 'rtl' : 'ltr'}"`));
     expect(response.headers()['cache-control']).toContain('no-store');
+    await expect(page.locator('.product-header')).toHaveCSS('position', 'sticky');
     await expect(page.locator('html')).toHaveAttribute('lang', language);
     await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -54,8 +55,8 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
   await page.locator('#directory-city').selectOption('algiers');
   await expect(page.locator('.directory-row')).toHaveCount(1);
   await expect(page.locator('.directory-row a')).toHaveAttribute('href', /google\.com\/maps\/dir\/.*travelmode=walking/);
-  const robots = await page.request.get('/robots.txt'); expect(robots.status()).toBe(200); expect(await robots.text()).toContain('Disallow: /operations');
-  const sitemap = await page.request.get('/sitemap.xml'); expect(sitemap.status()).toBe(200); expect(await sitemap.text()).toContain('lang=kab');
+  const robots = await page.request.get('/robots.txt', { ignoreHTTPSErrors: true }); expect(robots.status()).toBe(200); expect(await robots.text()).toContain('Disallow: /operations');
+  const sitemap = await page.request.get('/sitemap.xml', { ignoreHTTPSErrors: true }); expect(sitemap.status()).toBe(200); expect(await sitemap.text()).toContain('lang=kab');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.locator('.landing-illustration').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
 });

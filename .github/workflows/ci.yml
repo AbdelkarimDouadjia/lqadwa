@@ -37,6 +37,7 @@ jobs:
         with:
           name: browser-checks
           path: .cloudflare/e2e/
+          include-hidden-files: true # Only isolated synthetic browser artifacts in this exact directory.
           retention-days: 7
   android:
     runs-on: ubuntu-24.04

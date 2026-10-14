@@ -37,5 +37,5 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js deploy --config dist/server/wrangler.json
+          node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js deploy --config dist/server/wrangler.json --keep-vars
       - run: node scripts/public-release-check.mjs
