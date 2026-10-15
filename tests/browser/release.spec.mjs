@@ -124,7 +124,7 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
     if (role === 'owner' && language === 'kab') {
       await expect(page.locator('.landing-editor')).toHaveAttribute('dir', 'ltr');
       await page.locator('.landing-editor-toolbar select').selectOption('kab');
-      await editor.locator('.landing-editor-actions button').first().click();
+      await page.locator('.landing-editor-actions button').first().click();
       await expect(page.locator('.landing-preview-dialog')).toHaveAttribute('dir', 'ltr');
       await page.keyboard.press('Escape');
     }
