@@ -10,6 +10,7 @@ const get=(path,options={})=>{
 };
 const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.0.9');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');assert.equal(healthData.design,'2026-10-13');
 assert.equal(healthData.discovery,'2026-10-14');
+assert.equal(healthData.presentation,'2026-10-15');
 for(const lang of ['ar','fr','en','kab']) {
  const response=await get('/?lang='+lang),html=await response.text();
  assert.equal(response.status,200);assert.match(html,/<h1>/);assert.match(html,/directory-title/);

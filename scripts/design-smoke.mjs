@@ -17,3 +17,18 @@ const footer=read('components/site-footer.tsx');assert(footer.includes('.filter(
 const native=read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java');assert(native.includes('applyPalette()')&&native.includes('nav.setItemTextColor(navColors)'));
 assert(read('android/app/src/main/res/values-night/themes.xml').includes('Theme.Material3.DayNight.NoActionBar'));
 console.log('PASS: light/dark text and action contrast, mobile targets, theme cascade, empty social links and native palette.');
+const editorial=read('app/editorial.css');
+for (const selector of ['.app-shell:has(.editorial-page) {','[data-theme=dark] .app-shell:has(.editorial-page) {']) {
+ const block=editorial.slice(editorial.indexOf(selector)).split('}')[0];
+ const tokens=Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[a-f\d]{6})/gi)].map(m=>[m[1],m[2]]));
+ for(const [front,back] of [['foreground','background'],['foreground','card'],['foreground','chapter'],['foreground','chapter-sky'],['muted-foreground','card'],['primary-foreground','primary']]) {
+  assert(tokens[front]&&tokens[back]);const a=luminance(tokens[front]),b=luminance(tokens[back]);
+  assert((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5,`${selector} ${front}/${back}`);
+ }
+}
+assert(editorial.includes('prefers-reduced-motion:no-preference'));
+assert(editorial.includes('data-less-motion=true'));
+assert(!/opacity:\s*0[;}]/.test(editorial),'Page content must remain readable without animation/JavaScript');
+assert(!/opacity\s*:/.test(editorial),'Entrance motion must not reduce text contrast');
+for(const name of ['neighbourhood','prescription','pharmacy','walk']) assert(readFileSync(`public/art/${name}.webp`).length<400000);
+console.log('PASS: editorial light/dark contrast, motion fallback, visible no-JS content and optimized artwork.');
