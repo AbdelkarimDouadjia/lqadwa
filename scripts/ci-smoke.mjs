@@ -24,6 +24,10 @@ try {
  if(!ready)throw Error('Local Worker did not become healthy');
  for(const path of ['/','/login','/operations']){
   const response=await fetch('http://localhost:5173'+path,{redirect:'manual',signal:AbortSignal.timeout(15000)});
+  if(path==='/operations'){
+   assert.equal(response.status,307,'private administration must redirect to its dedicated sign-in');
+   assert.equal(response.headers.get('location'),'/operations/login');
+  }else assert(response.ok,`${path} must render`);
   assert.equal(response.headers.get('x-frame-options'),'DENY',path);
   assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);
   assert.match(response.headers.get('strict-transport-security')||'',/max-age=15552000/,path);

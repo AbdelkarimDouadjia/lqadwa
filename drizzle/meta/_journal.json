@@ -85,6 +85,13 @@
       "when": 1791838870960,
       "tag": "0011_profile_details",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792099794409,
+      "tag": "0012_daily_hiroim",
+      "breakpoints": true
     }
   ]
 }

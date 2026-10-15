@@ -99,6 +99,18 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   if (role !== 'client') expect(navText).not.toContain('My bookings');
   await expect(page.locator('.product-desktop-nav button')).toHaveCount(role === 'client' ? 3 : 1);
   expect(navText.length).toBeGreaterThan(0);
+  if (role === 'owner') {
+    const editor = page.locator('.landing-editor');
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.landing-editor-fields')).toContainText('Headline - first line');
+    await editor.locator('.landing-editor-toolbar select').selectOption('ar');
+    await expect(editor.locator('.landing-editor-toolbar select')).toHaveValue('ar');
+    await expect(editor.locator('.landing-editor-fields input').first()).toHaveValue(/[\u0600-\u06FF]/);
+    await page.getByRole('button', { name: 'Preview draft' }).click();
+    await expect(page.locator('.landing-preview-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.landing-preview-dialog')).toHaveCount(0);
+  }
   for (const language of languages) {
     await page.locator('.product-language').click();
     await page.getByRole('menuitem').filter({ hasText: new RegExp('^' + names[language]) }).click();

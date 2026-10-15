@@ -4,6 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {execFileSync,spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
+import {emptyLandingContent} from '../lib/landing-content.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
@@ -61,6 +62,22 @@ try{
  assert.equal(joined.data.admin.accounts.length,0);assert.equal(joined.data.admin.activity.length,0);assert.equal(joined.data.admin.members.length,0);assert.equal(joined.data.admin.users,0);
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],409);
  const d=await request('/api/auth',{action:'admin-login',identifier:delegate.email,password});assert.equal(d.data.redirect,'/operations');sessions[delegate.id]=cookie(d.response);
+ // Landing CMS is owner-only, draft-first, validated, versioned and reversible.
+ const initialLanding=(await request('/api/landing')).data.content;assert.deepEqual(initialLanding,emptyLandingContent);
+ await request('/api/landing',{action:'load'},'',401);
+ await request('/api/landing',{action:'load'},sessions[delegate.id],403);
+ const invalidLanding=structuredClone(emptyLandingContent);invalidLanding.blocks=[{id:randomUUID(),enabled:true,target:'javascript:alert(1)',copy:{ar:{heading:'LOCAL'}}}];
+ await request('/api/landing',{action:'save',draftVersion:0,content:invalidLanding},rootCookie,400);
+ const draftLanding=structuredClone(emptyLandingContent);draftLanding.copy={ar:{titleA:'LOCAL OWNER DRAFT'}};
+ const draftSaved=await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie);assert.equal(draftSaved.data.draftVersion,1);
+ assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Unsaved public copy is never exposed');
+ await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie,409);
+ const draftLoaded=await request('/api/landing',{action:'load'},rootCookie);assert.equal(draftLoaded.data.draft.copy.ar.titleA,'LOCAL OWNER DRAFT');
+ const publishedLanding=await request('/api/landing',{action:'publish',draftVersion:1},rootCookie);assert.equal(publishedLanding.data.publishedVersion,1);
+ assert.equal((await request('/api/landing')).data.content.copy.ar.titleA,'LOCAL OWNER DRAFT');
+ const revision=(await request('/api/landing',{action:'load'},rootCookie)).data.revisions[0];assert(revision);
+ await request('/api/landing',{action:'restore',draftVersion:2,revision:revision.id},rootCookie);
+ assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Owner rollback restores the prior published copy');
  const registration=await request('/api/app',{action:'register-pharmacy',name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000000',license:'LOCAL-NOT-VALID'},sessions[other.id]);const pharmacy=registration.data.ownPharmacy.id;createdPharmacies.push(pharmacy);
  assert.equal(registration.data.role,'pharmacist');
  assert.equal(registration.data.staffRequests.length,0);
@@ -209,6 +226,6 @@ try{
  }
 }finally{
  const ids=users.slice(1).map(u=>quote(u.id)).join(','),pharmacies=createdPharmacies.map(quote).join(',');
- sql(`UPDATE service_controls SET requests_paused=0,pickups_paused=0,message='',updated=0 WHERE id=1;DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner IN (${ids}));DELETE FROM reservations WHERE owner IN (${ids});DELETE FROM responses WHERE request IN (SELECT id FROM requests WHERE owner IN (${ids}));DELETE FROM requests WHERE owner IN (${ids});${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
+ sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor='local-release-owner' AND action LIKE 'landing-%';UPDATE service_controls SET requests_paused=0,pickups_paused=0,message='',updated=0 WHERE id=1;DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner IN (${ids}));DELETE FROM reservations WHERE owner IN (${ids});DELETE FROM responses WHERE request IN (SELECT id FROM requests WHERE owner IN (${ids}));DELETE FROM requests WHERE owner IN (${ids});${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
  auth.closeAllConnections();await new Promise(resolve=>auth.close(resolve));
 }
