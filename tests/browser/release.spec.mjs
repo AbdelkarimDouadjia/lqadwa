@@ -13,6 +13,10 @@ async function noOverflow(page) {
     overflow: document.documentElement.scrollWidth - innerWidth,
     width: innerWidth, language: document.documentElement.lang, theme: document.documentElement.dataset.theme,
     styles: document.styleSheets.length,
+    offenders: [...document.querySelectorAll('body *')].map(element => {
+      const rect = element.getBoundingClientRect();
+      return { tag: element.tagName, class: typeof element.className === 'string' ? element.className : '', id: element.id, left: Math.round(rect.left), right: Math.round(rect.right), scroll: element.scrollWidth, client: element.clientWidth };
+    }).filter(element => element.right > innerWidth + 1).sort((a, b) => b.right - a.right).slice(0, 6),
   }));
   expect(layout.styles, JSON.stringify(layout)).toBeGreaterThan(0);
   expect(layout.overflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
