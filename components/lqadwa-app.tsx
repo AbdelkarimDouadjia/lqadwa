@@ -31,6 +31,7 @@ import { AdminLandingEditor } from "@/components/admin-landing-editor";
 import { BookingQr } from "@/components/booking-qr";
 import { cities, distanceLabel, timeLeft, isFreshReply, type AppData, type Booking, type Pharmacy, type StaffBooking } from "@/lib/domain";
 import { tr, type Language, type TranslationKey } from "@/lib/i18n";
+import { emptyLandingContent, type LandingContent } from "@/lib/landing-content";
 
 import { workspaceNavigation, workspaceView, canSubmitPharmacy, type View } from "@/lib/workspace";
 type Modal = { kind: "reserve"; pharmacy: Pharmacy } | { kind: "booking"; booking: Booking } | { kind: "pharmacy"; pharmacy: Pharmacy } | { kind: "collect"; booking: StaffBooking } | null;
@@ -43,7 +44,7 @@ function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: 
   return Math.round(12_742_000 * Math.asin(Math.sqrt(arc)));
 }
 function localizedDistance(meters: number, language: Language) { return language === "ar" ? distanceLabel(meters) : meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`; }
-export default function HomePage({ initialView = "search" }: { initialView?: View }) {
+export default function HomePage({ initialView = "search", initialLandingContent }: { initialView?: View; initialLandingContent?: LandingContent }) {
   const [language, setLanguage] = useState<Language>("ar");
   const [requestedView, setView] = useState<View>(initialView);
   const [data, setData] = useState<AppData>(blank);
@@ -290,12 +291,12 @@ export default function HomePage({ initialView = "search" }: { initialView?: Vie
   if (loading && !error) return <div className="startup-screen" role="status"><img src="/brand/luqya.png" alt="" width="104" height="104" /><strong>LQADWA</strong><p>{t("loadingApp")}</p><span className="startup-loader" /></div>;
   return <div className={`app-shell${signedOut ? " is-signed-out" : ""}${appMode ? " app-mode" : ""}`}>
     <a className="skip-link" href="#main">{t(view)}</a>
-    <SiteHeader signedOut={signedOut} role={data.role} view={view} language={language} dark={dark} name={data.profile.name} unread={unread} navigate={navigate} onLanguage={setLanguage} onTheme={toggleTheme} onNotifications={()=>{setNotificationsOpen(true);if(unread)void mutate({action:"read-notifications"});}}/>
+    <SiteHeader signedOut={signedOut} role={data.role} view={view} language={language} dark={dark} name={data.profile.name} unread={unread} landingSections={initialLandingContent?.sections} navigate={navigate} onLanguage={setLanguage} onTheme={toggleTheme} onNotifications={()=>{setNotificationsOpen(true);if(unread)void mutate({action:"read-notifications"});}}/>
     {!signedOut && <div className="context-bar"><div className="context-inner"><span className="service-label"><span />{t(data.role === "admin" ? "adminTitle" : data.role === "pharmacist" ? "pharmacyTitle" : "patientSpace")}</span><span className="context-explainer">{t("pickupOnly")}</span></div></div>}
     {offline && <div className="connection-banner" role="status"><WifiOff />{t("offline")}</div>}
     <main id="main" tabIndex={-1} className="main-layout">
       {!signedOut && data.service && (data.service.requests_paused || data.service.pickups_paused || data.service.message) ? <aside className="service-banner" role="status"><strong>{language === "ar" ? "تنبيه الخدمة" : language === "fr" ? "Information du service" : language === "kab" ? "Talɣut n umeẓlu" : "Service notice"}</strong>{data.service.message && <p>{data.service.message}</p>}{!!data.service.requests_paused && <p>{language === "ar" ? "الطلبات والحجوزات الجديدة متوقفة مؤقتاً. يمكنك إدارة حسابك وإلغاء حجوزاتك الحالية." : language === "fr" ? "Nouvelles demandes et réservations suspendues. Votre compte et les annulations restent disponibles." : language === "kab" ? "Tuttriwin timaynutin ttwaḥebsent. Amiḍan-ik yeqqim yeldi." : "New requests and reservations are temporarily paused. Account access and cancellation remain available."}</p>}{!!data.service.pickups_paused && <p>{language === "ar" ? "تأكيد الاستلام متوقف مؤقتاً. تواصل مع الصيدلية أو الدعم." : language === "fr" ? "Confirmation de retrait suspendue. Contactez la pharmacie ou le support." : language === "kab" ? "Asentem n uḥraz yeḥbes. Nermes tasaymit." : "Pickup confirmation is paused. Contact the pharmacy or support."}</p>}</aside> : null}
-      {signedOut && <LandingPage language={language}/>}
+      {signedOut && <LandingPage language={language} content={initialLandingContent ?? emptyLandingContent} />}
       {(!signedOut && view === "pharmacy" && !own) && <div className="pricing-strip"><div><span>{t("free")}</span><strong>{t("alwaysFreePatient")}</strong></div><div><del>300 {language === "ar" ? "دج/شهر" : language === "kab" ? "DA/aggur" : language === "fr" ? "DA/mois" : "DA/month"}</del><strong>{language === "ar" ? "باطل" : language === "kab" ? "Baṭel" : language === "fr" ? "Gratuit" : "Free"}</strong><small>{t("freeUntil")} · {t("pharmacistPrice")}</small></div></div>}
       {error && <div className="error-banner" role="alert">{error}<Button variant="outline" onClick={() => void load()}><RefreshCw />{t("retry")}</Button></div>}
       {!signedOut && view === "search" && <><div className="page-intro"><div className="intro-copy"><div className="overline"><span />LQADWA · CLICK & COLLECT</div><h1>{t("welcome")}</h1><p>{t("welcomeSub")}</p></div><span className="free-label"><ShieldCheck /><span>{t("free")}<strong>{t("pickupOnly")}</strong></span></span></div>

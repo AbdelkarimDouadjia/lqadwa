@@ -21,6 +21,7 @@ assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un
 assert.ok(read('android/app/build.gradle').includes("versionCode 15; versionName '1.1.0'"));
 assert.equal((read('components/app-install.tsx').match(/v=\$\{version\}/g)||[]).length,2,'APK links follow the package version');
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /android\.webkit|new WebView/);
+assert.match(read('android/app/src/main/AndroidManifest.xml'), /android:authorities="\$\{applicationId\}\.fileprovider"/, 'Camera FileProvider follows the debug/release application id');
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /public void onBackPressed\(|Comparator.comparingDouble/);
 assert.ok(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java').includes('getOnBackPressedDispatcher().addCallback(this,backNavigation)'));
 assert.ok(read('android/app/src/main/AndroidManifest.xml').includes('android:dataExtractionRules="@xml/data_extraction_rules"'));

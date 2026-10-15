@@ -4,7 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {execFileSync,spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
-import {emptyLandingContent} from '../lib/landing-content.ts';
+import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
@@ -39,7 +39,7 @@ const cookie=response=>response.headers.getSetCookie().map(v=>v.split(';')[0]).f
 async function request(path,body,credential='',expected=200){
  const response=await fetch(base+path,{method:body?'POST':'GET',headers:{...(body?{origin:base,'content-type':'application/json'}:{}),...(credential?{cookie:credential}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual',signal:AbortSignal.timeout(20000)});
  const raw=await response.text(),data=response.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):raw;
- assert.equal(response.status,expected,`${body?.action||path}: ${typeof data==='object'?data.error:raw.slice(0,100)}`);return {response,data};
+ assert((Array.isArray(expected)?expected:[expected]).includes(response.status),`${body?.action||path}: expected ${expected}, received ${response.status}: ${typeof data==='object'?data.error:raw.slice(0,100)}`);return {response,data};
 }
 try{
  assert.equal(adminLoginEmail(' ADMIN ',owner.email),owner.email);assert.equal(adminLoginEmail('Admin',undefined),'');assert.equal(adminLoginEmail(delegate.email,owner.email),delegate.email);
@@ -68,16 +68,30 @@ try{
  await request('/api/landing',{action:'load'},sessions[delegate.id],403);
  const invalidLanding=structuredClone(emptyLandingContent);invalidLanding.blocks=[{id:randomUUID(),enabled:true,target:'javascript:alert(1)',copy:{ar:{heading:'LOCAL'}}}];
  await request('/api/landing',{action:'save',draftVersion:0,content:invalidLanding},rootCookie,400);
- const draftLanding=structuredClone(emptyLandingContent);draftLanding.copy={ar:{titleA:'LOCAL OWNER DRAFT'}};
+ const largeInvalidLanding=structuredClone(emptyLandingContent);largeInvalidLanding.version=2;
+ for(const language of ['ar','fr','en','kab'])largeInvalidLanding.copy[language]=Object.fromEntries(landingCopyKeys.map(key=>[key,'x'.repeat(600)]));
+ assert(Buffer.byteLength(JSON.stringify({action:'save',draftVersion:0,content:largeInvalidLanding}))>32_768);
+ await request('/api/landing',{action:'save',draftVersion:0,content:largeInvalidLanding},rootCookie,400);
+ const draftLanding=structuredClone(emptyLandingContent);draftLanding.copy={ar:{titleA:'LOCAL OWNER DRAFT'}};draftLanding.sections={journey:false,pharmacy:false,faq:false};
+ draftLanding.blocks=[{id:randomUUID(),enabled:true,target:'journey',copy:{ar:{heading:'LOCAL SECTION',body:'LOCAL BODY',button:'LOCAL CTA'} }},{id:randomUUID(),enabled:true,target:'none',copy:{ar:{heading:'',body:'',button:''}}}];
  const draftSaved=await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie);assert.equal(draftSaved.data.draftVersion,1);
  assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Unsaved public copy is never exposed');
  await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie,409);
- const draftLoaded=await request('/api/landing',{action:'load'},rootCookie);assert.equal(draftLoaded.data.draft.copy.ar.titleA,'LOCAL OWNER DRAFT');
+ const draftLoaded=await request('/api/landing',{action:'load'},rootCookie);assert.equal(draftLoaded.data.draft.copy.ar.titleA,'LOCAL OWNER DRAFT');assert.equal(draftLoaded.data.draft.blocks[1].copy.ar.heading,'');
  const publishedLanding=await request('/api/landing',{action:'publish',draftVersion:1},rootCookie);assert.equal(publishedLanding.data.publishedVersion,1);
  assert.equal((await request('/api/landing')).data.content.copy.ar.titleA,'LOCAL OWNER DRAFT');
+ const publishedHtml=(await request('/')).data;for(const id of ['how-it-works','for-pharmacies','questions'])assert(!publishedHtml.includes(`href="#${id}"`),`Hidden section link ${id} remains visible`);
  const revision=(await request('/api/landing',{action:'load'},rootCookie)).data.revisions[0];assert(revision);
- await request('/api/landing',{action:'restore',draftVersion:2,revision:revision.id},rootCookie);
- assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Owner rollback restores the prior published copy');
+ const unpublishedDraft=structuredClone(draftLanding);unpublishedDraft.copy.ar.titleA='LOCAL UNSAVED DRAFT';
+ await request('/api/landing',{action:'save',draftVersion:2,content:unpublishedDraft},rootCookie);
+ const publishAudit=()=>sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-publish'`)[0].results[0].count;
+ const auditsBeforeRace=publishAudit();
+ const racedPublishes=await Promise.all([request('/api/landing',{action:'publish',draftVersion:3},rootCookie,[200,409]),request('/api/landing',{action:'publish',draftVersion:3},rootCookie,[200,409])]);
+ assert.deepEqual(racedPublishes.map(result=>result.response.status).sort((a,b)=>a-b),[200,409]);assert.equal(publishAudit()-auditsBeforeRace,1,'Only the successful concurrent publish is audited');
+ const separateDraft=structuredClone(unpublishedDraft);separateDraft.copy.ar.titleA='LOCAL SEPARATE DRAFT';await request('/api/landing',{action:'save',draftVersion:4,content:separateDraft},rootCookie);
+ const restoreAudit=()=>sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-restore'`)[0].results[0].count;
+ const auditsBeforeRestore=restoreAudit();await request('/api/landing',{action:'restore',draftVersion:5,revision:revision.id},rootCookie);
+ const restored=(await request('/api/landing',{action:'load'},rootCookie)).data;assert.equal(restored.draft.copy.ar.titleA,'LOCAL SEPARATE DRAFT','Restoring a published revision preserves a separate unsaved draft');assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Owner rollback restores the prior published copy');assert.equal(restoreAudit()-auditsBeforeRestore,1,'Successful restore is audited once');
  const registration=await request('/api/app',{action:'register-pharmacy',name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000000',license:'LOCAL-NOT-VALID'},sessions[other.id]);const pharmacy=registration.data.ownPharmacy.id;createdPharmacies.push(pharmacy);
  assert.equal(registration.data.role,'pharmacist');
  assert.equal(registration.data.staffRequests.length,0);

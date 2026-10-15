@@ -31,7 +31,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     requireMutationOrigin(request);
-    const input = landingRequest.parse(await limitedJson(request, 32_768));
+    const input = landingRequest.parse(await limitedJson(request, 524_288));
     const user = await identity(request);
     if (!isRootAdmin(user.userId)) throw new HttpError("صلاحية مالك المنصة مطلوبة.", 403);
     await rateLimit(user.userId, "landing-content", 30);
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       const results = await db.batch([
         db.prepare("INSERT INTO landing_content_revisions (id,actor,created_at,content_json) SELECT ?,?,?,published_json FROM landing_content WHERE id='main' AND draft_version=?").bind(revisionId, user.userId, now, input.draftVersion),
         db.prepare("UPDATE landing_content SET published_json=draft_json,published_version=published_version+1,draft_version=draft_version+1,published_at=?,updated_at=?,updated_by=? WHERE id='main' AND draft_version=? AND draft_json<>published_json").bind(now, now, user.userId, input.draftVersion),
-        audit(user.userId, "landing-publish", "main", "Landing page content published"),
+        audit(user.userId, "landing-publish", "main", "Landing page content published", true),
         db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions ORDER BY created_at DESC LIMIT -1 OFFSET 25)"),
       ]);
       if (!results[1].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل النشر.", 409);
@@ -82,8 +82,8 @@ export async function POST(request: Request) {
     const content = parseLandingContent(revision.content_json), serialized = JSON.stringify(content), revisionId = crypto.randomUUID();
     const results = await db.batch([
       db.prepare("INSERT INTO landing_content_revisions (id,actor,created_at,content_json) SELECT ?,?,?,published_json FROM landing_content WHERE id='main' AND draft_version=?").bind(revisionId, user.userId, now, input.draftVersion),
-      db.prepare("UPDATE landing_content SET draft_json=?,published_json=?,draft_version=draft_version+1,published_version=published_version+1,updated_by=?,updated_at=?,published_at=? WHERE id='main' AND draft_version=?").bind(serialized, serialized, user.userId, now, now, input.draftVersion),
-      audit(user.userId, "landing-restore", input.revision, "Landing page revision restored"),
+      db.prepare("UPDATE landing_content SET draft_json=CASE WHEN draft_json=published_json THEN ? ELSE draft_json END,published_json=?,draft_version=draft_version+1,published_version=published_version+1,updated_by=?,updated_at=?,published_at=? WHERE id='main' AND draft_version=?").bind(serialized, serialized, user.userId, now, now, input.draftVersion),
+      audit(user.userId, "landing-restore", input.revision, "Landing page revision restored", true),
       db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions ORDER BY created_at DESC LIMIT -1 OFFSET 25)"),
     ]);
     if (!results[1].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الاستعادة.", 409);

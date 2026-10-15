@@ -121,6 +121,13 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
     await page.locator('.product-language').click();
     await page.getByRole('menuitem').filter({ hasText: new RegExp('^' + names[language]) }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', language);
+    if (role === 'owner' && language === 'kab') {
+      await expect(page.locator('.landing-editor')).toHaveAttribute('dir', 'ltr');
+      await page.locator('.landing-editor-toolbar select').selectOption('kab');
+      await page.getByRole('button', { name: 'Preview draft' }).click();
+      await expect(page.locator('.landing-preview-dialog')).toHaveAttribute('dir', 'ltr');
+      await page.keyboard.press('Escape');
+    }
     for (const theme of ['light', 'dark']) {
       if (await page.locator('html').getAttribute('data-theme') !== theme) await page.locator('.product-theme').click();
       for (const width of widths) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page); }

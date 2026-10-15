@@ -146,7 +146,7 @@ export function AdminLandingEditor({ language }: { language: Language }) {
     setDraft(current => { const blocks = [...current.blocks], to = Math.max(0, Math.min(blocks.length - 1, index + delta)); [blocks[index], blocks[to]] = [blocks[to], blocks[index]]; return { ...current, blocks }; });
   }
 
-  return <section className="panel landing-editor" dir={language === "ar" || language === "kab" ? "rtl" : "ltr"} aria-labelledby="landing-editor-title">
+  return <section className="panel landing-editor" dir={language === "ar" ? "rtl" : "ltr"} aria-labelledby="landing-editor-title">
     <div className="landing-editor-heading"><span className="landing-editor-icon"><Globe2 aria-hidden="true" /></span><div><h2 id="landing-editor-title">{w("title")}</h2><p>{w("help")}</p></div></div>
     {!loaded ? <div className="landing-editor-load" role={loadError ? "alert" : "status"}>{loadError ? <><p>{w("failed")}</p><Button variant="outline" onClick={() => void reload()}><RotateCcw />{w("retry")}</Button></> : <p>{w("loading")}</p>}</div> : <>
       <div className="landing-editor-status"><span className={`landing-status-dot ${hasUnpublished ? "is-draft" : "is-live"}`} />{hasUnpublished ? w("unpublished") : w("published")}<span className="landing-editor-version">v{publishedVersion}</span></div>
@@ -170,6 +170,6 @@ export function AdminLandingEditor({ language }: { language: Language }) {
         </aside>
       </div>
     </>}
-    <Dialog open={preview} onOpenChange={setPreview}><DialogContent className="landing-preview-dialog" dir={contentLanguage === "ar" || contentLanguage === "kab" ? "rtl" : "ltr"}><DialogTitle>{w("preview")}</DialogTitle><DialogDescription>{dirty ? w("unsaved") : w("help")}</DialogDescription><div className="landing-preview-scroll"><LandingPage language={contentLanguage} content={draft} hideDirectory /></div></DialogContent></Dialog>
+    <Dialog open={preview} onOpenChange={setPreview}><DialogContent className="landing-preview-dialog" dir={contentLanguage === "ar" ? "rtl" : "ltr"}><DialogTitle>{w("preview")}</DialogTitle><DialogDescription>{dirty ? w("unsaved") : w("help")}</DialogDescription><div className="landing-preview-scroll"><LandingPage language={contentLanguage} content={draft} hideDirectory /></div></DialogContent></Dialog>
   </section>;
 }

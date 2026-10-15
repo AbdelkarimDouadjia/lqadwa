@@ -44,7 +44,8 @@ export function LandingPage({ language, startHref = "/login?mode=register&return
   };
   const custom = content.blocks.filter(block => block.enabled && block.copy[language]?.heading?.trim() && block.copy[language]?.body?.trim()).map(block => {
     const text = block.copy[language]!;
-    return <section className="editorial-custom-section" key={block.id} data-arrive="surface"><h2>{text.heading}</h2><p>{text.body}</p>{text.button && block.target !== "none" && <Button asChild><a href={sectionLinks[block.target]}>{text.button}<ArrowUpRight aria-hidden="true" /></a></Button>}</section>;
+    const targetVisible = block.target !== "journey" || content.sections.journey !== false;
+    return <section className="editorial-custom-section" key={block.id} data-arrive="surface"><h2>{text.heading}</h2><p>{text.body}</p>{text.button && block.target !== "none" && targetVisible && <Button asChild><a href={sectionLinks[block.target]}>{text.button}<ArrowUpRight aria-hidden="true" /></a></Button>}</section>;
   });
 
   return <div ref={root} className="editorial-page">
