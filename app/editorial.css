@@ -136,6 +136,8 @@ html[data-less-motion=true] .editorial-page * { animation: none !important; tran
   .editorial-page .landing-actions { flex: 0 1 45%; }
   .editorial-card-copy { padding: 28px; }
   .editorial-pharmacy { gap: 40px; }
+}
+@media (max-width:1200px) {
   .app-shell:has(.editorial-page) .product-desktop-nav { display: none; }
   .app-shell:has(.editorial-page) .product-header-actions { margin-inline-start: auto; }
   .app-shell:has(.editorial-page) .product-menu-button { display: flex; }
