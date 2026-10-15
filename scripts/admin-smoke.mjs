@@ -223,6 +223,7 @@ try{
  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},sessions[delegate.id],403);
  const pending=await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['analytics']},rootCookie);await request('/api/app',{action:'admin-invites-revoke'},rootCookie);await request('/api/app',{action:'admin-invite-redeem',token:pending.data.invite},sessions[recipient.id],409);
  console.log('PASS: owner alias/password verification, verified-email invitation binding, single use, editable metadata denial, scoped reads/writes, immediate permission updates, protected owner and revoked access. Fixtures are LOCAL only.');
+  sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor=${quote(owner.id)} AND action LIKE 'landing-%';`);
  if (process.argv.includes('--review') || process.argv.includes('--browser')) {
   await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},rootCookie);
   if (process.argv.includes('--browser')) {
