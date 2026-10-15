@@ -148,7 +148,7 @@ html[data-less-motion=true] .editorial-page * { animation: none !important; tran
   .app-shell:has(.editorial-page) .product-brand strong { font-size: 20px; }
   .app-shell:has(.editorial-page) .brand-tile { width: 36px; height: 36px; border-radius: 11px; }
   .editorial-hero { padding-top: 36px; }
-  .editorial-hero h1 { font-size: clamp(31px,8.4vw,50px); }
+  .editorial-hero h1 { font-size: clamp(26px,8.4vw,50px); }
   html[dir=rtl] .editorial-hero h1 { font-size: clamp(44px,12vw,68px); }
   .headline-window { width: 1.3em; }
   .hero-under { display: grid; gap: 24px; margin-block: 24px 32px; }

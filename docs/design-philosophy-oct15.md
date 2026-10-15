@@ -76,6 +76,7 @@ Top three problems (most visible first), each with the screenshot it shows in an
 - Taste source gate: zero failures/warnings. Browser gate: zero failures, two documented warnings; 23 animated elements, four unique raster illustrations, two-line English headings at 1440/768/390.
 - Chromium: four languages × two themes × four widths (320/390/768/1440), eight axe checks without violations, decoded artwork, keyboard menu, real directory anchor, reduced-motion mode, no-JS reading, public/private login layout and rounded branding passed. No live sign-ins or records were changed.
 - Public artwork is four compressed WebP files (~630 KB total). Original generated PNGs remain in the local generated-images directory and ignored release/art-originals folder; prompts are below. Fonts are locally served with the included OFL licence.
+- A final 320px text-line check found the French hero wrapping to three lines. Lowered only the narrow-screen fluid type floor and added a heading-line assertion to the existing four-language browser matrix.
 - No schema migration, authentication-policy change, paid service or new runtime dependency. Existing signed Android 1.0.9 downloads are unchanged. Real-device, mailbox and native Kabyle acceptance remain outside this visual release.
 
 ## Generation instructions

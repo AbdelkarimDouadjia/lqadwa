@@ -38,7 +38,12 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.locator('.product-avatar, .product-notification')).toHaveCount(0);
     await expect(page.locator('a[href="/operations"]')).toHaveCount(0);
-    for (const width of widths) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page); }
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 }); await noOverflow(page);
+      const headlineLines = await page.locator('h1').evaluate(el => el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight));
+      expect(headlineLines, `${language}/${theme}/${width}: headline wrapping`).toBeLessThanOrEqual(2.1);
+    }
     await page.setViewportSize({ width: 390, height: 844 }); await accessible(page);
     if (language === 'ar' || language === 'en') await page.screenshot({ path: `.cloudflare/e2e/${info.project.name}-guest-${language}-${theme}.png`, fullPage: true });
   }
