@@ -58,7 +58,11 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
   const robots = await page.request.get('/robots.txt', { ignoreHTTPSErrors: true }); expect(robots.status()).toBe(200); expect(await robots.text()).toContain('Disallow: /operations');
   const sitemap = await page.request.get('/sitemap.xml', { ignoreHTTPSErrors: true }); expect(sitemap.status()).toBe(200); expect(await sitemap.text()).toContain('lang=kab');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await page.locator('.landing-illustration').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  for (const selector of ['.hero-line', '.editorial-cover img', '.has-arrived']) {
+    const animations = await page.locator(selector).evaluateAll(elements => elements.map(element => getComputedStyle(element).animationName));
+    expect(animations.length).toBeGreaterThan(0);
+    expect(animations.every(name => name === 'none')).toBe(true);
+  }
 });
 
 for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, scoped navigation, layout matrix and account menu`, async ({ page, context }, info) => {

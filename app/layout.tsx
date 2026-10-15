@@ -4,6 +4,7 @@ import { publicLanguage } from "@/lib/public-page";
 import "./globals.css";
 import "./luqya.css";
 import "./design-refinement.css";
+import "./editorial.css";
 
 export const metadata: Metadata = {
   title: "لقى دوا · LQADWA | دواؤك أقرب إليك",
