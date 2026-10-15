@@ -28,6 +28,7 @@ export async function identity(request?: Request, options: { allowClosed?: boole
   if (!options.allowSuspended && !isRootAdmin(user.userId) && await database().prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(user.userId).first()) throw new HttpError("تم تعليق الحساب. تواصل مع إدارة المنصة.", 403);
   return user;
 }
-export function audit(actor: string, action: string, target: string, detail: string) {
-  return database().prepare("INSERT INTO audit_log (id, actor, action, target, detail, created) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), actor, action, target, detail, Date.now());
+export function audit(actor: string, action: string, target: string, detail: string, onlyAfterChange = false) {
+  const query = onlyAfterChange ? "INSERT INTO audit_log (id, actor, action, target, detail, created) SELECT ?, ?, ?, ?, ?, ? WHERE changes() > 0" : "INSERT INTO audit_log (id, actor, action, target, detail, created) VALUES (?, ?, ?, ?, ?, ?)";
+  return database().prepare(query).bind(crypto.randomUUID(), actor, action, target, detail, Date.now());
 }

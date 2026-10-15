@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { getAppUser } from "@/lib/auth";
 import { ex } from "@/lib/experience-copy";
 import { publicLanguage, publicUrl } from "@/lib/public-page";
+import { database } from "@/db";
+import { emptyLandingContent, parseLandingContent } from "@/lib/landing-content";
 import LqadwaApp from "@/components/lqadwa-app";
 import { PublicLanding } from "@/components/public-landing";
 
@@ -22,7 +24,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function Page({ searchParams }: Props) {
   const query = await searchParams, store = await cookies();
   const hasSession = store.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+  let content = emptyLandingContent;
+  try { const row = await database().prepare("SELECT published_json FROM landing_content WHERE id='main'").first<{ published_json: string }>(); content = parseLandingContent(row?.published_json); } catch { /* Keep the current bundled copy available during a database outage. */ }
   // Avoid contacting Auth at all for the public landing; cookies are never authorization.
-  if (query.space || (hasSession && await getAppUser())) return <LqadwaApp />;
-  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} />;
+  if (query.space || (hasSession && await getAppUser())) return <LqadwaApp initialLandingContent={content} />;
+  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} initialContent={content} />;
 }

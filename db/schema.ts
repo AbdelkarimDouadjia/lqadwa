@@ -82,3 +82,11 @@ export const serviceControls = sqliteTable("service_controls", {
 export const requestControls = sqliteTable("request_controls", {
   request: text("request").primaryKey().references(() => requests.id, { onDelete: "cascade" }), stopped: integer("stopped").notNull().default(1),
 });
+export const landingContent = sqliteTable("landing_content", {
+  id: text("id").primaryKey(), draftJson: text("draft_json").notNull(), publishedJson: text("published_json").notNull(),
+  draftVersion: integer("draft_version").notNull().default(0), publishedVersion: integer("published_version").notNull().default(0),
+  updatedBy: text("updated_by").notNull(), updatedAt: integer("updated_at").notNull(), publishedAt: integer("published_at").notNull().default(0),
+});
+export const landingContentRevisions = sqliteTable("landing_content_revisions", {
+  id: text("id").primaryKey(), actor: text("actor").notNull(), createdAt: integer("created_at").notNull(), contentJson: text("content_json").notNull(),
+}, t => [index("landing_content_revisions_created_idx").on(t.createdAt)]);

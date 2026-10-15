@@ -9,11 +9,17 @@ test.beforeEach(async ({ context }) => {
   await context.route(url => !['localhost', '127.0.0.1'].includes(url.hostname), route => route.abort());
 });
 async function noOverflow(page) {
-  const layout = await page.evaluate(() => ({
-    overflow: document.documentElement.scrollWidth - innerWidth,
-    width: innerWidth, language: document.documentElement.lang, theme: document.documentElement.dataset.theme,
-    styles: document.styleSheets.length,
-  }));
+  const layout = await page.evaluate(() => {
+    const overflow = document.documentElement.scrollWidth - innerWidth;
+    return {
+      overflow, width: innerWidth, language: document.documentElement.lang, theme: document.documentElement.dataset.theme,
+      styles: document.styleSheets.length,
+      ...(overflow > 1 ? { scrollers: [...document.querySelectorAll('html, body, body *')]
+        .filter(element => element.scrollWidth > element.clientWidth + 1 && !element.matches('input,textarea,select,button,svg'))
+        .map(element => ({ tag: element.tagName, class: typeof element.className === 'string' ? element.className : '', id: element.id, scroll: element.scrollWidth, client: element.clientWidth }))
+        .sort((a, b) => (b.scroll - b.client) - (a.scroll - a.client)).slice(0, 8) } : {}),
+    };
+  });
   expect(layout.styles, JSON.stringify(layout)).toBeGreaterThan(0);
   expect(layout.overflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
 }
@@ -99,10 +105,29 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   if (role !== 'client') expect(navText).not.toContain('My bookings');
   await expect(page.locator('.product-desktop-nav button')).toHaveCount(role === 'client' ? 3 : 1);
   expect(navText.length).toBeGreaterThan(0);
+  if (role === 'owner') {
+    const editor = page.locator('.landing-editor');
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.landing-editor-fields')).toContainText('Headline - first line');
+    await editor.locator('.landing-editor-toolbar select').selectOption('ar');
+    await expect(editor.locator('.landing-editor-toolbar select')).toHaveValue('ar');
+    await expect(editor.locator('.landing-editor-fields input').first()).toHaveValue(/[\u0600-\u06FF]/);
+    await page.getByRole('button', { name: 'Preview draft' }).click();
+    await expect(page.locator('.landing-preview-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.landing-preview-dialog')).toHaveCount(0);
+  }
   for (const language of languages) {
     await page.locator('.product-language').click();
     await page.getByRole('menuitem').filter({ hasText: new RegExp('^' + names[language]) }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', language);
+    if (role === 'owner' && language === 'kab') {
+      await expect(page.locator('.landing-editor')).toHaveAttribute('dir', 'ltr');
+      await page.locator('.landing-editor-toolbar select').selectOption('kab');
+      await page.locator('.landing-editor-actions button').first().click();
+      await expect(page.locator('.landing-preview-dialog')).toHaveAttribute('dir', 'ltr');
+      await page.keyboard.press('Escape');
+    }
     for (const theme of ['light', 'dark']) {
       if (await page.locator('html').getAttribute('data-theme') !== theme) await page.locator('.product-theme').click();
       for (const width of widths) { await page.setViewportSize({ width, height: 900 }); await noOverflow(page); }

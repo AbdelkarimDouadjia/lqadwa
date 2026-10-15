@@ -17,6 +17,7 @@ for(const lang of ['ar','fr','en','kab']) {
  assert.match(html,new RegExp('lang="'+lang+'"'));assert.match(html,/rel="canonical"/);
  assert.match(response.headers.get('cache-control')||'',/no-store/);
 }
+const landing=await get('/api/landing');assert.equal(landing.status,200,'published landing content must be readable after database migration');assert.equal((await landing.json()).content.version,1);
 assert.equal((await get('/robots.txt')).status,200);assert.equal((await get('/sitemap.xml')).status,200);
 const directory=await(await get('/api/v1/pharmacies?city=algiers&limit=1')).json();
 assert.equal(directory.availability,'not-confirmed');assert.equal(directory.distanceOrigin.type,'wilaya-center');
