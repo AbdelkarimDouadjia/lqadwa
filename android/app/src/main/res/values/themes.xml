@@ -2,13 +2,16 @@
   <style name="LqadwaTheme" parent="Theme.Material3.DayNight.NoActionBar">
     <item name="colorPrimary">#08776B</item>
     <item name="colorOnPrimary">#FFFFFF</item>
-    <item name="colorSecondary">#3459A0</item>
+    <item name="colorSecondary">#37668B</item>
+    <item name="colorSurface">#FFFFFF</item>
+    <item name="colorOnSurface">#19352F</item>
+    <item name="colorOnSurfaceVariant">#52675F</item>
     <item name="android:fontFamily">sans</item>
-    <item name="android:windowLightStatusBar">false</item>
-    <item name="android:statusBarColor">#123344</item>
+    <item name="android:windowLightStatusBar">true</item>
+    <item name="android:statusBarColor">#F6F5F0</item>
     <item name="android:navigationBarColor">#FFFFFF</item>
     <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:windowBackground">#F7F8FB</item>
+    <item name="android:windowBackground">#F6F5F0</item>
     <item name="android:colorAccent">#087D71</item>
   </style>
 </resources>

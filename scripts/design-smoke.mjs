@@ -32,3 +32,16 @@ assert(!/opacity:\s*0[;}]/.test(editorial),'Page content must remain readable wi
 assert(!/opacity\s*:/.test(editorial),'Entrance motion must not reduce text contrast');
 for(const name of ['neighbourhood','prescription','pharmacy','walk']) assert(readFileSync(`public/art/${name}.webp`).length<400000);
 console.log('PASS: editorial light/dark contrast, motion fallback, visible no-JS content and optimized artwork.');
+
+for(const [front,back] of [['19352F','F6F5F0'],['52675F','FFFFFF'],['FFFFFF','08776B'],['19352F','DCEAF8'],['19352F','FFE2CC'],['EDF5F1','1B2C28'],['B0C4BD','101E1C'],['102F26','80DDC3'],['EDF5F1','49382C'],['EDF5F1','253D4D']]){
+ const a=luminance(front),b=luminance(back);assert((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5,`Native contrast: ${front}/${back}`);
+}
+assert(native.includes('if(!destinationKey.equals(renderedDestination)&&motionEnabled())'),'Network refresh must not replay entrance animation');
+assert(native.includes('scroll.scrollTo(0,previousScroll)'),'Refresh must preserve scroll');
+assert(native.includes('if(signingIn)nativeLogin();else login();'),'Sign-in is a native destination');
+assert(native.includes('if(BuildConfig.DEBUG)getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE)'),'Screenshot exemption is debug-only');
+assert(native.includes('getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE)'),'Release keeps screenshot privacy');
+assert(native.includes('View.AUTOFILL_HINT_PASSWORD'));
+assert(native.includes('requestDisallowInterceptTouchEvent'));
+assert(readFileSync('android/app/src/main/res/drawable/welcome_pharmacy.webp').length<100000);
+console.log('PASS: native contrast, motion gating, refresh position, full-screen auth, autofill, map gestures and release screenshot protection.');
