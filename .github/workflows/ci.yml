@@ -58,7 +58,7 @@ jobs:
         run: |
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - run: gradle -p android assembleRelease lintRelease --console=plain --no-daemon
+      - run: gradle -p android assembleRelease assembleDebugAndroidTest lintRelease --console=plain --no-daemon
       # CI APKs are unsigned: never publish them as distribution packages.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

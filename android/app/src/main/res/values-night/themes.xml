@@ -1,17 +1,17 @@
 <resources>
   <style name="LqadwaTheme" parent="Theme.Material3.DayNight.NoActionBar">
-    <item name="colorPrimary">#63DBC7</item>
+    <item name="colorPrimary">#80DDC3</item>
     <item name="colorOnPrimary">#092C27</item>
     <item name="colorSecondary">#A9C7FF</item>
-    <item name="colorSurface">#182235</item>
-    <item name="colorOnSurface">#EDF2FA</item>
-    <item name="colorOnSurfaceVariant">#ABB9CE</item>
+    <item name="colorSurface">#1B2C28</item>
+    <item name="colorOnSurface">#EDF5F1</item>
+    <item name="colorOnSurfaceVariant">#B0C4BD</item>
     <item name="android:fontFamily">sans</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:statusBarColor">#182235</item>
-    <item name="android:navigationBarColor">#182235</item>
+    <item name="android:statusBarColor">#101E1C</item>
+    <item name="android:navigationBarColor">#1B2C28</item>
     <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:windowBackground">#101724</item>
-    <item name="android:colorAccent">#63DBC7</item>
+    <item name="android:windowBackground">#101E1C</item>
+    <item name="android:colorAccent">#80DDC3</item>
   </style>
 </resources>
