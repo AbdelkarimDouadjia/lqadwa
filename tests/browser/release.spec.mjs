@@ -76,6 +76,45 @@ test('public HTML, locale/theme matrix, keyboard navigation and real directory',
   }
 });
 
+test('public information pages render in every language and link into the service', async ({ page }, info) => {
+  for (const path of ['/how-it-works', '/for-pharmacies', '/safety', '/pricing', '/help']) {
+    for (const language of languages) {
+      const response = await page.goto(`${path}?lang=${language}`);
+      expect(response.status(), `${path}/${language}`).toBe(200);
+      await expect(page.locator('.public-information-page h1')).toHaveCount(1);
+      await expect(page.locator('html')).toHaveAttribute('lang', language);
+      await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
+      await expect(page.locator('.public-info-hero a')).toHaveAttribute('href', /\/login\?mode=register|\/privacy/);
+      await expect(page.locator('.product-desktop-nav a').first()).toHaveAttribute('href', language === 'ar' ? '/how-it-works' : `/how-it-works?lang=${language}`);
+      await expect(page.locator('.public-info-related a')).toHaveCount(4);
+      await expect(page.locator('.product-avatar, .product-notification')).toHaveCount(0);
+      await page.setViewportSize({ width: 390, height: 844 }); await noOverflow(page); await accessible(page);
+    }
+  }
+  await page.context().addCookies([{ name: 'lqadwa-language', value: 'fr', url: 'http://localhost:5173' }]);
+  await page.goto('/help');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(page).toHaveTitle(/Vos questions, clairement/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/help\?lang=fr$/);
+  await page.setViewportSize({ width: 320, height: 800 }); await noOverflow(page);
+  await page.setViewportSize({ width: 768, height: 900 }); await noOverflow(page);
+  await page.setViewportSize({ width: 1440, height: 900 }); await noOverflow(page);
+  await page.goto('/how-it-works?lang=ar');
+  await page.screenshot({ path: `.cloudflare/e2e/${info.project.name}-public-info-ar-desktop.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await noOverflow(page);
+  await page.screenshot({ path: `.cloudflare/e2e/${info.project.name}-public-info-ar-mobile.png`, fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/how-it-works?lang=fr');
+  await page.getByRole('link', { name: 'Pour les pharmacies' }).first().click();
+  await expect(page).toHaveURL(/\/for-pharmacies\?lang=fr$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(page.locator('.public-information-page h1')).toHaveCount(1);
+  await page.locator('.product-language').click();
+  await page.getByRole('menuitem', { name: /English/ }).click();
+  await expect(page).toHaveURL(/\/for-pharmacies\?lang=en$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
 for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, scoped navigation, layout matrix and account menu`, async ({ page, context }, info) => {
   await context.addInitScript(() => { localStorage.setItem('dawa-language', 'en'); });
   await page.goto(role === 'owner' ? '/operations/login' : '/login');

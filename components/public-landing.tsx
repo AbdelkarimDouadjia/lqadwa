@@ -34,7 +34,7 @@ export function PublicLanding({ initialLanguage, initialDark, initialContent }: 
   };
   return <div className="app-shell is-signed-out">
     <a className="skip-link" href="#main">{language === "ar" ? "تجاوز إلى المحتوى" : language === "fr" ? "Aller au contenu" : language === "kab" ? "Ruḥ ɣer ugbur" : "Skip to content"}</a>
-    <SiteHeader signedOut role="client" view="search" language={language} dark={dark} name="" unread={0} landingSections={initialContent.sections} navigate={() => window.scrollTo({ top: 0, behavior: "auto" })} onLanguage={changeLanguage} onTheme={() => setDark(value => !value)} onNotifications={() => {}} />
+    <SiteHeader signedOut role="client" view="search" language={language} dark={dark} name="" unread={0} navigate={() => window.scrollTo({ top: 0, behavior: "auto" })} onLanguage={changeLanguage} onTheme={() => setDark(value => !value)} onNotifications={() => {}} />
     <main id="main" className="main-layout" tabIndex={-1}><LandingPage language={language} startHref="#find-a-pharmacy" content={initialContent}><PublicDirectory language={language} /></LandingPage></main>
     <SiteFooter language={language} signedOut role="client" />
   </div>;
