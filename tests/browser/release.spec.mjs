@@ -85,7 +85,7 @@ test('public information pages render in every language and link into the servic
       await expect(page.locator('html')).toHaveAttribute('lang', language);
       await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
       await expect(page.locator('.public-info-hero a')).toHaveAttribute('href', /\/login\?mode=register|\/privacy/);
-      await expect(page.locator('.product-desktop-nav a').first()).toHaveAttribute('href', '/how-it-works');
+      await expect(page.locator('.product-desktop-nav a').first()).toHaveAttribute('href', language === 'ar' ? '/how-it-works' : `/how-it-works?lang=${language}`);
       await expect(page.locator('.public-info-related a')).toHaveCount(4);
       await expect(page.locator('.product-avatar, .product-notification')).toHaveCount(0);
       await page.setViewportSize({ width: 390, height: 844 }); await noOverflow(page); await accessible(page);
