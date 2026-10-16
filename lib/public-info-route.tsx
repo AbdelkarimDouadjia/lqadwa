@@ -11,7 +11,8 @@ const localizedPath = (path: PublicInfoPath, language: Language) => `${publicOri
 
 export function createPublicInfoRoute(path: PublicInfoPath) {
   async function generateMetadata({ searchParams }: RouteProps): Promise<Metadata> {
-    const query = await searchParams, language = publicLanguage(query.lang);
+    const query = await searchParams, store = await cookies();
+    const language = publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value));
     const copy = publicInfoCopy(language, path);
     const alternates = { "ar-DZ": localizedPath(path, "ar"), "fr-DZ": localizedPath(path, "fr"), en: localizedPath(path, "en"), kab: localizedPath(path, "kab"), "x-default": localizedPath(path, "ar") };
     return { title: `${copy.title} | LQADWA`, description: copy.summary, alternates: { canonical: localizedPath(path, language), languages: alternates }, robots: { index: true, follow: true } };

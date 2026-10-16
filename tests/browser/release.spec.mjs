@@ -91,6 +91,11 @@ test('public information pages render in every language and link into the servic
       await page.setViewportSize({ width: 390, height: 844 }); await noOverflow(page); await accessible(page);
     }
   }
+  await page.context().addCookies([{ name: 'lqadwa-language', value: 'fr', url: 'http://localhost:5173' }]);
+  await page.goto('/help');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(page).toHaveTitle(/Vos questions, clairement/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/help\?lang=fr$/);
   await page.setViewportSize({ width: 320, height: 800 }); await noOverflow(page);
   await page.setViewportSize({ width: 768, height: 900 }); await noOverflow(page);
   await page.setViewportSize({ width: 1440, height: 900 }); await noOverflow(page);
