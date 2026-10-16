@@ -17,13 +17,20 @@ for(const lang of ['ar','fr','en','kab']) {
  assert.match(html,new RegExp('lang="'+lang+'"'));assert.match(html,/rel="canonical"/);
  assert.match(response.headers.get('cache-control')||'',/no-store/);
 }
+for(const path of ['/how-it-works','/for-pharmacies','/safety','/pricing','/help']) for(const lang of ['ar','fr','en','kab']) {
+ const response=await get(path+'?lang='+lang),html=await response.text();
+ assert.equal(response.status,200,path+'?lang='+lang);
+ assert.match(html,/<article[^>]*public-information-page/);
+ assert.match(html,/rel="canonical"/);
+ assert.match(html,new RegExp('lang="'+lang+'"'));
+}
 const landing=await get('/api/landing');assert.equal(landing.status,200,'published landing content must be readable after database migration');assert.equal((await landing.json()).content.version,1);
 assert.equal((await get('/robots.txt')).status,200);assert.equal((await get('/sitemap.xml')).status,200);
 const directory=await(await get('/api/v1/pharmacies?city=algiers&limit=1')).json();
 assert.equal(directory.availability,'not-confirmed');assert.equal(directory.distanceOrigin.type,'wilaya-center');
 assert(Array.isArray(directory.items));assert(directory.items.length<=1);
 for(const item of directory.items){assert(!('owner' in item));assert(!('license' in item));}
-for(const path of ['/','/login','/operations/login','/privacy','/account-data']){
+for(const path of ['/','/login','/operations/login','/privacy','/account-data','/how-it-works','/for-pharmacies','/safety','/pricing','/help']){
  const response=await get(path);assert.equal(response.status,200,path);
  assert.equal(response.headers.get('x-frame-options'),'DENY',path);
  assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);

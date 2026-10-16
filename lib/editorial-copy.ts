@@ -31,5 +31,10 @@ const copy = {
   walkAlt: ["تصوّر فني لممر مشاة بين مبانٍ بيضاء", "Illustration d’un passage piéton entre des maisons blanches", "Illustration of a pedestrian passage between white buildings", "Tawlaft n ubrid gar yixxamen"],
   stockAlt: ["تصوّر فني لرفوف صيدلية وعلب غير مسماة", "Illustration d’étagères de pharmacie et de boîtes sans marque", "Illustration of pharmacy shelves with unbranded cartons", "Tawlaft n uxezzen n tsaymit"],
   contact: ["نحن هنا لمساعدتك", "Parlons-en", "Let’s talk", "Ad nemmeslay"],
+  howPage: ["كيف تعمل الخدمة", "Comment ça marche", "How it works", "Amek i iteddu"],
+  pharmacyPage: ["للصيدليات", "Pour les pharmacies", "For pharmacies", "I tsaymitin"],
+  safetyPage: ["الأمان والخصوصية", "Sécurité et confidentialité", "Safety & privacy", "Taɣellist d tabaḍnit"],
+  pricingPage: ["الأسعار", "Tarifs", "Pricing", "Azal"],
+  helpPage: ["المساعدة والأسئلة", "Aide et questions", "Help & questions", "Tallelt d isteqsiyen"],
 } as const;
 export const editorialText = (language: Language, key: keyof typeof copy) => copy[key][({ ar: 0, fr: 1, en: 2, kab: 3 } as const)[language]];

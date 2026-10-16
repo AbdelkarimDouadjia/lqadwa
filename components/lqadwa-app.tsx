@@ -291,7 +291,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
   if (loading && !error) return <div className="startup-screen" role="status"><img src="/brand/luqya.png" alt="" width="104" height="104" /><strong>LQADWA</strong><p>{t("loadingApp")}</p><span className="startup-loader" /></div>;
   return <div className={`app-shell${signedOut ? " is-signed-out" : ""}${appMode ? " app-mode" : ""}`}>
     <a className="skip-link" href="#main">{t(view)}</a>
-    <SiteHeader signedOut={signedOut} role={data.role} view={view} language={language} dark={dark} name={data.profile.name} unread={unread} landingSections={initialLandingContent?.sections} navigate={navigate} onLanguage={setLanguage} onTheme={toggleTheme} onNotifications={()=>{setNotificationsOpen(true);if(unread)void mutate({action:"read-notifications"});}}/>
+    <SiteHeader signedOut={signedOut} role={data.role} view={view} language={language} dark={dark} name={data.profile.name} unread={unread} navigate={navigate} onLanguage={setLanguage} onTheme={toggleTheme} onNotifications={()=>{setNotificationsOpen(true);if(unread)void mutate({action:"read-notifications"});}}/>
     {!signedOut && <div className="context-bar"><div className="context-inner"><span className="service-label"><span />{t(data.role === "admin" ? "adminTitle" : data.role === "pharmacist" ? "pharmacyTitle" : "patientSpace")}</span><span className="context-explainer">{t("pickupOnly")}</span></div></div>}
     {offline && <div className="connection-banner" role="status"><WifiOff />{t("offline")}</div>}
     <main id="main" tabIndex={-1} className="main-layout">
