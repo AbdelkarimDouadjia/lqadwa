@@ -1,12 +1,14 @@
 # LQADWA operations — owner handover
 
-## Navigation, themes and social pages (1.0.9)
+## Public pages, branded emails and native onboarding (1.1.0)
 
-The shared public header contains no admin/account actions. Authenticated desktop/mobile navigation is role-specific; server-side permissions remain authoritative. The footer hides pharmacy onboarding from existing pharmacy/admin workspaces. Rounded branding and the last-loaded `app/design-refinement.css` keep colors consistent across light/dark menus, forms, workspaces and public sections. `scripts/design-smoke.mjs` checks real CSS token contrast in both modes as part of CI. Native Android has a DayNight theme switch, themed cards and active navigation. No new device permission or paid API is needed.
+The shared public header contains no admin/account actions. Authenticated desktop/mobile navigation is role-specific; server-side permissions remain authoritative. The footer hides pharmacy onboarding from existing pharmacy/admin workspaces. Public how-it-works, pharmacy, safety, pricing and help pages are localized in Arabic, French, English and Kabyle. Rounded branding and `app/design-refinement.css` keep colors consistent across light/dark menus, forms, workspaces and public sections. `scripts/design-smoke.mjs` checks contrast in both modes as part of CI. Native Android has a DayNight theme switch, themed cards and active navigation plus the in-app three-step pickup guide. No new device permission or paid API is needed.
+
+Arabic-first Supabase confirmation and password-recovery templates, with the LQADWA mark, are in `supabase/templates/`. Apply them in Supabase Authentication → Email Templates and test actual delivery with an inbox you control; repository files alone do not change hosted Supabase configuration.
 
 Support email is `abdelkarim.douadjia@gmail.com`. Footer social settings are in `lib/site-information.ts`; leave fields empty until the operator creates and verifies ownership of the accounts. Proposed `@lqadwa.dz`, `@getlqadwa` and `@lqadwa_sante` are not verified available: search indexing is not an authoritative availability check and direct platform checks were blocked. Do not publish guessed social URLs, business addresses, registration numbers or support hours.
 
-Web and native 1.0.9 use the existing accounts/database. APK signing certificate is unchanged, versionCode is 14 and older signed packages are preserved under ignored `.cloudflare/previous-apks/1.0.8/`. GitHub currently reports the source repository as public; the owner requested leaving visibility unchanged. The public website and signed APK links stay on Cloudflare. See the release handover for deployment/CI IDs, hashes and outstanding operator acceptance.
+Web and native 1.1.0 use the existing accounts/database. APK signing certificate is unchanged; the current signed ARM64, ARMv7 and x86_64 builds are versionCode 15. Older signed packages are preserved under ignored `.cloudflare/previous-apks/1.0.8/` and the immediately previous public downloads have a dated local backup. GitHub currently reports the source repository as public; the owner requested leaving visibility unchanged. The public website and signed APK links stay on Cloudflare. See the release handover for deployment/CI IDs, hashes and outstanding operator acceptance.
 
 ## Experience and stock controls (1.0.8)
 

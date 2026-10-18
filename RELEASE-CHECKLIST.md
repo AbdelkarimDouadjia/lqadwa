@@ -1,6 +1,6 @@
 # LQADWA release checklist
 
-The latest recorded release is 1.0.9 on Cloudflare with signed native Android downloads. Source is maintained in the owner's GitHub repository. Historical release checks below are not a fresh production-readiness certification. This checklist separates engineering checks from acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
+The public Worker currently reports release 1.1.0, with signed native Android downloads. Source is maintained in the owner's GitHub repository. Historical release checks below are not a fresh production-readiness certification. This checklist separates engineering checks from acceptance tasks still required for broad patient use. Details, links and artifact hashes are in [RELEASE-HANDOVER.md](./RELEASE-HANDOVER.md); repeatable procedures are in [OPERATIONS.md](./OPERATIONS.md).
 
 ## Completed verification
 
@@ -15,6 +15,7 @@ The latest recorded release is 1.0.9 on Cloudflare with signed native Android do
 ## Required acceptance before broad patient use
 
 - Verify confirmation and password recovery with a non-team address, including delivery failures and expired links. Earlier documentation observed SMTP off; the owner subsequently reported configuring it. Current configuration and end-to-end delivery remain unverified in this audit. Do not expose provider credentials.
+- Correct or suspend any existing approved pharmacy record whose coordinates fail Algeria bounds before reopening discovery to that pharmacy. New out-of-country pins are rejected and those records are omitted from client discovery, but the owner must still correct the source record and independently verify the license/location.
 - Verify supported physical Android phones: fresh install/upgrade, login, returning from account confirmation/recovery, rotation, camera/gallery, permission denial, GPS/routes, QR pickup, weak networks and process death. No physical-device pass is claimed.
 - Independently verify pharmacy licenses/locations and pharmacist handling of name/strength, stale availability, reservation expiry and original-prescription pickup.
 - Complete fluent Kabyle review. Native OCR supports printed Latin; Arabic/handwritten recognition is not promised. OCR/catalog matching is not clinical advice or prescription verification.

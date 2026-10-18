@@ -1,68 +1,131 @@
-# LQADWA
+<p align="center">
+  <img src="public/brand/luqya.png" width="78" alt="LQADWA mark" />
+</p>
 
-LQADWA connects people in Algeria with registered, independently approved pharmacies for medicine availability and in-pharmacy pickup. The web application supports Arabic RTL, French, English and Kabyle. The Android application uses native Material views and MapLibre, not a WebView.
+<h1 align="center">LQADWA · لقى دوا</h1>
 
-There is no medicine checkout, delivery, commission or guaranteed synchronized stock. Patients use the service free of charge. The displayed pharmacy subscription is 300 DA/month, waived through 30 September 2027; billing is disabled.
+<p align="center">Find a nearby pharmacy that confirms availability. Reserve, then collect in person.</p>
 
-## Published access
+<p align="center">
+  <a href="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml"><img alt="Release checks" src="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Web: Arabic, French, English, Kabyle" src="https://img.shields.io/badge/web-AR%20%7C%20FR%20%7C%20EN%20%7C%20KAB-08776b">
+  <img alt="Android: native Java" src="https://img.shields.io/badge/Android-native%20Material-17352f">
+  <img alt="License" src="https://img.shields.io/badge/license-proprietary-52675f">
+</p>
 
-- [Client](https://lqadwa.lqadwa-dz.workers.dev/)
-- [Pharmacy](https://lqadwa.lqadwa-dz.workers.dev/?space=pharmacy#pharmacy)
-- [Private owner and admin login](https://lqadwa.lqadwa-dz.workers.dev/operations/login)
-- [Android ARM64 APK](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release.apk)
-- [Android ARMv7 APK](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release-armv7.apk)
+LQADWA is an Algerian pharmacy-orientation service for hard-to-find or urgent medicines. It connects people to registered pharmacies nearby without selling medicine, charging a commission, or arranging delivery.
 
-Hosting uses the owner's Cloudflare Worker and D1 database on free plans. Supabase provides authentication. No ChatGPT login or hosting is used. Source is held in the owner's [GitHub repository](https://github.com/AbdelkarimDouadjia/lqadwa). Repository visibility is independent of protected application access.
+## Published service
 
-## Roles and privacy
+- [Open LQADWA](https://lqadwa.lqadwa-dz.workers.dev/)
+- [Browse how it works](https://lqadwa.lqadwa-dz.workers.dev/how-it-works)
+- [Pharmacy participation](https://lqadwa.lqadwa-dz.workers.dev/for-pharmacies)
+- [Android ARM64](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release.apk) · [Android 32-bit ARMv7](https://lqadwa.lqadwa-dz.workers.dev/downloads/lqadwa-release-armv7.apk)
 
-Patients confirm their email, search by medicine/location, request availability, reserve after pharmacy confirmation and present a pickup QR/code. Pharmacy registration requires administrative approval. Pharmacists answer requests, manage optional private stock notes, verify pickup codes and mark collection only after checking the original prescription when legally required.
+Patients use the service free of charge. Pharmacy access is shown as 300 DA/month, waived through 30 September 2027; billing is disabled. Hosting and the database use the configured free plans, subject to each provider's quotas and terms.
 
-Administration is not advertised in public navigation. The owner is identified by a server-side stable-ID allowlist. Owner login accepts `admin` or the configured owner email and verifies the actual Supabase password. No shared password or public admin signup exists. The owner creates email-bound, seven-day, single-use invitations with scoped permissions, and can edit or revoke delegated access. Every administrative read/write is checked on the server.
+## Product walkthrough
 
-Prescription images and full extracted text stay on the device. OCR produces editable text and possible catalog matches, not prescription validation or dosing advice. Users must check the medicine and strength themselves. Browser OCR supports Arabic/French/English models; native Android supports printed Latin. Handwriting is unreliable. No patient prescription images are collected for administrators to inspect.
+These are real captures of the public Arabic “How it works” page on 18 October 2026. The image is editorial illustration, not a real pharmacy or a stock claim.
 
-## Maps and catalog
+<p align="center">
+  <img src="docs/screenshots/how-it-works-ar-desktop-view.jpg" width="70%" alt="LQADWA public walkthrough on desktop" />
+  <img src="docs/screenshots/how-it-works-ar-mobile-view.jpg" width="25%" alt="LQADWA public walkthrough on mobile" />
+</p>
 
-Maps show registered approved pharmacy pins and a permission-based current position. Walking/driving route previews use public OpenStreetMap/FOSSGIS services. Google Maps links support external navigation and transit/train options where coverage exists. No live traffic, complete Algerian transit coverage or public-map availability guarantee is claimed. Arrival sharing is optional, coarse, foreground-only and restricted to the assigned pharmacy; stale positions disappear.
+## Interfaces and capabilities
 
-The bundled medicine reference comes from the ministry's August 2026 nomenclature; see `scripts/import-medicines.py`. Catalog presence does not confirm present stock, prescription validity or suitability. The geographic reference source and licenses are retained in the project. Pharmacies supply their own coordinates. The generated logo and IBM Plex Sans Arabic fonts are bundled with their attribution/license information; the brand is not trademark clearance.
+| Space | Main tasks |
+| --- | --- |
+| Patient | Search the medicine catalogue by name/strength and wilaya, request availability, review pharmacy replies, reserve for pickup, show the pickup QR/code, and open walking/driving/transit directions where public map data supports them. |
+| Pharmacy | Apply for approval, answer nearby requests, manage manually entered stock notes, handle reservations, and verify pickup at the counter. |
+| Owner / delegated admin | Review pharmacy applications, manage accounts and service controls, inspect scoped analytics, update landing-page content, and assign or revoke permission-scoped admin access. The admin route is protected and is not linked from public navigation. |
+| Native Android | Native Material screens for search, reservations, map, account, pharmacy operations, OCR review, QR pickup and the new in-app service guide. It is not a WebView wrapper. |
 
-## Local verification
+### Trust and service limits
 
-Use Node.js 24. Install and run the same web gates used by CI:
+- A pharmacy confirms availability; a catalogue entry or directory listing is not proof of current stock.
+- Search results are ordered by distance. The public directory distance is approximate from the wilaya centre until the user signs in and provides location.
+- A reservation follows pharmacy confirmation and expires after two hours. The patient goes to the pharmacy and presents the original prescription when legally required.
+- There is no online sale, medicine payment, delivery, patient subscription or pharmacy commission.
+- The medicine catalogue is a reference list, not clinical advice. OCR text is editable and must be checked with the pharmacist; OCR does not verify a prescription, diagnosis, dose or suitability.
+- Browser OCR supports the configured Arabic/French/English models. Native Android OCR currently targets printed Latin text; handwriting and Arabic print are not promised there. Prescription images stay on-device.
+- Maps use OpenStreetMap/MapLibre and public FOSSGIS routes. Google Maps opens externally for navigation and available transit modes; there is no live-traffic or complete Algerian transit guarantee.
+- Optional arrival sharing is foreground-only, consent-based, time-limited and restricted to the pharmacy for that active reservation.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Patient[Patient web and Android] --> Web[Cloudflare Worker web app]
+  Pharmacy[Pharmacy workspace] --> Web
+  Owner[Private owner/admin workspace] --> Web
+  Android[Native Android Material app] --> API[Authenticated service API]
+  Web --> API
+  API --> D1[(Cloudflare D1)]
+  API --> Auth[Supabase Auth]
+  Web --> Auth
+  Android --> Maps[MapLibre and OpenStreetMap]
+  Web --> Maps
+  Maps --> Routes[Public FOSSGIS routing]
+  Android --> OCR[On-device ML Kit OCR and QR]
+  Web --> OCRWeb[On-device browser OCR]
+  Catalog[Medicine nomenclature import] --> D1
+```
+
+Authentication is handled by Supabase. Role, pharmacy approval, reservation and admin-permission checks are enforced server-side. Application data is stored in Cloudflare D1. There is no public admin signup, ChatGPT login or shared owner password.
+
+## Repository map
+
+```text
+app/                       Next.js routes, API endpoints and page styles
+components/                Public site, role workspaces and shared UI
+lib/                       Auth, access control, pharmacy discovery and domain logic
+db/ drizzle/               D1 schema and migrations
+supabase/templates/        Branded signup and password-recovery email HTML
+android/app/               Native Android app and isolated UI screenshot test
+docs/                      Operations, release evidence and real screenshots
+scripts/                   CI checks, OCR, local fixtures and Android release tooling
+.github/workflows/         CI and manually triggered Cloudflare deployment
+```
+
+Public information pages include how it works, pharmacy participation, safety, pricing, help and privacy in Arabic, French, English and Kabyle. Account/workspace navigation is role-specific; the private owner route is not shown in public menus.
+
+## Run locally
+
+Requirements: Node.js 24, Java 17, Android SDK 36, Android build-tools 35.0.0 and Gradle 8.13.
 
 ```sh
 npm run install:ci
 npm run check
+npm run test:discovery
 npm run lint
 npm audit --omit=dev --audit-level=high
 npm run build
 npx --no-install playwright install chromium firefox webkit
 npm run test:e2e
 npm run test:ocr
+gradle -p android assembleRelease assembleDebugAndroidTest lintRelease --console=plain --no-daemon
 ```
 
-The integration command applies migrations to local D1, starts an isolated localhost Worker, runs synthetic account/role checks and stops it. Port 5173 must be free. Fixtures never run against production. OCR verification renders a synthetic printed image in memory and runs the shipped Tesseract models; it is not a physical-phone camera test.
+Browser/integration checks use isolated local D1 and synthetic identities; they do not write to production. `test:ocr` checks a synthetic printed image. Android instrumentation screenshots are captured by `NativeDesignTest` when a compatible emulator/device is available. None of these checks replaces acceptance on a physical phone.
 
-`test:e2e` includes those integration checks plus isolated Chromium/Firefox/WebKit tests. Browser artifacts are under ignored `.cloudflare/e2e/`; the Auth stub stays responsive during browser login. The layout matrix covers guest/client/pharmacy/owner, four languages, both themes and eight widths. Axe is an automated check, not screen-reader or WCAG certification. Linux CI installs browser OS dependencies with `--with-deps`. Use `test:integration` for an API-only run.
+For local web development, apply migrations to a local D1 database and configure development authentication separately; see [OPERATIONS.md](OPERATIONS.md). Never point synthetic fixtures at production.
 
-Guests receive server-rendered landing content and a paginated approved-pharmacy directory without an Auth lookup. `?lang=ar|fr|en|kab` supplies indexable language variants; private `?space=…` and legacy app fragments keep their journeys. Pharmacy distances in the public directory are explicitly approximate from the wilaya centre. No stock availability is inferred from a listing; requests and pickup reservations require a verified account.
+## Authentication email setup
 
-For ordinary local development, build once, apply local migrations with `node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js d1 migrations apply DB --local --config dist/server/wrangler.json --persist-to .wrangler/state`, then run `npm run dev`. Configure development authentication separately. Never deploy local fixture identities or the local Auth server URL.
+The project-owned signup-confirmation and password-recovery templates are in [`supabase/templates`](supabase/templates). They use the LQADWA mark and secure Supabase action link. An operator must paste and save them in Supabase Dashboard, then verify actual inbox delivery; see [the email setup guide](docs/auth-email-templates.md). SMTP/mailbox delivery is not proven by a successful code build.
 
-## Android distribution
+## Design references
 
-Use Java 17+, Android SDK 36, build-tools 35.0.0 and Gradle 8.13. On the owner's Windows machine, `./scripts/build-android.ps1` builds signed release APKs and an AAB using protected signing material outside the repository. CI compiles and runs Android lint without signing credentials; its unsigned packages are not distribution downloads. See `OPERATIONS.md` for signing custody and recovery.
+The native map/list hierarchy and concise pharmacy states were informed by [Pharmacy Finder App](https://dribbble.com/shots/6795987-Pharmacy-Finder-App) and [Pharmacy App Concept](https://dribbble.com/shots/6948601-Pharmacy-App-Concept). LQADWA uses its own brand, layout and code; reference artwork and proprietary components were not copied.
 
-The app includes branded launch behavior, native email/password sign-in, medicine search, reservations, QR/OCR, pharmacy operations, GPS/maps and foreground arrival sharing. Account confirmation/recovery, optional provider/device linking and the private admin console may open the browser. No background location collection or iOS build is included.
+## Release and operator notes
 
-## CI and deployment
+- The manual deployment workflow requires a separately configured least-privilege Cloudflare secret. Web and Android CI builds do not sign APKs.
+- Signed Android APKs/AAB are produced only from the owner's protected signing material using `scripts/build-android.ps1`. Never commit a keystore or signing password.
+- Google/Apple sign-in appears only after each provider is configured and accepted. No Apple developer membership or paid service was purchased.
+- Public-map providers, email delivery and free-tier quotas can change; monitor limits before expanding to real users.
+- Legal operator identity, pharmacy licenses, data-protection review, physical-device acceptance, email inbox acceptance and fluent Kabyle review remain owner launch responsibilities.
 
-`.github/workflows/ci.yml` runs web checks, local role/security checks, actual OCR and Android build/lint. Actions are pinned and repository permissions are read-only. `.github/workflows/deploy.yml` is manual and requires separately configured, least-privilege Cloudflare repository secrets. It does not change database schema or expose signing material. No paid runner or hosting plan was activated.
-
-Production migrations are managed separately, with a backup first. Deploy a verified web build using `wrangler deploy --config dist/server/wrangler.json`, then run `node scripts/public-release-check.mjs` to check public headers/endpoints and exact hosted APK hashes.
-
-## Launch requirements
-
-See `RELEASE-HANDOVER.md`, `OPERATIONS.md`, `AUTH-PROVIDERS.md` and `RELEASE-CHECKLIST.md`. Before broad patient use, verify public confirmation/recovery email receipt, actual supported Android phones, independent pharmacy licenses, legal operator details and Algerian pharmacy/data-protection requirements, fluent Kabyle wording and recovery procedures. Google/Apple buttons remain hidden until configured and accepted. No paid provider enrollment was purchased. Free service quotas and public routing limits still apply. Passing automated checks is not clinical, legal or complete security certification.
+See [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), [RELEASE-HANDOVER.md](RELEASE-HANDOVER.md), [OPERATIONS.md](OPERATIONS.md), [AUTH-PROVIDERS.md](AUTH-PROVIDERS.md) and [BRAND.md](BRAND.md) for full handover details.

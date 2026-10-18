@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
-import {execFileSync,spawn} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
 import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
@@ -14,7 +14,22 @@ const base='http://localhost:5173', password='LOCAL-only-unique-passphrase';
 const users=[{id:'local-release-owner',email:'owner@example.invalid'},...['delegate','recipient','other'].map(name=>({id:'admin-test-'+randomUUID(),email:name+'@example.invalid'}))];
 const [owner,delegate,recipient,other]=users, createdPharmacies=[];
 const quote=v=>"'"+v.replaceAll("'","''")+"'", hash=v=>createHash('sha256').update(v).digest('hex');
-const sql=command=>JSON.parse(execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/wrangler-dist/cli.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to',process.env.LQADWA_TEST_STATE||'.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'}));
+const explorer=base+'/cdn-cgi/local/explorer/api';
+let localDatabaseId;
+async function sql(command){
+ assert(process.env.LQADWA_TEST_STATE?.includes('integration-'),'Use only an isolated local integration database');
+ if(!localDatabaseId){
+  const response=await fetch(explorer+'/d1/database',{signal:AbortSignal.timeout(5000)}),data=await response.json();
+  assert(response.ok&&data.success,'Local Wrangler D1 inspector must be available');
+  localDatabaseId=data.result.find(database=>database.name==='DB')?.uuid;
+  assert(localDatabaseId,'Local Wrangler D1 database binding was not found');
+ }
+ const statements=command.split(';').map(statement=>statement.trim()).filter(Boolean);
+ const response=await fetch(`${explorer}/d1/database/${localDatabaseId}/raw`,{method:'POST',headers:{connection:'close','content-type':'application/json'},body:JSON.stringify({batch:statements.map(sql=>({sql}))}),signal:AbortSignal.timeout(10000)});
+ const data=await response.json();
+ if(!response.ok||!data.success||data.result?.some(result=>!result.success))throw Error(`Local D1 query failed: ${data.errors?.[0]?.message||data.result?.find(result=>!result.success)?.error||response.status}`);
+ return data.result.map(result=>({success:result.success,meta:result.meta,results:(result.results?.rows||[]).map(row=>Object.fromEntries(result.results.columns.map((column,index)=>[column,row[index]])))}));
+}
 const record=u=>({...u,aud:'authenticated',role:'authenticated',is_anonymous:false,email_confirmed_at:'2026-01-01T00:00:00Z',user_metadata:{full_name:'LOCAL FICTIONAL ACCOUNT',role:'owner',...(u.id===recipient.id?{first_name:'LOCAL',last_name:'NEW PERSON'}:{})},app_metadata:{provider:'email'}});
 let signupPayload;
 const jwt=u=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),aud:'authenticated',role:'authenticated'})).toString('base64url'),'local-fixture-not-a-signature'].join('.');
@@ -37,7 +52,7 @@ const auth=createServer(async(req,res)=>{
 await new Promise(resolve=>auth.listen(5888,'127.0.0.1',resolve));
 const cookie=response=>response.headers.getSetCookie().map(v=>v.split(';')[0]).filter(v=>!v.endsWith('=')).join('; ');
 async function request(path,body,credential='',expected=200){
- const response=await fetch(base+path,{method:body?'POST':'GET',headers:{...(body?{origin:base,'content-type':'application/json'}:{}),...(credential?{cookie:credential}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual',signal:AbortSignal.timeout(20000)});
+ const response=await fetch(base+path,{method:body?'POST':'GET',headers:{connection:'close',...(body?{origin:base,'content-type':'application/json'}:{}),...(credential?{cookie:credential}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual',signal:AbortSignal.timeout(20000)});
  const raw=await response.text(),data=response.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):raw;
  assert((Array.isArray(expected)?expected:[expected]).includes(response.status),`${body?.action||path}: expected ${expected}, received ${response.status}: ${typeof data==='object'?data.error:raw.slice(0,100)}`);return {response,data};
 }
@@ -57,7 +72,7 @@ try{
  await request('/api/auth',{action:'admin-login',identifier:delegate.email,password},'',401);
  const create=await request('/api/app',{action:'admin-invite-create',email:delegate.email,permissions:['pharmacies']},rootCookie),token=create.data.invite;assert(token);
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[other.id],403);
- assert.equal(sql(`SELECT used_by FROM admin_invites WHERE hash=${quote(hash(token))};`)[0].results[0].used_by,null);
+ assert.equal((await sql(`SELECT used_by FROM admin_invites WHERE hash=${quote(hash(token))};`))[0].results[0].used_by,null);
  const joined=await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id]);assert.deepEqual(joined.data.admin.access,{isOwner:false,permissions:['pharmacies']});
  assert.equal(joined.data.admin.accounts.length,0);assert.equal(joined.data.admin.activity.length,0);assert.equal(joined.data.admin.members.length,0);assert.equal(joined.data.admin.users,0);
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],409);
@@ -84,14 +99,14 @@ try{
  const revision=(await request('/api/landing',{action:'load'},rootCookie)).data.revisions[0];assert(revision);
  const unpublishedDraft=structuredClone(draftLanding);unpublishedDraft.copy.ar.titleA='LOCAL UNSAVED DRAFT';
  await request('/api/landing',{action:'save',draftVersion:2,content:unpublishedDraft},rootCookie);
- const publishAudit=()=>sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-publish'`)[0].results[0].count;
- const auditsBeforeRace=publishAudit();
+ const publishAudit=async()=>(await sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-publish'`))[0].results[0].count;
+ const auditsBeforeRace=await publishAudit();
  const racedPublishes=await Promise.all([request('/api/landing',{action:'publish',draftVersion:3},rootCookie,[200,409]),request('/api/landing',{action:'publish',draftVersion:3},rootCookie,[200,409])]);
- assert.deepEqual(racedPublishes.map(result=>result.response.status).sort((a,b)=>a-b),[200,409]);assert.equal(publishAudit()-auditsBeforeRace,1,'Only the successful concurrent publish is audited');
+ assert.deepEqual(racedPublishes.map(result=>result.response.status).sort((a,b)=>a-b),[200,409]);assert.equal(await publishAudit()-auditsBeforeRace,1,'Only the successful concurrent publish is audited');
  const separateDraft=structuredClone(unpublishedDraft);separateDraft.copy.ar.titleA='LOCAL SEPARATE DRAFT';await request('/api/landing',{action:'save',draftVersion:4,content:separateDraft},rootCookie);
- const restoreAudit=()=>sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-restore'`)[0].results[0].count;
- const auditsBeforeRestore=restoreAudit();await request('/api/landing',{action:'restore',draftVersion:5,revision:revision.id},rootCookie);
- const restored=(await request('/api/landing',{action:'load'},rootCookie)).data;assert.equal(restored.draft.copy.ar.titleA,'LOCAL SEPARATE DRAFT','Restoring a published revision preserves a separate unsaved draft');assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Owner rollback restores the prior published copy');assert.equal(restoreAudit()-auditsBeforeRestore,1,'Successful restore is audited once');
+ const restoreAudit=async()=>(await sql(`SELECT COUNT(*) AS count FROM audit_log WHERE actor=${quote(owner.id)} AND action='landing-restore'`))[0].results[0].count;
+ const auditsBeforeRestore=await restoreAudit();await request('/api/landing',{action:'restore',draftVersion:5,revision:revision.id},rootCookie);
+ const restored=(await request('/api/landing',{action:'load'},rootCookie)).data;assert.equal(restored.draft.copy.ar.titleA,'LOCAL SEPARATE DRAFT','Restoring a published revision preserves a separate unsaved draft');assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Owner rollback restores the prior published copy');assert.equal(await restoreAudit()-auditsBeforeRestore,1,'Successful restore is audited once');
  const registration=await request('/api/app',{action:'register-pharmacy',name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',city:'algiers',latitude:36.75,longitude:3.05,phone:'0550000000',license:'LOCAL-NOT-VALID'},sessions[other.id]);const pharmacy=registration.data.ownPharmacy.id;createdPharmacies.push(pharmacy);
  assert.equal(registration.data.role,'pharmacist');
  assert.equal(registration.data.staffRequests.length,0);
@@ -117,9 +132,9 @@ try{
  const empty=(await request('/api/stock?filter=out',null,sessions[other.id])).data.rows[0];assert.equal(empty.quantity,0);
  await request('/api/stock',{action:'delete',id:empty.id,updated:empty.updated},sessions[other.id]);
  const localInventory=Array.from({length:51},(_,i)=>({id:randomUUID(),name:'LOCAL PAGED '+String(i).padStart(3,'0')}));
- sql(localInventory.map(s=>`INSERT INTO stock_items(id,pharmacy,name,quantity,updated) VALUES(${quote(s.id)},${quote(pharmacy)},${quote(s.name)},0,${Date.now()});`).join(''));
+ await sql(localInventory.map(s=>`INSERT INTO stock_items(id,pharmacy,name,quantity,updated) VALUES(${quote(s.id)},${quote(pharmacy)},${quote(s.name)},0,${Date.now()});`).join(''));
  const firstStockPage=(await request('/api/stock?q=LOCAL%20PAGED&sort=name',null,sessions[other.id])).data,secondStockPage=(await request('/api/stock?q=LOCAL%20PAGED&sort=name&page=1',null,sessions[other.id])).data;assert.equal(firstStockPage.total,51);assert.equal(firstStockPage.rows.length,50);assert.equal(secondStockPage.rows.length,1);assert(!firstStockPage.rows.some(s=>s.id===secondStockPage.rows[0].id));
- sql(`DELETE FROM stock_items WHERE pharmacy=${quote(pharmacy)} AND name LIKE 'LOCAL PAGED %';`);
+ await sql(`DELETE FROM stock_items WHERE pharmacy=${quote(pharmacy)} AND name LIKE 'LOCAL PAGED %';`);
  await request('/api/stock?threshold=0',null,sessions[other.id],400);
  // Full management API remains authenticated, paginated and permission-scoped.
  await request('/api/admin?section=accounts',null,'',401);
@@ -180,13 +195,13 @@ try{
  await request('/api/admin',{action:'service-save',requests_paused:true,pickups_paused:true,message:'LOCAL PAUSE',updated:controls.updated,reason:'Local pause'},rootCookie);
  await request('/api/app',{action:'search',medicine:'Doliprane',city:'algiers',night:false,token:randomUUID()},sessions[recipient.id],409);
  await request('/api/app',{action:'collect',reservation:booking.id,pharmacy,code:booking.code,checked:true},sessions[other.id],409);
- assert.throws(()=>sql(`UPDATE reservations SET status='collected' WHERE id=${quote(booking.id)}`),'Database blocks an in-flight/older client pickup');
+ await assert.rejects(sql(`UPDATE reservations SET status='collected' WHERE id=${quote(booking.id)}`),'Database blocks an in-flight/older client pickup');
  await request('/api/admin',{action:'service-save',requests_paused:false,pickups_paused:false,message:'',updated:controls.updated,reason:'Stale control update'},rootCookie,409);
  controls=(await request('/api/admin?section=service',null,rootCookie)).data.service;
  await request('/api/admin',{action:'service-save',requests_paused:false,pickups_paused:false,message:'',updated:controls.updated,reason:'Local resume'},rootCookie);
  await request('/api/admin',{action:'request-stop',id:requestId,reason:'Local safety stop'},rootCookie);
  assert.equal((await request('/api/app',null,sessions[recipient.id])).data.reservations.find(b=>b.id===booking.id).status,'cancelled');
- assert.equal(sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation=${quote(booking.id)}`)[0].results[0].n,0);
+ assert.equal((await sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation=${quote(booking.id)}`))[0].results[0].n,0);
  await request('/api/app',{action:'reserve',request:requestId,pharmacy,consent:true},sessions[recipient.id],409);
  await request('/api/app',{action:'reply',request:requestId,pharmacy,available:true},sessions[other.id],409);
  await request('/api/admin',{action:'reservation-cancel',id:booking.id,reason:'Already cancelled'},rootCookie,409);
@@ -223,14 +238,17 @@ try{
  await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},sessions[delegate.id],403);
  const pending=await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['analytics']},rootCookie);await request('/api/app',{action:'admin-invites-revoke'},rootCookie);await request('/api/app',{action:'admin-invite-redeem',token:pending.data.invite},sessions[recipient.id],409);
  console.log('PASS: owner alias/password verification, verified-email invitation binding, single use, editable metadata denial, scoped reads/writes, immediate permission updates, protected owner and revoked access. Fixtures are LOCAL only.');
-  sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor=${quote(owner.id)} AND action LIKE 'landing-%';`);
+  await sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor=${quote(owner.id)} AND action LIKE 'landing-%';`);
  if (process.argv.includes('--review') || process.argv.includes('--browser')) {
   await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},rootCookie);
   if (process.argv.includes('--browser')) {
    const closeProxy=await startUiProxy();
    try {
     await new Promise((resolve,reject)=>{
-     const browser=spawn(process.execPath,['node_modules/playwright/cli.js','test'],{stdio:'inherit',env:process.env});
+     const args=['node_modules/playwright/cli.js','test'];
+     if(process.env.LQADWA_TEST_GREP)args.push('-g',process.env.LQADWA_TEST_GREP);
+     if(process.env.LQADWA_TEST_PROJECT)args.push('--project',process.env.LQADWA_TEST_PROJECT);
+     const browser=spawn(process.execPath,args,{stdio:'inherit',env:process.env});
      browser.once('error',reject);browser.once('exit',code=>code===0?resolve():reject(Error('Browser checks failed: '+code)));
     });
    } finally {await closeProxy();}
@@ -241,6 +259,6 @@ try{
  }
 }finally{
  const ids=users.slice(1).map(u=>quote(u.id)).join(','),pharmacies=createdPharmacies.map(quote).join(',');
- sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor='local-release-owner' AND action LIKE 'landing-%';UPDATE service_controls SET requests_paused=0,pickups_paused=0,message='',updated=0 WHERE id=1;DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner IN (${ids}));DELETE FROM reservations WHERE owner IN (${ids});DELETE FROM responses WHERE request IN (SELECT id FROM requests WHERE owner IN (${ids}));DELETE FROM requests WHERE owner IN (${ids});${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
+ await sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor='local-release-owner' AND action LIKE 'landing-%';UPDATE service_controls SET requests_paused=0,pickups_paused=0,message='',updated=0 WHERE id=1;DELETE FROM reservation_locations WHERE reservation IN (SELECT id FROM reservations WHERE owner IN (${ids}));DELETE FROM reservations WHERE owner IN (${ids});DELETE FROM responses WHERE request IN (SELECT id FROM requests WHERE owner IN (${ids}));DELETE FROM requests WHERE owner IN (${ids});${pharmacies?`DELETE FROM stock_items WHERE pharmacy IN (${pharmacies});DELETE FROM responses WHERE pharmacy IN (${pharmacies});DELETE FROM registered_pharmacies WHERE id IN (${pharmacies});`:''}DELETE FROM admin_members WHERE owner IN (${ids});DELETE FROM admin_invites WHERE email IN (${users.slice(1).map(u=>quote(u.email)).join(',')});DELETE FROM account_controls WHERE owner IN (${ids});DELETE FROM notifications WHERE owner IN (${ids});DELETE FROM mobile_sessions WHERE owner IN (${ids});DELETE FROM audit_log WHERE actor IN (${ids}) OR target IN (${ids});DELETE FROM profiles WHERE id IN (${ids});`);
  auth.closeAllConnections();await new Promise(resolve=>auth.close(resolve));
 }

@@ -7,7 +7,7 @@ import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
 import { pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
 import { createAvailabilityRequest } from "@/lib/request-service";
-import { publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
+import { inAlgeriaBounds, publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
 import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("collect"), reservation: id, pharmacy: id, code: z.string().regex(/^DZ-[A-F0-9]{8}$/), checked: z.literal(true) }),
   z.object({ action: z.literal("duty"), pharmacy: id, enabled: z.boolean() }),
   z.object({ action: z.literal("profile"), name: z.string().trim().min(2).max(121), city: cityId }),
-  z.object({ action: z.literal("register-pharmacy"), name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city: cityId, latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/), license: z.string().trim().min(5).max(100) }),
+  z.object({ action: z.literal("register-pharmacy"), name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city: cityId, latitude: z.number().min(18.9).max(37.2), longitude: z.number().min(-8.7).max(12), phone: z.string().regex(/^0\d{8,9}$/), license: z.string().trim().min(5).max(100) }),
   z.object({ action: z.literal("admin-review"), pharmacy: id, status: z.enum(["approved", "rejected", "suspended"]) }),
   z.object({ action: z.literal("admin-invite-create"), email: adminEmail, permissions }),
   z.object({ action: z.literal("admin-permissions"), owner: id, permissions }),
@@ -72,7 +72,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   const sampleIds = legacySampleIds;
   const sampleRequests = new Set((results[2].results as Reply[]).filter((r) => sampleIds.has(r.pharmacy)).map((r) => r.request));
   const ownPharmacy = results[7].results[0] as Registered | undefined;
-  const directory = (results[6].results as PublicPharmacyRow[]).filter(p => !sampleIds.has(p.id)).map(pharmacyFromRow);
+  const directory = (results[6].results as PublicPharmacyRow[]).filter(p => !sampleIds.has(p.id) && inAlgeriaBounds(p.latitude / 1e6, p.longitude / 1e6)).map(pharmacyFromRow);
   const associatedIds = [...(results[2].results as Reply[]), ...(results[3].results as Booking[])].map(record => record.pharmacy);
   directory.push(...await relatedPharmacies(db, associatedIds, new Set(directory.map(p => p.id))));
   let admin: AppData["admin"] = null;

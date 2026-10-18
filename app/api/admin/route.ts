@@ -14,7 +14,7 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 const id = z.string().min(1).max(100), reason = z.string().trim().min(3).max(200);
 const city = z.enum(cities.map(c => c.id) as [string, ...string[]]);
 const pharmacyFields = { name: z.string().trim().min(3).max(100), address: z.string().trim().min(8).max(160), city,
-  latitude: z.number().min(18.9).max(38), longitude: z.number().min(-9).max(12), phone: z.string().regex(/^0\d{8,9}$/),
+  latitude: z.number().min(18.9).max(37.2), longitude: z.number().min(-8.7).max(12), phone: z.string().regex(/^0\d{8,9}$/),
   license: z.string().trim().min(5).max(100), hours: z.string().trim().min(3).max(100), duty: z.boolean() };
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("account-edit"), id, name: z.string().trim().min(2).max(121), city, details: personalSchema.optional(), reason }),
