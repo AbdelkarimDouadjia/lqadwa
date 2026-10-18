@@ -1,5 +1,5 @@
 import { cities, legacySampleIds, type Pharmacy } from "@/lib/domain";
-import { discoveryQuery, publicPharmacyColumns } from "./pharmacy-discovery-query.mjs";
+import { discoveryQuery, inAlgeriaBounds, publicPharmacyColumns } from "./pharmacy-discovery-query.mjs";
 
 export type PublicPharmacyRow = {
   id: string; name: string; address: string; city: string; latitude: number;
@@ -35,7 +35,7 @@ export async function relatedPharmacies(db: D1Database, ids: string[], present: 
   for (let offset = 0; offset < missing.length; offset += 90) {
     const chunk = missing.slice(offset, offset + 90);
     const rows = await db.prepare(`SELECT ${publicPharmacyColumns} FROM registered_pharmacies WHERE status='approved' AND id IN (${chunk.map(() => '?').join(',')})`).bind(...chunk).all<PublicPharmacyRow>();
-    items.push(...rows.results.map(pharmacyFromRow));
+    items.push(...rows.results.filter(row => inAlgeriaBounds(row.latitude / 1e6, row.longitude / 1e6)).map(pharmacyFromRow));
   }
   return items;
 }

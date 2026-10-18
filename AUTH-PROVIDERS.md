@@ -23,7 +23,7 @@ Requires an existing eligible Apple Developer setup (Team ID, App ID, Services I
 
 ## Email / launch gate
 
-1 October 2026 fresh dashboard inspection: custom SMTP switch `aria-checked=false`. Public email delivery is not accepted yet. Owner must enable/save a free sender directly in Supabase and verify confirmation and password recovery using an eligible non-team address. Do not disable email confirmation to bypass delivery limits.
+The owner confirmed SMTP setup on 18 October 2026. Signup confirmation and password recovery are implemented through Supabase Auth; polished Arabic-first templates live in `supabase/templates/`. SMTP state and mailbox delivery have not been independently verified in this workspace. Apply the templates and complete a real inbox test before broad public signup. Do not disable email confirmation to bypass delivery limits. See `docs/auth-email-templates.md`.
 
 ## Maps
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {performance} from 'node:perf_hooks';
-import {discoveryQuery} from '../lib/pharmacy-discovery-query.mjs';
+import {discoveryQuery,inAlgeriaBounds} from '../lib/pharmacy-discovery-query.mjs';
 
 // Local in-memory SQLite only. These timings are NOT Cloudflare D1/network latency.
 const measurements=[];
@@ -17,12 +17,16 @@ for(const size of [10,100,300,1000,10000]){
   insert.run('fixture-'+String(i).padStart(5,'0'),(selected?'ZZ':'AA')+' FICTIONAL '+i,'FICTIONAL',selected?'algiers':'oran',36753000+i%100*100,3058000+i%100*100,'0000000000',i%2,'LOCAL','approved');
  }
  db.exec('COMMIT');
+ insert.run('outside-algeria','ZZ FICTIONAL OUTSIDE','FICTIONAL','algiers',38000000,11000000,'0000000000',1,'LOCAL','approved');
+ assert(inAlgeriaBounds(36.7538,3.0588));
+ assert(!inAlgeriaBounds(38,11));
  const options={city:'algiers',lat:36.753,lng:3.058,night:false,limit:25,excluded:[]};
  const query=discoveryQuery(options),statement=db.prepare(query.sql);
  const old=db.prepare("SELECT * FROM registered_pharmacies WHERE status='approved' ORDER BY name LIMIT 300");
  const oldTargets=old.all().filter(p=>p.city==='algiers').slice(0,25);
  const newTargets=statement.all(...query.parameters);
  assert.equal(newTargets.length,Math.min(25,Math.ceil(size/5)));
+ assert(!newTargets.some(row=>row.id==='outside-algeria'),'Out-of-country pharmacies must never enter discovery');
  assert(newTargets.every(row=>!('owner' in row)&&!('license' in row)));
  const plan=db.prepare('EXPLAIN QUERY PLAN '+query.sql).all(...query.parameters).map(row=>row.detail);
  assert(plan.some(detail=>detail.includes('registered_pharmacies_city_idx')),'City/status index must be used');

@@ -42,6 +42,7 @@ public final class NativeDesignTest extends Instrumentation {
   getInstrumentation().runOnMainSync(()->getActivity().getOnBackPressedDispatcher().onBackPressed());getInstrumentation().waitForIdleSync();
   Field signing=MainActivity.class.getDeclaredField("signingIn");signing.setAccessible(true);assertFalse(signing.getBoolean(getActivity()));
   render("ar","search",true);capture("search-ar");
+  render("ar","guide",true);capture("guide-ar");
   render("en","map",true);capture("map-en");
   render("fr","bookings",true);capture("bookings-fr");
   render("en","account",true);capture("account-en");

@@ -10,6 +10,8 @@ Motion expresses a destination change, not a network refresh. Short fade-and-ris
 
 Forms stay native. Sign-in becomes a full-screen task with a normal Back action, while confirmations and filters remain dialogs. The map appears before route controls, with enough visible area for panning. A compact action grid replaces the search screen's stack of equally weighted buttons. Roles, consent, OCR review and server authorization are unchanged.
 
+Account now opens an in-app, numbered three-step service guide. It explains medicine/location search, pharmacist confirmation and two-hour pickup, then the required in-person handoff—without implying delivery or online payment. The guide keeps the same 220 ms destination transition, respects reduced motion and returns to Account with Android Back.
+
 ```
 [ rounded mark / destination             theme | language ]
 [ title / short guidance                                  ]
@@ -28,3 +30,7 @@ Generated with the built-in image-generation tool, generation mode, 15 October 2
 Prompt: “Original polished editorial 3D clay illustration for the welcome screen of LQADWA, an Algerian pharmacy-finding Android app. A small ivory neighborhood pharmacy with a deep teal cross, pale apricot path and sky blue location pin; warm soft lighting and tactile matte materials. Ivory #F6F5F0, teal #08776B and #173B36, sky #DCEAF8, apricot #FFE2CC. Landscape 3:2, generous breathing room. No people, words, UI, phone mockup, medicine brands or watermark. Decorative onboarding illustration, not an actual pharmacy.”
 
 The installed ui-ux-pro-max search-script path is a 34-byte redirect file with no executable scripts at that location. Its mobile design and accessibility checklist was applied directly instead.
+
+## External visual research
+
+I reviewed public Dribbble concepts for their healthcare color restraint, compact medicine search, map-first pharmacy discovery and readable card hierarchy: [PharmaNova](https://dribbble.com/shots/27146214-PharmaNova-Modern-Online-Pharmacy-Mobile-App-UI) and [PharmaVite](https://dribbble.com/shots/26942512-PharmaVite-Pharmacy-Finder-Delivery-App-UI). These are visual references, not assets or copied screens. LQADWA deliberately removes checkout and delivery patterns and instead emphasizes pharmacist confirmation, an expiring pickup reservation, and directions for in-person collection.

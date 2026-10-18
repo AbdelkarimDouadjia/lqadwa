@@ -106,9 +106,11 @@ test('public information pages render in every language and link into the servic
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/how-it-works?lang=fr');
   await page.getByRole('link', { name: 'Pour les pharmacies' }).first().click();
+  await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/\/for-pharmacies\?lang=fr$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
   await expect(page.locator('.public-information-page h1')).toHaveCount(1);
+  await expect(page.locator('.product-language')).toHaveAttribute('aria-haspopup', 'menu');
   await page.locator('.product-language').click();
   await page.getByRole('menuitem', { name: /English/ }).click();
   await expect(page).toHaveURL(/\/for-pharmacies\?lang=en$/);
