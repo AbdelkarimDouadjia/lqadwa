@@ -24,11 +24,13 @@ Engineering evidence only; no legal, clinical, mail-delivery or real-device cert
 | `npm run test:ai-safety` | Exit 0; five synthetic candidate cases, uncertainty spans, edit-distance metrics, assistant tool injection/limits/citations |
 | Standalone admin integration | Exit 0: AAL1 owner denied admin-data/CMS/actions, provider step-up succeeds; permission/invitation/CMS/health privacy checks. Full suite repeats amended stock/assistant regressions |
 | Standalone workflow integration | Exit 0: account isolation, hidden pickup codes, suspension/cancellation, location withdrawal/staleness, export/deletion/tombstones, opaque-token privilege denial and pickup rate limits |
-| Full browser run, then targeted editor regressions | Initial full run 16/18 passed. After the diagnosed fixes, editor passed Chromium (30.3s), Firefox (48.5s), and the final WebKit run (1.1m), including frame axe/Escape. Full combined rerun remains required in exact-head PR CI |
+| Full browser run, then exact-head PR CI | Initial local run 16/18 passed; diagnosed editor fixes passed targeted Chromium/Firefox/WebKit tests. On commit `9d52b232213b759c71a04ba2bdb24ebc4cfef283`, [CI run 40215151158](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/40215151158) web job passed the full 18-test suite in 4.7 minutes, plus API/build/check/lint/audit/OCR/AI checks |
 | `node scripts/ci-smoke.mjs` final API gate | Exit 0: discovery/concurrency/identity, admin/MFA/CMS/stock/assistant, auth/provider response contract, workflow/privacy and information-only tests all passed |
 | `wrangler deploy --dry-run` | Exit 0; 146 modules, upload 3783 KiB / gzip 996.33 KiB; 83 static assets. No deployment was made |
 | Android `assembleRelease assembleDebug assembleDebugAndroidTest lintRelease` | Exit 0; Gradle 8.13, 1m49s, latest native 16/1.1.1 source including durable retry metadata and logout clearing. Signing configuration preserved; unsigned outputs not advertised as distribution |
 | Local Android instrumentation | Not successfully run: emulator could not start because the Windows hypervisor driver is missing; no connected device. Compiling its APK is separate |
+| PR Android CI at `9d52b23` | Build/debug/test APK compilation and lint passed; emulator startup step timed out before instrumentation ran. Startup stderr was not retained, so the emulator failure cause is unknown. Follow-up runner diagnostics add bounded startup/adb calls and always-upload logs; no native test pass is inferred |
+| `node scripts/android-runner-smoke.mjs` | Exit 0 for fake-process early exit, no-device timeout, instrumentation failure rejection and success sentinel. This checks runner control flow only, not Android behavior |
 | Real phone signed install/upgrade | Not run |
 | Real non-team mailbox signup/recovery | Not run; no authorized inbox supplied |
 | Live pharmacy round trip | Not run; participating pharmacy acceptance not supplied |
