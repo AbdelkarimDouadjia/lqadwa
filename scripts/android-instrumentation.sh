@@ -45,12 +45,16 @@ while ((SECONDS<lqadwa_deadline)); do
   fi
   sleep 2
 done
-if [[ "$lqadwa_ready" != true ]]; then printf 'Emulator did not complete boot within %s seconds.\n' "$lqadwa_boot_limit" >&2; exit 1; fi
+if [[ "$lqadwa_ready" != true ]]; then
+  if ! kill -0 "$lqadwa_emulator_pid" 2>/dev/null; then printf 'Emulator exited before connecting to adb. See emulator.log.\n' >&2;
+  else printf 'Emulator did not complete boot within %s seconds.\n' "$lqadwa_boot_limit" >&2; fi
+  exit 1
+fi
 timeout 10s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" shell getprop > "$lqadwa_reports/device.txt"
 timeout 10s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" shell input keyevent 82
 timeout 90s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" install -r android/app/build/outputs/apk/debug/app-x86_64-debug.apk
 timeout 90s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-timeout 180s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" shell am instrument -w dz.lqidwa.pilot.design.test/dz.lqidwa.pilot.NativeDesignTest > "$lqadwa_reports/instrumentation.log" 2>&1
+timeout 180s "$lqadwa_sdk/platform-tools/adb" -s "$lqadwa_serial" shell am instrument -r -w dz.lqidwa.pilot.design.test/dz.lqidwa.pilot.NativeDesignTest > "$lqadwa_reports/instrumentation.log" 2>&1
 grep -q 'PASS: native screens' "$lqadwa_reports/instrumentation.log"
 grep -q 'INSTRUMENTATION_CODE: -1' "$lqadwa_reports/instrumentation.log"
 if grep -q 'FAIL:' "$lqadwa_reports/instrumentation.log"; then exit 1; fi

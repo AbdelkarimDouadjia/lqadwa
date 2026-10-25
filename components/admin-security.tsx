@@ -32,7 +32,7 @@ export function AdminSecurity() {
     try {
       const response = await fetch("/api/auth/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(enroll?{action:"enroll"}:{action:"verify",factorId:factor,code}), signal: AbortSignal.timeout(20000) });
       const data = await response.json() as MfaResponse; if (!response.ok) throw Error(data.error);
-      if (data.redirect) { setSecret(""); setQr(""); location.replace(data.redirect); return; }
+      if (data.redirect) { setSecret(""); setQr(""); location.replace(sessionStorage.getItem("dawa-admin-invite") ? "/" : data.redirect); return; }
       if (!data.factorId || !data.secret || !data.qrCode) throw Error("Incomplete authenticator enrollment");
       setFactor(data.factorId); setSecret(data.secret);
       setQr(data.qrCode.startsWith("data:image/") ? data.qrCode : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.qrCode)}`);

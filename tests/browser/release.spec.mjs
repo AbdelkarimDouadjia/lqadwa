@@ -177,6 +177,47 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   await accessible(page);
 });
 
+test.describe('administrator invitation',()=>{
+// This test injects an HTTP MFA challenge; worker-owned requests bypass page routes.
+test.use({serviceWorkers:'block'});
+test('survives MFA and resumes without granting owner access', async ({ page, context, request }) => {
+  test.setTimeout(90000);page.setDefaultTimeout(15000);
+  const origin='https://localhost:5443',headers={origin},password='LOCAL-only-unique-passphrase';
+  const localRequest={headers,ignoreHTTPSErrors:true};
+  expect((await request.post('/api/auth',{...localRequest,data:{action:'admin-login',identifier:'admin',password}})).status()).toBe(200);
+  const invitation=await request.post('/api/app',{...localRequest,data:{action:'admin-invite-create',email:'recipient@example.invalid',permissions:['audit']}});
+  expect(invitation.status()).toBe(200);const token=(await invitation.json()).invite;
+  let attempts=0,member='';
+  await context.addInitScript(()=>localStorage.setItem('dawa-language','en'));
+  await page.route('**/api/app',async route=>{
+    if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='admin-invite-redeem'&&++attempts===1)return route.fulfill({status:403,json:{error:'LOCAL step-up required',code:'MFA_REQUIRED'}});
+    return route.continue();
+  });
+  try{
+    await page.goto('/?admin_invite='+token);
+    await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel('Email address',{exact:true}).fill('recipient@example.invalid');
+    await page.getByLabel('Password',{exact:true}).fill(password);
+    await page.locator('form').getByRole('button',{name:'Sign in',exact:true}).click();
+    await expect(page).toHaveURL(/\/operations\/security$/,{timeout:30000});
+    expect(await page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
+    member=(await(await page.request.get('/api/app',{ignoreHTTPSErrors:true})).json()).profile.id;
+    await expect(page.locator('#totp-code')).toBeVisible();
+    await page.getByLabel('Language / اللغة').selectOption('en');
+    await page.getByLabel('Six-digit code',{exact:true}).fill('123456');
+    await page.getByRole('button',{name:'Verify access',exact:true}).click();
+    await expect(page).toHaveURL(/\/operations$/,{timeout:30000});await expect(page.getByRole('heading',{name:'Audit trail',exact:true})).toBeVisible();
+    expect(attempts).toBe(2);expect(await page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBeNull();
+    await expect(page.locator('.visual-editor-entry')).toHaveCount(0);
+    const data=await(await page.request.get('/api/app',{ignoreHTTPSErrors:true})).json();expect(data.admin.access).toEqual({isOwner:false,permissions:['audit']});
+  }finally{
+    if(member)await request.post('/api/app',{...localRequest,data:{action:'admin-revoke',owner:member}});
+    await request.post('/api/app',{...localRequest,data:{action:'admin-invites-revoke'}});
+  }
+});
+});
+
 test('visual editor: real drag-and-drop, live canvas, draft isolation, publication and restoration', async ({ page, context, browser }, info) => {
   page.setDefaultTimeout(15000);
   const apiOptions = { ignoreHTTPSErrors: true, headers: { origin: 'https://localhost:5443' } };

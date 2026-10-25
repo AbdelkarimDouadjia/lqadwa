@@ -71,6 +71,13 @@ try{
  const create=await request('/api/app',{action:'admin-invite-create',email:delegate.email,permissions:['pharmacies']},rootCookie),token=create.data.invite;assert(token);
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[other.id],403);
  assert.equal((await sql(`SELECT used_by FROM admin_invites WHERE hash=${quote(hash(token))};`))[0].results[0].used_by,null);
+ delegate.aal='aal1';sessions[delegate.id]=cookie((await request('/api/auth',{action:'login',email:delegate.email,password})).response);
+ assert.equal((await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],403)).data.code,'MFA_REQUIRED');
+ assert.equal((await sql(`SELECT used_by FROM admin_invites WHERE hash=${quote(hash(token))};`))[0].results[0].used_by,null,'Step-up must not consume the invitation');
+ const delegateFactor=(await request('/api/auth/mfa',null,sessions[delegate.id])).data.factors[0].id;
+ sessions[delegate.id]=cookie((await request('/api/auth/mfa',{action:'verify',factorId:delegateFactor,code:'123456'},sessions[delegate.id])).response);
+ assert.equal((await request('/api/app',null,sessions[delegate.id])).data.admin,null,'MFA alone must never grant an administrative role');
+ delegate.aal='aal2';
  const joined=await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id]);assert.deepEqual(joined.data.admin.access,{isOwner:false,permissions:['pharmacies']});
  assert.equal(joined.data.admin.accounts.length,0);assert.equal(joined.data.admin.activity.length,0);assert.equal(joined.data.admin.members.length,0);assert.equal(joined.data.admin.users,0);
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],409);
