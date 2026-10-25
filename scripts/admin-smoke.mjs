@@ -54,7 +54,7 @@ const cookie=response=>response.headers.getSetCookie().map(v=>v.split(';')[0]).f
 async function request(path,body,credential='',expected=200){
  const response=await fetch(base+path,{method:body?'POST':'GET',headers:{connection:'close',...(body?{origin:base,'content-type':'application/json'}:{}),...(credential?{cookie:credential}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual',signal:AbortSignal.timeout(20000)});
  const raw=await response.text(),data=response.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):raw;
- assert((Array.isArray(expected)?expected:[expected]).includes(response.status),`${body?.action||path}: expected ${expected}, received ${response.status}: ${typeof data==='object'?data.error:raw.slice(0,100)}`);return {response,data};
+ assert((Array.isArray(expected)?expected:[expected]).includes(response.status),`${body?.action||path}: expected ${expected}, received ${response.status}: ${typeof data==='object'?data.error:raw.slice(0,2000)}`);return {response,data};
 }
 try{
  assert.equal(adminLoginEmail(' ADMIN ',owner.email),owner.email);assert.equal(adminLoginEmail('Admin',undefined),'');assert.equal(adminLoginEmail(delegate.email,owner.email),delegate.email);
@@ -78,6 +78,9 @@ try{
  await request('/api/app',{action:'admin-invite-redeem',token},sessions[delegate.id],409);
  const d=await request('/api/auth',{action:'admin-login',identifier:delegate.email,password});assert.equal(d.data.redirect,'/operations');sessions[delegate.id]=cookie(d.response);
  // Landing CMS is owner-only, draft-first, validated, versioned and reversible.
+ await request('/operations/editor',null,'',307);
+ await request('/operations/editor',null,sessions[delegate.id],404);
+ assert((await request('/operations/editor?lang=en',null,rootCookie)).data.includes('builder-header'),'Owner gets the separate visual editor');
  const initialLanding=(await request('/api/landing')).data.content;assert.deepEqual(initialLanding,emptyLandingContent);
  await request('/api/landing',{action:'load'},'',401);
  await request('/api/landing',{action:'load'},sessions[delegate.id],403);

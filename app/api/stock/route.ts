@@ -21,7 +21,10 @@ export async function GET(request:Request){try{
  return json({rows:rows[0].results,total:(rows[1].results[0] as {total:number}).total,page,summary:rows[2].results[0]});
 }catch(e){return failure(e);}}
 export async function POST(request:Request){try{
- requireMutationOrigin(request);const {user,db,pharmacy}=await access(request);await rateLimit(user.userId,"stock-write",60);const input=schema.parse(await limitedJson(request));
+ requireMutationOrigin(request);
+ // Read the bounded body before a permission response closes the HTTP transport.
+ const input=schema.parse(await limitedJson(request));
+ const {user,db,pharmacy}=await access(request);await rateLimit(user.userId,"stock-write",60);
  const now=Date.now(),target=input.action==="create"?crypto.randomUUID():input.id;
  if(input.action!=="delete"&&await db.prepare("SELECT id FROM stock_items WHERE pharmacy=? AND lower(name)=lower(?) AND id!=?").bind(pharmacy,input.name,target).first())throw new HttpError("Medicine already exists; edit its entry",409);
  const write=input.action==="create"?db.prepare("INSERT INTO stock_items(id,pharmacy,name,quantity,updated) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registered_pharmacies WHERE id=? AND owner=? AND status='approved')").bind(target,pharmacy,input.name,input.quantity,now,pharmacy,user.userId):input.action==="edit"?db.prepare("UPDATE stock_items SET name=?,quantity=?,updated=? WHERE id=? AND pharmacy=? AND updated=? AND EXISTS(SELECT 1 FROM registered_pharmacies WHERE id=? AND owner=? AND status='approved')").bind(input.name,input.quantity,Math.max(now,input.updated+1),input.id,pharmacy,input.updated,pharmacy,user.userId):db.prepare("DELETE FROM stock_items WHERE id=? AND pharmacy=? AND updated=? AND EXISTS(SELECT 1 FROM registered_pharmacies WHERE id=? AND owner=? AND status='approved')").bind(input.id,pharmacy,input.updated,pharmacy,user.userId);

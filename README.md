@@ -42,6 +42,8 @@ These are real captures of the public Arabic “How it works” page on 18 Octob
 | Owner / delegated admin | Review pharmacy applications, manage accounts and service controls, inspect scoped analytics, update landing-page content, and assign or revoke permission-scoped admin access. The admin route is protected and is not linked from public navigation. |
 | Native Android | Native Material screens for search, reservations, map, account, pharmacy operations, OCR review, QR pickup and the new in-app service guide. It is not a WebView wrapper. |
 
+The owner’s [visual page editor](https://lqadwa.lqadwa-dz.workers.dev/operations/editor) has a dedicated canvas, draggable layers, section insertion, contextual text/style controls, four-language editing, responsive previews, undo/redo, private drafts and versioned publication. It uses the actual public page components; owner authorization is enforced on the page and API. See [the operating guide](OPERATIONS.md#visual-page-editor-25-october-2026).
+
 ### Trust and service limits
 
 - A pharmacy confirms availability; a catalogue entry or directory listing is not proof of current stock.

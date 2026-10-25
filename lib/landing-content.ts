@@ -17,6 +17,7 @@ const localeBlockSchema = z.object({ heading: z.string().trim().max(100).optiona
 const languageMap = <T extends z.ZodTypeAny>(schema: T) => z.object({ ar: schema, fr: schema, en: schema, kab: schema }).partial().strict();
 const contentBlockSchema = z.object({
   id: z.string().uuid(), enabled: z.boolean(), target: z.enum(["none", "search", "pharmacy", "directory", "journey"]), copy: languageMap(localeBlockSchema),
+  appearance: z.object({ tone: z.enum(["soft", "plain", "brand"]), align: z.enum(["start", "center"]) }).strict().optional(),
 }).strict();
 
 export const landingContentSchema = z.object({
@@ -25,11 +26,35 @@ export const landingContentSchema = z.object({
   sections: z.object(Object.fromEntries(landingSectionKeys.map(key => [key, z.boolean().optional()]))).strict(),
   order: z.array(z.enum(landingSectionKeys)).length(landingSectionKeys.length).refine(values => new Set(values).size === landingSectionKeys.length),
   blocks: z.array(contentBlockSchema).max(8),
-}).strict();
+  layout: z.array(z.union([z.enum(landingSectionKeys), z.string().uuid()])).max(14).optional(),
+}).strict().superRefine((content, context) => {
+  if (new Set(content.blocks.map(block => block.id)).size !== content.blocks.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["blocks"], message: "Each content section needs a unique identifier." });
+  }
+  if (!content.layout) return;
+  const ids = new Set([...landingSectionKeys, ...content.blocks.map(block => block.id)]);
+  if (content.layout.length !== ids.size || new Set(content.layout).size !== ids.size || content.layout.some(id => !ids.has(id))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["layout"], message: "Include each section exactly once." });
+  }
+});
 
 export const emptyLandingContent: LandingContent = {
   version: 1, copy: {}, sections: {}, order: [...landingSectionKeys], blocks: [],
 };
+
+/** Older saved pages keep their original order until the owner rearranges them. */
+export function landingLayout(content: LandingContent): string[] {
+  return content.layout ?? [...content.order, ...content.blocks.map(block => block.id)];
+}
+
+export function reorderLanding(content: LandingContent, source: string, target: string, after = false): LandingContent {
+  const layout = [...landingLayout(content)];
+  if (source === target || !layout.includes(source) || !layout.includes(target)) return content;
+  layout.splice(layout.indexOf(source), 1);
+  layout.splice(layout.indexOf(target) + Number(after), 0, source);
+  if (layout.every((id, index) => id === landingLayout(content)[index])) return content;
+  return { ...content, layout, order: layout.filter((id): id is LandingSectionKey => (landingSectionKeys as readonly string[]).includes(id)) };
+}
 
 export function parseLandingContent(value: unknown): LandingContent {
   let parsed = value;
