@@ -67,6 +67,9 @@ jobs:
         run: |
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
+          # Headless QEMU still links libpulse; it is absent on this runner image.
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y libpulse0
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'platform-tools' 'system-images;android-34;google_apis;x86_64'
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name lqadwa-ci --package 'system-images;android-34;google_apis;x86_64'
           bash scripts/android-instrumentation.sh

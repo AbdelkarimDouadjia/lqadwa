@@ -24,6 +24,7 @@ export async function createAvailabilityRequest(db: D1Database, owner: string, o
     db.prepare(`INSERT INTO requests(id,owner,medicine,city,created) SELECT ?,?,?,?,?
       WHERE NOT EXISTS(SELECT 1 FROM closed_accounts WHERE hash=?)
       AND NOT EXISTS(SELECT 1 FROM account_controls WHERE owner=? AND suspended=1)
+      AND NOT EXISTS(SELECT 1 FROM service_controls WHERE id=1 AND requests_paused=1)
       AND (EXISTS(SELECT 1 FROM requests WHERE id=? AND owner=?) OR (SELECT count(*) FROM requests WHERE owner=? AND created>?)<8)
       ON CONFLICT(id) DO NOTHING`).bind(input.token, owner, medicine.label, input.city, now, ownerHash, owner, input.token, owner, owner, now - 60_000),
     db.prepare(`INSERT INTO request_identity(request,medicine_id,catalog_version,identity_json,selection_source,verification,payload_json)
@@ -45,7 +46,10 @@ export async function createAvailabilityRequest(db: D1Database, owner: string, o
       ON CONFLICT(id) DO NOTHING`).bind(notice, now, input.token, owner),
   ]);
   const stored = await db.prepare("SELECT i.payload_json AS payload FROM requests r JOIN request_identity i ON i.request=r.id WHERE r.id=? AND r.owner=?").bind(input.token, owner).first<{payload:string}>();
-  if (!stored) throw new HttpError("تعذر إنشاء الطلب. انتظر قليلاً وأعد المحاولة. / Request unavailable; retry shortly.", 429);
+  if (!stored) {
+    if (await db.prepare("SELECT 1 FROM service_controls WHERE id=1 AND requests_paused=1").first()) throw new HttpError("الخدمة متوقفة مؤقتاً بقرار الإدارة. / Service temporarily paused by administration.", 409, "SERVICE_PAUSED");
+    throw new HttpError("تعذر إنشاء الطلب. انتظر قليلاً وأعد المحاولة. / Request unavailable; retry shortly.", 429);
+  }
   if (stored.payload !== payload) throw conflict();
   if (!await db.prepare("SELECT 1 FROM responses WHERE request=? LIMIT 1").bind(input.token).first()) throw new HttpError("لم تبقَ صيدلية معتمدة لهذا الطلب. أعد البحث. / No approved recipient remains; retry the search.", 409);
 }
