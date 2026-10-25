@@ -2,7 +2,7 @@
 
 Decision: **BLOCKED for production publication / READY_CORE not established.**
 
-This document supersedes historical release claims where they conflict with fresh evidence. The existing site remains on its October 18 Worker. The candidate implements a safe `INFORMATION_ONLY` default, but that default is not active on the old deployed code. No live migration, account change, provider configuration change, signing-key change or new deployment was performed during this implementation.
+This document supersedes historical release claims where they conflict with fresh evidence. The existing site remains on its October 18 Worker. The candidate implements a safe `INFORMATION_ONLY` default, but that default is not active on the old deployed code. After explicit user approval, additive migrations 0013/0014 were applied and verified on 25 October. No live account change, provider configuration change, signing-key change or application deployment was performed.
 
 ## Gate matrix
 
@@ -12,7 +12,7 @@ This document supersedes historical release claims where they conflict with fres
 | Baseline CI | GitHub run `39136734212` succeeded for exact main SHA; this does not validate the new candidate or production | Engineering |
 | Candidate checks | See [release-evidence](release-evidence.md); review-branch CI must pass on its final SHA | Engineering |
 | Live deployment identity | Cloudflare deployment `cb7edb74-2771-4b71-8fc5-65aa67974960`, Worker version `60fa7df1-4e94-4d73-be5f-1bbd5e498ad1`, 2026-10-18 14:37 UTC; health reports 1.1.0 | Engineering |
-| Live schema | Fresh read-only query confirmed migrations 0000–0012. Earlier transient 7403 error was superseded by a successful query. Proposed 0013/0014 are not applied | Engineering / operator approval |
+| Live schema | Explicit approval obtained; fresh backup/rehearsal passed, then only 0013/0014 applied. Read-only verification confirms 0000–0014, request identity table, nullable stock columns and zero FK violations; old 1.1.0 health remains 200 | Engineering / approved operator action completed |
 | Backup and rehearsal | Fresh protected export; local restore + both additive migrations passed; existing rows preserved. No restore against production | Engineering |
 | Real signup and recovery | **Not verified.** SMTP previously reported configured; no authorized non-team inbox/receipt/callback test supplied in this session | Operator + inbox owner |
 | Participating pharmacy | **Not established.** A database account or approved flag is insufficient evidence of license, pin, hours, staffing or a working response agreement | Operator + participating pharmacist |

@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {releasePolicy,requiresCore,healthUpdateAllowed} from '../lib/release-policy.ts';
 import {hasRecentMfa} from '../lib/mfa-assurance.ts';
 import {medicineCatalog,normalizeMedicine,resolveMedicine,searchMedicines,catalogVersion} from '../lib/medicine-catalog.ts';
 import {validateReleaseApproval,informationGates,coreGates} from '../lib/release-approval.mjs';
+const manifest=JSON.parse(readFileSync('lib/medicine-catalog-manifest.json','utf8')),records=JSON.parse(readFileSync('lib/medicines-2026.json','utf8'));
+assert.equal(manifest.catalogVersion,catalogVersion,'Catalog version must match the reviewed manifest');
+assert.equal(manifest.records,records.length);
+assert.equal(createHash('sha256').update(JSON.stringify(records)).digest('hex'),manifest.sha256,'Frozen catalog was changed/reordered: publish a new version and reviewed crosswalk instead');
 assert.equal(releasePolicy().mode,'INFORMATION_ONLY');
 for(const mode of ['core','',undefined,'CORE_SERVICE','false'])assert.equal(releasePolicy({RELEASE_MODE:mode}).availabilityRequests,false);
 assert.deepEqual(releasePolicy({RELEASE_MODE:'CORE'}),{mode:'CORE',registration:true,availabilityRequests:true,healthCollection:false,prescriptionAI:false,assistant:false});

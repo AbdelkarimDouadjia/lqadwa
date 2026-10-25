@@ -14,9 +14,12 @@ try{
  const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all().map(row=>row.name);
  const counts=()=>Object.fromEntries(tables.map(name=>[name,db.prepare('SELECT count(*) AS n FROM "'+name.replaceAll('"','""')+'"').get().n]));
  const before=counts();
- for(const migration of ['0013_request_identity.sql','0014_stock_identity.sql'])db.exec(readFileSync('drizzle/'+migration,'utf8'));
+ const applied=new Set(db.prepare('SELECT name FROM d1_migrations').all().map(row=>row.name)),rehearsed=[];
+ for(const migration of ['0013_request_identity.sql','0014_stock_identity.sql'])if(!applied.has(migration)){db.exec(readFileSync('drizzle/'+migration,'utf8'));rehearsed.push(migration);}
  assert.deepEqual(counts(),before,'Additive migration must preserve all existing rows');
- assert.equal(db.prepare('SELECT count(*) AS n FROM request_identity').get().n,0);
+ if(!tables.includes('request_identity'))assert.equal(db.prepare('SELECT count(*) AS n FROM request_identity').get().n,0);
+ db.prepare('SELECT request,medicine_id,catalog_version,identity_json,selection_source,verification,payload_json FROM request_identity LIMIT 0').all();
+ db.prepare('SELECT medicine_id,catalog_version,identity_json FROM stock_items LIMIT 0').all();
  assert(db.prepare("SELECT name FROM sqlite_master WHERE name='landing_content'").get());
  assert(db.prepare("SELECT name FROM sqlite_master WHERE name='landing_content_revisions'").get());
  db.exec("SAVEPOINT old_client_compatibility");
@@ -33,5 +36,5 @@ try{
  assert.deepEqual(counts(),before,'Compatibility exercise must leave the restored records unchanged');
  assert.equal(db.prepare('PRAGMA quick_check').get().quick_check,'ok');
  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0,'Migrated rehearsal has foreign-key inconsistencies');
- console.log(JSON.stringify({status:'PASS',backupSha256:createHash('sha256').update(sql).digest('hex'),backupBytes:Buffer.byteLength(sql),existingRowsPreserved:true,legacySqlCompatibility:true,landingTables:true,additiveMigrations:['0013_request_identity.sql','0014_stock_identity.sql'],productionModified:false}));
+ console.log(JSON.stringify({status:'PASS',backupSha256:createHash('sha256').update(sql).digest('hex'),backupBytes:Buffer.byteLength(sql),existingRowsPreserved:true,legacySqlCompatibility:true,landingTables:true,additiveMigrations:['0013_request_identity.sql','0014_stock_identity.sql'],appliedInRehearsal:rehearsed,productionModified:false}));
 }finally{db.close();}

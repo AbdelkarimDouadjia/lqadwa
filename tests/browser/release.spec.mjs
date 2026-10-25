@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {readFile} from 'node:fs/promises';
 
 const widths = [320, 360, 375, 390, 414, 768, 1024, 1440];
 const languages = ['ar', 'fr', 'en', 'kab'];
@@ -218,7 +219,9 @@ test('survives MFA and resumes without granting owner access', async ({ page, co
 });
 });
 
-test('visual editor: real drag-and-drop, live canvas, draft isolation, publication and restoration', async ({ page, context, browser }, info) => {
+test.describe('visual editor',()=>{
+test.use({serviceWorkers:'block'});
+test('real drag-and-drop, draft files, MFA recovery, publication and restoration', async ({ page, context, browser }, info) => {
   page.setDefaultTimeout(15000);
   const apiOptions = { ignoreHTTPSErrors: true, headers: { origin: 'https://localhost:5443' } };
   await context.addInitScript(() => localStorage.setItem('dawa-language', 'en'));
@@ -272,7 +275,7 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
 
     await frame.getByRole('button', { name: 'Select section: How it works', exact: true }).click();
-    await expect(inspector.locator('h3')).toHaveText('How it works');
+    await expect(inspector.locator('.builder-selection-heading h3')).toHaveText('How it works');
     await page.locator('.builder-panel-tabs').getByRole('button', { name: 'Insert', exact: true }).click();
     // Real pointer drag crosses from the insertion palette into the preview iframe.
     const card = await page.getByRole('button', { name: 'Text section', exact: true }).boundingBox();
@@ -324,7 +327,31 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
     await page.getByRole('button', { name: 'Desktop', exact: true }).click();
     await page.getByRole('button', { name: 'Toggle preview theme', exact: true }).click();
 
+    const headline=page.getByLabel('Headline - first line',{exact:true}),beforeImport=await headline.inputValue();
+    const downloadReady=page.waitForEvent('download');await page.getByRole('button',{name:'Export draft',exact:true}).click();
+    const download=await downloadReady,draftBytes=await readFile(await download.path());
+    expect(JSON.parse(draftBytes.toString()).format).toBe('lqadwa-landing-draft');
+    await headline.fill('LOCAL EDIT BEFORE IMPORT');
+    const fileInput=page.locator('input[type=file]');
+    await fileInput.setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{"format":"foreign"}')});
+    await expect(page.locator('.builder-request-error')).toHaveText('Choose a valid LQADWA draft file, at most 512 KB.');
+    await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await fileInput.setInputFiles({name:'draft.json',mimeType:'application/json',buffer:draftBytes});
+    await expect(page.getByRole('dialog')).toContainText('Replace only the current draft');
+    await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click();
+    await expect(headline).toHaveValue(beforeImport);
+    await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(headline).toHaveValue(beforeImport);
+    expect((await page.request.get('/api/landing',apiOptions).then(r=>r.json())).content).toEqual(original);
+    const requireMfa=route=>route.request().method()==='POST'&&route.request().postDataJSON()?.action==='save'?route.fulfill({status:403,json:{code:'MFA_REQUIRED',error:'LOCAL authenticator renewal required'}}):route.continue();
+    await page.route('**/api/landing',requireMfa);
+    await page.getByRole('button',{name:'Save draft',exact:true}).click();
+    await expect(page.getByRole('link',{name:'Verify in another tab',exact:true})).toHaveAttribute('target','_blank');
+    await expect(headline).toHaveValue(beforeImport);
+    await page.unroute('**/api/landing',requireMfa);
     await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await expect(page.locator('.builder-session-help')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
     expect((await page.request.get('/api/landing', apiOptions).then(r => r.json())).content).toEqual(original);
     await page.reload();
@@ -379,4 +406,5 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
       expect(restored.status()).toBe(200);
     }
   }
+});
 });

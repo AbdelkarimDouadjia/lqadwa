@@ -50,18 +50,21 @@ export async function POST(request: Request) {
     }
 
     const row = await current();
+    if (input.action === "save" && row && row.draft_version === input.draftVersion + 1 && row.draft_json === JSON.stringify(input.content)) {
+      return json({ ok: true, unchanged: true, draftVersion: row.draft_version, updatedAt: row.updated_at });
+    }
     if ((row?.draft_version ?? 0) !== input.draftVersion) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الحفظ.", 409);
     const now = Date.now();
 
     if (input.action === "save") {
-      const saved = await db.prepare(`INSERT INTO landing_content
+      const saved = await db.batch([db.prepare(`INSERT INTO landing_content
         (id,draft_json,published_json,draft_version,published_version,updated_by,updated_at,published_at)
         VALUES ('main',?,?,1,0,?,?,0)
         ON CONFLICT(id) DO UPDATE SET draft_json=excluded.draft_json,draft_version=landing_content.draft_version+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at
         WHERE landing_content.draft_version=?`)
-        .bind(JSON.stringify(input.content), emptyJson, user.userId, now, input.draftVersion).run();
-      if (!saved.meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الحفظ.", 409);
-      await audit(user.userId, "landing-draft-save", "main", "Landing page draft saved").run();
+        .bind(JSON.stringify(input.content), emptyJson, user.userId, now, input.draftVersion),
+        audit(user.userId, "landing-draft-save", "main", "Landing page draft saved", true)]);
+      if (!saved[0].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الحفظ.", 409);
       return json({ ok: true, draftVersion: input.draftVersion + 1, updatedAt: now });
     }
 
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
     if (!results[1].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الاستعادة.", 409);
     return json({ ok: true, draftVersion: input.draftVersion + 1, publishedVersion: (row?.published_version ?? 0) + 1, publishedAt: now });
   } catch (error) {
-    if (error instanceof HttpError) return json({ error: error.message }, error.status);
+    if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status);
     if (error instanceof z.ZodError) return json({ error: "راجع الحقول المدخلة؛ بعض النصوص طويلة أو غير صالحة." }, 400);
     console.error("Landing content operation failed", error instanceof Error ? error.name : "unknown");
     return json({ error: "تعذّر حفظ محتوى الصفحة. بيانات المسودة محفوظة؛ حاول مجدداً." }, 503);

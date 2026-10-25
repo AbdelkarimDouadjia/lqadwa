@@ -2,6 +2,12 @@
 
 Engineering evidence only; no legal, clinical, mail-delivery or real-device certification. Workflow/browser fixtures were synthetic and loopback-only. No real prescription was used in screenshots or tests.
 
+## Authorized database follow-up
+
+The user subsequently explicitly approved production migrations 0013 and 0014. A new ACL-restricted backup (12,967 bytes; SHA-256 `eec399ee669d4909650c97600ece6e71e42c2747e9cd2ea92f04bedaa5dcffec`) restored locally with row preservation, integrity/FK and legacy SQL compatibility checks passing. Immediately before applying, the tool verified that the only pending migrations were those exact two files. Both were applied successfully. Read-only verification confirms migrations 0000–0014, the identity table, nullable stock columns, and zero FK violations. Existing production health remains HTTP 200 / version 1.1.0. No application was deployed.
+
+The post-migration backup (13,669 bytes; SHA-256 `81dd27d06ae6a410e8b15de2037c444f5fb53fc884d4391ac415cacf4bcba639`) also restored successfully. The rehearsal now handles both old backups needing the additive migrations and already-migrated backups, preserving any existing identity rows and verifying actual columns. Backup SQL and export URLs are never committed; export logs redact temporary links. Historical observations below describe their point in time; the pending-migration status is superseded by this approved operation.
+
 ## Fresh source and production comparison
 
 - `git fetch origin` completed. Main remains `fd2f052ae204c2849580c2cab7088e32534a78de`. Existing editor/dependency work was preserved in `e00af2d`; candidate branch is `feat/core-release-readiness`. No reset/reversion.
@@ -12,6 +18,8 @@ Engineering evidence only; no legal, clinical, mail-delivery or real-device cert
 - Local `scripts/restore-rehearsal.mjs` exited 0: integrity, CMS tables, additive migrations 0013/0014, existing rows and legacy request/profile/stock SQL compatibility passed. Compatibility writes ran inside a rolled-back savepoint. No production migration or restore.
 
 ## Candidate commands and results
+
+Follow-up editor work adds validated local draft-file export/import with confirmation and Undo, an MFA-renewal link that preserves the open canvas, idempotent identical save retries, and atomic draft/audit commits. The isolated API regression forces audit failure and verifies rollback; targeted Chromium editor workflow passed in 45.1s, including actual drag, files, invalid-input rejection, MFA error recovery, publication/history and accessibility/layout checks. The ordered medicine-catalog fingerprint check passed. Local pre- and post-migration restore rehearsals both passed. Consult PR #7 exact-head CI for combined cross-browser/native follow-up results.
 
 | Command / check | Observed result |
 |---|---|

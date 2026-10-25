@@ -24,7 +24,7 @@ async function sql(command){
   localDatabaseId=data.result.find(database=>database.name==='DB')?.uuid;
   assert(localDatabaseId,'Local Wrangler D1 database binding was not found');
  }
- const statements=command.split(';').map(statement=>statement.trim()).filter(Boolean);
+ const statements=Array.isArray(command)?command:command.split(';').map(statement=>statement.trim()).filter(Boolean);
  const response=await fetch(`${explorer}/d1/database/${localDatabaseId}/raw`,{method:'POST',headers:{connection:'close','content-type':'application/json'},body:JSON.stringify({batch:statements.map(sql=>({sql}))}),signal:AbortSignal.timeout(10000)});
  const data=await response.json();
  if(!response.ok||!data.success||data.result?.some(result=>!result.success))throw Error(`Local D1 query failed: ${data.errors?.[0]?.message||data.result?.find(result=>!result.success)?.error||response.status}`);
@@ -97,9 +97,14 @@ try{
  await request('/api/landing',{action:'save',draftVersion:0,content:largeInvalidLanding},rootCookie,400);
  const draftLanding=structuredClone(emptyLandingContent);draftLanding.copy={ar:{titleA:'LOCAL OWNER DRAFT'}};draftLanding.sections={journey:false,pharmacy:false,faq:false};
  draftLanding.blocks=[{id:randomUUID(),enabled:true,target:'journey',copy:{ar:{heading:'LOCAL SECTION',body:'LOCAL BODY',button:'LOCAL CTA'} }},{id:randomUUID(),enabled:true,target:'none',copy:{ar:{heading:'',body:'',button:''}}}];
+ await sql(["CREATE TRIGGER local_cms_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='landing-draft-save' BEGIN SELECT RAISE(ABORT,'LOCAL FORCED CMS AUDIT FAILURE'); END;"]);
+ try{await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie,503);assert.equal((await request('/api/landing',{action:'load'},rootCookie)).data.draftVersion,0,'Audit failure must roll back the draft save');}
+ finally{await sql('DROP TRIGGER local_cms_audit_failure;');}
  const draftSaved=await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie);assert.equal(draftSaved.data.draftVersion,1);
  assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Unsaved public copy is never exposed');
- await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie,409);
+ const repeatedDraft=await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie);assert.equal(repeatedDraft.data.draftVersion,1);assert.equal(repeatedDraft.data.unchanged,true,'An ambiguous save retry recovers the committed draft');
+ assert.equal((await sql("SELECT count(*) AS n FROM audit_log WHERE action='landing-draft-save'"))[0].results[0].n,1,'One audit record for a retried draft save');
+ await request('/api/landing',{action:'save',draftVersion:0,content:emptyLandingContent},rootCookie,409);
  const draftLoaded=await request('/api/landing',{action:'load'},rootCookie);assert.equal(draftLoaded.data.draft.copy.ar.titleA,'LOCAL OWNER DRAFT');assert.equal(draftLoaded.data.draft.blocks[1].copy.ar.heading,'');
  const publishedLanding=await request('/api/landing',{action:'publish',draftVersion:1},rootCookie);assert.equal(publishedLanding.data.publishedVersion,1);
  assert.equal((await request('/api/landing')).data.content.copy.ar.titleA,'LOCAL OWNER DRAFT');

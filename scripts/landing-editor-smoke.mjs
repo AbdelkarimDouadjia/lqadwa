@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { emptyLandingContent, landingContentSchema, landingLayout, parseLandingContent, reorderLanding } from '../lib/landing-content.ts';
+import { emptyLandingContent, landingContentSchema, landingLayout, parseLandingContent, reorderLanding, importLandingDraft, exportLandingDraft, landingDraftFileMaxBytes } from '../lib/landing-content.ts';
 
 const original = structuredClone(emptyLandingContent), id = randomUUID();
 original.blocks = [{ id, enabled: true, target: 'search', copy: { en: { heading: 'Find a pharmacy', body: 'Collect your medicine in person.' } } }];
@@ -22,4 +22,7 @@ for (const layout of [[], ['journey', 'journey'], [...moved.layout, id], moved.l
 assert(!landingContentSchema.safeParse({ ...original, blocks: [...original.blocks, original.blocks[0]] }).success);
 assert(landingContentSchema.safeParse({ ...moved, blocks: [{ ...moved.blocks[0], appearance: { tone: 'brand', align: 'center' } }] }).success);
 assert(!landingContentSchema.safeParse({ ...moved, blocks: [{ ...moved.blocks[0], appearance: { tone: 'javascript:alert(1)', align: 'center' } }] }).success);
+assert.deepEqual(importLandingDraft(exportLandingDraft(moved)),moved,'Draft files preserve locale copy, order and appearance');
+for(const raw of ['not json','{}',JSON.stringify({format:'lqadwa-landing-draft',fileVersion:2,content:moved}),JSON.stringify({format:'lqadwa-landing-draft',fileVersion:1,content:{...moved,blocks:[{...moved.blocks[0],target:'javascript:alert(1)'}]}}),' '.repeat(landingDraftFileMaxBytes+1)])assert.throws(()=>importLandingDraft(raw));
+assert.throws(()=>importLandingDraft('é'.repeat(landingDraftFileMaxBytes/2+1)),'UTF-8 byte limit applies before parsing');
 console.log('PASS: backward-compatible layouts, immutable interleaved section moves, round trips and validated identifiers/appearance.');
