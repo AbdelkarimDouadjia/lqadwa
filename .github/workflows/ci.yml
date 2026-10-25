@@ -64,6 +64,8 @@ jobs:
       - run: gradle -p android assembleRelease assembleDebug assembleDebugAndroidTest lintRelease --console=plain --no-daemon
       - name: Run native instrumentation on an isolated API 34 emulator
         timeout-minutes: 12
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/lqadwa-avd
         run: |
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
@@ -71,7 +73,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --no-install-recommends -y libpulse0
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'platform-tools' 'system-images;android-34;google_apis;x86_64'
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name lqadwa-ci --package 'system-images;android-34;google_apis;x86_64'
+          mkdir -p "$ANDROID_AVD_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name lqadwa-ci --device pixel_6 --path "$ANDROID_AVD_HOME/lqadwa-ci.avd" --package 'system-images;android-34;google_apis;x86_64'
+          test -s "$ANDROID_AVD_HOME/lqadwa-ci.avd/config.ini"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx lqadwa-ci
           bash scripts/android-instrumentation.sh
       - name: Preserve emulator and instrumentation diagnostics
         if: always()
