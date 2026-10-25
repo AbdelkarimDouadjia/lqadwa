@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {localAuthFixture} from './local-auth-fixture.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 // LOCAL ONLY: isolated fictional accounts; never point deletion tests at a live service.
@@ -13,7 +14,15 @@ const session=u=>({'x-lqadwa-session':u.token});
 // Start LOCAL Wrangler with --var APP_ADMIN_IDS:local-release-owner; never use this owner on the public host.
 const rootToken=randomUUID()+'-'+randomUUID(), cookie='untrusted-cookie=1';
 sql(`INSERT INTO profiles(id,name,city) VALUES('local-release-owner','LOCAL OWNER','algiers') ON CONFLICT(id) DO NOTHING;INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(rootToken)}','local-release-owner',${now},${now+900000});DELETE FROM rate_limits WHERE key='${hash(`account-write:local-release-owner:${Math.floor(now/3600000)}`)}';`);
-const root={'x-lqadwa-session':rootToken,origin};
+const authFixture=localAuthFixture([{id:'local-release-owner',email:'owner@example.invalid'}],'LOCAL-release-only-passphrase');
+await new Promise(resolve=>authFixture.server.listen(5888,'127.0.0.1',resolve));
+try {
+const login=await fetch('/api/auth',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({action:'admin-login',identifier:'admin',password:'LOCAL-release-only-passphrase'})});
+assert.equal(login.status,200);
+const rootCookie=login.headers.getSetCookie().map(v=>v.split(';')[0]).filter(v=>!v.endsWith('=')).join('; ');
+const root={cookie:rootCookie,origin};
+assert.equal((await fetch('/api/admin',{headers:{'x-lqadwa-session':rootToken}})).status,403,'Opaque owner tokens cannot access privileged data');
+assert.equal((await(await fetch('/api/app',{headers:{'x-lqadwa-session':rootToken}})).json()).admin,null);
 async function call(body,headers,status=200,path='/api/app'){const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});const raw=await r.text();const data=r.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):{error:raw};assert.equal(r.status,status,`${body.action} expected ${status}: ${JSON.stringify(data.error)}`);return data;}
 async function snapshot(u){const r=await fetch('/api/app',{headers:session(u)});assert.equal(r.status,200);return r.json();}
 async function register(u,label){const s=await call({action:'register-pharmacy',name:'FICTIONAL TEST '+label,address:'LOCAL TEST ONLY - NOT A REAL PHARMACY',city:'algiers',latitude:36.7538,longitude:3.0588,phone:'0550000000',license:'SYNTHETIC-TEST-NOT-VALID'},session(u));await call({action:'admin-review',pharmacy:s.ownPharmacy.id,status:'approved'},root);return s.ownPharmacy.id;}
@@ -80,3 +89,4 @@ await call({action:'collect',reservation:booking.id,pharmacy:b,code:booking.code
 await call({action:'delete',confirmation:'LQADWA'},session(other),200,'/api/account');await call({action:'delete',confirmation:'LQADWA'},session(secondPharmacist),200,'/api/account');
 assert.equal((await fetch('/api/health')).status,200);
 console.log('PASS: cross-account isolation, hidden pickup codes, input/CSRF limits, suspension cancellation, consent/location privacy, scoped export, irreversible deletion, stale-session tombstone and pickup rate limit. All fixtures local and fictional.');
+} finally { await new Promise(resolve=>authFixture.server.close(resolve)); }

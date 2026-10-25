@@ -13,15 +13,16 @@ export const medicines = [
   { name: "لانتوس 100 وحدة/مل", latin: "Lantus 100 UI/ml", ingredient: "Insuline glargine" },
   { name: "غلوكوفاج 850 مغ", latin: "Glucophage 850 mg", ingredient: "ميتفورمين · Metformine" },
 ];
-export type RequestRecord = { id: string; medicine: string; city: string; created: number; stopped?: number };
+export type RequestRecord = { id: string; medicine: string; city: string; created: number; stopped?: number; medicineId?:string|null;catalogVersion?:string|null;verification?:"catalog-identified"|"unverified";selectionSource?:"catalog"|"manual"|"ocr" };
 export type Reply = { request: string; pharmacy: string; status: "pending" | "yes" | "no"; updated: number | null };
 export type Booking = { id: string; request: string; pharmacy: string; code: string; created: number; expires: number; status: "active" | "expired" | "cancelled" | "collected"; medicine: string };
 export type Notice = { id: string; title: string; created: number; read: number };
 export type PharmacyApplication = { id: string; name: string; address: string; city: string; latitude: number; longitude: number; phone: string; license: string; status: "pending" | "approved" | "rejected" | "suspended"; duty: number; hours: string; created: number; updated: number };
-export type StaffRequest = { id: string; pharmacy: string; medicine: string; created: number; city: string; status: Reply["status"] };
+export type StaffRequest = { id: string; pharmacy: string; medicine: string; created: number; city: string; status: Reply["status"];verification?:"catalog-identified"|"unverified" };
 export type StaffBooking = Omit<Booking, "code"> & { approachLat?: number | null; approachLng?: number | null; approachUpdated?: number | null };
-export type StockItem = { id: string; pharmacy: string; name: string; quantity: number; updated: number };
+export type StockItem = { id: string; pharmacy: string; name: string; quantity: number; updated: number; medicineId?:string|null;catalogVersion?:string|null;identityJson?:string|null;verification?:"unverified"|"catalog-identified" };
 export type AppData = {
+  release?: import("./release-policy").ReleasePolicy;
   service?: { requests_paused: number; pickups_paused: number; message: string; updated: number };
   profile: { id?: string; name: string; city: string }; pharmacies: Pharmacy[];
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];

@@ -7,6 +7,11 @@ import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
 import { pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
 import { createAvailabilityRequest } from "@/lib/request-service";
+import { currentReleasePolicy, requireCoreAction } from "@/lib/release-runtime";
+import { recentPrivilegedSession, requirePrivilegedSession } from "@/lib/privileged-access";
+import { medicineSelectionFields } from "@/lib/request-contract";
+import { discoveryFilterFields } from "@/lib/discovery-contract";
+import { expireReservations } from "@/lib/reservation-expiry";
 import { inAlgeriaBounds, publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
 import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
@@ -16,7 +21,7 @@ const id = z.string().min(1).max(100);
 const permissions = z.array(z.enum(adminPermissions)).min(1).max(adminPermissions.length).transform(p => [...new Set(p)]);
 const adminEmail = z.string().trim().email().max(254).transform(v => v.toLowerCase());
 const actionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("search"), medicine: z.string().trim().min(2).max(100), city: cityId, night: z.boolean(), demo: z.literal(false).default(false), token: z.string().uuid() }),
+  z.object({ action: z.literal("search"), ...medicineSelectionFields, ...discoveryFilterFields, demo: z.literal(false).default(false), token: z.string().uuid() }),
   z.object({ action: z.literal("reply"), request: id, pharmacy: id, available: z.boolean() }),
   z.object({ action: z.literal("reserve"), request: id, pharmacy: id, consent: z.literal(true) }),
   z.object({ action: z.literal("cancel"), reservation: id }),
@@ -42,31 +47,31 @@ const json = (value: unknown, status = 200) => Response.json(value, { status, he
 type Registered = PharmacyApplication & { owner: string };
 
 function errorResponse(error: unknown) {
-  if (error instanceof HttpError) return json({ error: error.message }, error.status);
+  if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status);
   if (error instanceof z.ZodError) return json({ error: "تحقق من البيانات المدخلة ثم أعد المحاولة." }, 400);
   console.error("Application request failed", error instanceof Error ? error.name : "unknown");
   return json({ error: "تعذّر الاتصال بالخدمة. بياناتك الحالية محفوظة؛ حاول مجدداً." }, 503);
 }
-async function snapshot(owner: string, fallbackName: string, initialDetails: unknown = {}): Promise<AppData> {
+async function snapshot(owner: string, fallbackName: string, initialDetails: unknown = {}, request?: Request): Promise<AppData> {
   const db = database();
   const now = Date.now();
+  await expireReservations(db,owner,now);
   await db.batch([
     db.prepare("INSERT INTO profiles (id, name, city, details) SELECT ?, ?, 'algiers', ? WHERE NOT EXISTS (SELECT 1 FROM closed_accounts WHERE hash = ?) ON CONFLICT(id) DO NOTHING").bind(owner, fallbackName, JSON.stringify(parseDetails(personalSchema,initialDetails)), await tokenHash(owner)),
-    db.prepare("UPDATE reservations SET status = 'expired' WHERE owner = ? AND status = 'active' AND expires <= ?").bind(owner, now),
     db.prepare("DELETE FROM reservation_locations WHERE updated < ?").bind(now - 5 * 60_000),
   ]);
   const results = await db.batch([
     db.prepare("SELECT id, name, city FROM profiles WHERE id = ?").bind(owner),
-    db.prepare("SELECT r.id,r.medicine,r.city,r.created,COALESCE(c.stopped,0) AS stopped FROM requests r LEFT JOIN request_controls c ON c.request=r.id WHERE r.owner = ? ORDER BY r.created DESC LIMIT 100").bind(owner),
+    db.prepare("SELECT r.id,r.medicine,r.city,r.created,i.medicine_id AS medicineId,i.catalog_version AS catalogVersion,i.identity_json AS identityJson,COALESCE(i.verification,'unverified') AS verification,COALESCE(i.selection_source,'manual') AS selectionSource,COALESCE(c.stopped,0) AS stopped FROM requests r LEFT JOIN request_controls c ON c.request=r.id LEFT JOIN request_identity i ON i.request=r.id WHERE r.owner = ? ORDER BY r.created DESC LIMIT 100").bind(owner),
     db.prepare("SELECT s.request, s.pharmacy, s.status, s.updated FROM responses s JOIN requests r ON r.id = s.request WHERE r.owner = ? ORDER BY r.created DESC LIMIT 300").bind(owner),
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.code, b.created, b.expires, b.status, r.medicine FROM reservations b JOIN requests r ON b.request = r.id WHERE b.owner = ? ORDER BY b.created DESC LIMIT 100").bind(owner),
     db.prepare("SELECT pharmacy, duty FROM pharmacy_settings WHERE owner = ?").bind(owner),
     db.prepare("SELECT id, title, created, read FROM notifications WHERE owner = ? ORDER BY created DESC LIMIT 40").bind(owner),
     db.prepare(`SELECT ${publicPharmacyColumns} FROM registered_pharmacies WHERE status = 'approved' ORDER BY name,id LIMIT 300`),
     db.prepare("SELECT id, owner, name, address, city, latitude, longitude, phone, license, status, duty, hours, created, updated FROM registered_pharmacies WHERE owner = ? LIMIT 1").bind(owner),
-    db.prepare("SELECT r.id, s.pharmacy, r.medicine, r.created, r.city, s.status FROM responses s JOIN requests r ON r.id = s.request JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? AND p.status = 'approved' AND r.created > ? AND s.status = 'pending' ORDER BY r.created DESC LIMIT 100").bind(owner, now - 24 * 3600_000),
+    db.prepare("SELECT r.id, s.pharmacy, r.medicine, r.created, r.city, s.status,COALESCE(i.verification,'unverified') AS verification,COALESCE(i.selection_source,'manual') AS selectionSource,i.identity_json AS identityJson FROM responses s JOIN requests r ON r.id = s.request JOIN registered_pharmacies p ON p.id = s.pharmacy LEFT JOIN request_identity i ON i.request=r.id WHERE p.owner = ? AND p.status = 'approved' AND r.created > ? AND s.status = 'pending' ORDER BY r.created DESC LIMIT 100").bind(owner, now - 24 * 3600_000),
     db.prepare("SELECT b.id, b.request, b.pharmacy, b.created, b.expires, b.status, r.medicine, l.latitude / 1000.0 AS approachLat, l.longitude / 1000.0 AS approachLng, l.updated AS approachUpdated FROM reservations b JOIN requests r ON r.id = b.request JOIN registered_pharmacies p ON p.id = b.pharmacy LEFT JOIN reservation_locations l ON l.reservation = b.id AND l.updated > ? WHERE p.owner = ? AND p.status = 'approved' AND b.status = 'active' AND b.expires > ? ORDER BY b.created DESC LIMIT 100").bind(now - 60_000, owner, now),
-    db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? ORDER BY s.updated DESC LIMIT 200").bind(owner),
+    db.prepare("SELECT s.id,s.pharmacy,s.name,s.quantity,s.updated,s.medicine_id AS medicineId,s.catalog_version AS catalogVersion,s.identity_json AS identityJson,CASE WHEN s.medicine_id IS NULL THEN 'unverified' ELSE 'catalog-identified' END AS verification FROM stock_items s JOIN registered_pharmacies p ON p.id=s.pharmacy WHERE p.owner=? ORDER BY s.updated DESC LIMIT 200").bind(owner),
   ]);
   // Keep legacy sample records recoverable, but never present them as real care.
   const sampleIds = legacySampleIds;
@@ -76,7 +81,8 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   const associatedIds = [...(results[2].results as Reply[]), ...(results[3].results as Booking[])].map(record => record.pharmacy);
   directory.push(...await relatedPharmacies(db, associatedIds, new Set(directory.map(p => p.id))));
   let admin: AppData["admin"] = null;
-  const access = await adminAccess(owner, db);
+  const roleAccess = await adminAccess(owner, db);
+  const access = roleAccess && await recentPrivilegedSession(owner, request) ? roleAccess : null;
   if (access) {
     const can = (permission: typeof adminPermissions[number]) => access.permissions.includes(permission);
     const empty = () => db.prepare("SELECT NULL WHERE 0");
@@ -103,6 +109,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     };
   }
   return {
+    release: currentReleasePolicy(),
     service: await db.prepare("SELECT requests_paused, pickups_paused, message, updated FROM service_controls WHERE id=1").first() as AppData["service"],
     profile: results[0].results[0] as AppData["profile"],
     requests: (results[1].results as RequestRecord[]).filter((r) => !sampleRequests.has(r.id)), responses: (results[2].results as Reply[]).filter((r) => !sampleIds.has(r.pharmacy)),
@@ -114,7 +121,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   };
 }
 export async function GET(request: Request) {
-  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك", "personalDetails" in user ? user.personalDetails : {})); }
+  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك", "personalDetails" in user ? user.personalDetails : {}, request)); }
   catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {
@@ -124,8 +131,10 @@ export async function POST(request: Request) {
     const user = await identity(request);
     const owner = user.userId, db = database(), now = Date.now(), ownerHash = await tokenHash(user.userId);
     await rateLimit(owner, input.action === "collect" ? "pickup-attempt" : "mutation", input.action === "collect" ? 10 : 90);
+    if (input.action.startsWith("admin-")) await requirePrivilegedSession(owner, request);
+    if (!(input.action === "share-location" && !input.enabled)) requireCoreAction(input.action);
     const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, ?, ?, ?, 0 WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ?)").bind(crypto.randomUUID(), recipient, title, now, recipient);
-    if (["search", "reserve", "collect"].includes(input.action)) {
+    if (["search", "reserve", "reply", "collect"].includes(input.action)) {
       const controls = await db.prepare("SELECT requests_paused,pickups_paused FROM service_controls WHERE id=1").first<{requests_paused:number;pickups_paused:number}>();
       if (input.action === "collect" ? controls?.pickups_paused : controls?.requests_paused) throw new HttpError("الخدمة متوقفة مؤقتاً بقرار الإدارة. / Service temporarily paused by administration.", 409);
     }
@@ -144,30 +153,49 @@ export async function POST(request: Request) {
         ? await db.prepare("SELECT r.owner AS patient FROM responses s JOIN requests r ON r.id = s.request WHERE s.request = ? AND s.pharmacy = ? AND r.owner = ? AND r.created > ? AND s.status = 'pending'").bind(input.request, input.pharmacy, owner, now - 24 * 3600_000).first<{ patient: string }>()
         : await db.prepare("SELECT r.owner AS patient FROM responses s JOIN requests r ON r.id = s.request JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE s.request = ? AND s.pharmacy = ? AND p.owner = ? AND p.status = 'approved' AND r.created > ? AND s.status = 'pending'").bind(input.request, input.pharmacy, owner, now - 24 * 3600_000).first<{ patient: string }>();
       if (!permitted) throw new HttpError("لا تملك صلاحية الرد على هذا الطلب أو انتهت صلاحيته.", 403);
-      const result = await db.prepare("UPDATE responses SET status = ?, updated = ? WHERE request = ? AND pharmacy = ? AND status = 'pending'").bind(input.available ? "yes" : "no", now, input.request, input.pharmacy).run();
-      if (!result.meta.changes) throw new HttpError("تم الرد على الطلب من قبل.", 409);
-      await notify(input.available ? "وصل تأكيد توفر من الصيدلية؛ يمكنك الحجز الآن." : "وصل رد من الصيدلية: الدواء غير متوفر.", permitted.patient).run();
+      const result = await db.batch([
+        db.prepare(`UPDATE responses SET status=?,updated=? WHERE request=? AND pharmacy=? AND status='pending'
+          AND EXISTS(SELECT 1 FROM registered_pharmacies p WHERE p.id=responses.pharmacy AND p.owner=? AND p.status='approved')
+          AND NOT EXISTS(SELECT 1 FROM request_controls c WHERE c.request=responses.request)
+          AND NOT EXISTS(SELECT 1 FROM service_controls WHERE id=1 AND requests_paused=1)
+          AND NOT EXISTS(SELECT 1 FROM account_controls WHERE owner=? AND suspended=1)`)
+          .bind(input.available?"yes":"no",now,input.request,input.pharmacy,owner,owner),
+        db.prepare(`INSERT INTO notifications(id,owner,title,created,read) SELECT ?,?,?,?,0 WHERE changes()>0 ON CONFLICT(id) DO NOTHING`)
+          .bind(`reply:${input.request}:${input.pharmacy}`,permitted.patient,input.available?"وصل تأكيد توفر من الصيدلية؛ يمكنك الحجز الآن.":"وصل رد من الصيدلية: الدواء غير متوفر.",now),
+      ]);
+      if (!result[0].meta.changes) throw new HttpError("تم الرد على الطلب من قبل أو تغيرت صلاحية الصيدلية.", 409);
     } else if (input.action === "reserve") {
       if (!legacySampleIds.has(input.pharmacy)) {
         const active = await db.prepare("SELECT id FROM registered_pharmacies WHERE id = ? AND status = 'approved'").bind(input.pharmacy).first();
         if (!active) throw new HttpError("هذه الصيدلية غير متاحة للحجز.", 409);
       }
       const bookingId = crypto.randomUUID(), code = `DZ-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-      const result = await db.prepare(`INSERT INTO reservations (id, owner, request, pharmacy, code, created, expires, status)
+      const prior = await db.prepare("SELECT pharmacy,status,expires FROM reservations WHERE request=? AND owner=?").bind(input.request,owner).first<{pharmacy:string;status:string;expires:number}>();
+      if(prior){if(prior.pharmacy===input.pharmacy&&prior.status==="active"&&prior.expires>now)return json(await snapshot(owner,user.fullName||"",{},request));throw new HttpError("This request already has a reservation.",409);}
+      const result = await db.batch([db.prepare(`INSERT INTO reservations (id, owner, request, pharmacy, code, created, expires, status)
         SELECT ?, ?, r.id, s.pharmacy, ?, ?, ?, 'active' FROM requests r JOIN responses s ON s.request = r.id
         WHERE r.id = ? AND r.owner = ? AND s.pharmacy = ? AND s.status = 'yes' AND s.updated > ?
         AND (? = 1 OR EXISTS (SELECT 1 FROM registered_pharmacies p WHERE p.id = s.pharmacy AND p.status = 'approved'))
         AND NOT EXISTS (SELECT 1 FROM reservations b WHERE b.request = r.id)
-        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000, Number(legacySampleIds.has(input.pharmacy))).run();
-      if (!result.meta.changes) throw new HttpError("الطلب محجوز بالفعل أو انتهى تأكيد التوفر. أرسل طلب بحث جديداً.", 409);
-      await notify("تم تأكيد الحجز لمدة ساعتين. رمز الاستلام موجود في حجوزاتي.").run();
+        AND NOT EXISTS(SELECT 1 FROM request_controls WHERE request=r.id)
+        AND NOT EXISTS(SELECT 1 FROM service_controls WHERE id=1 AND requests_paused=1)
+        AND NOT EXISTS(SELECT 1 FROM account_controls WHERE owner=? AND suspended=1)
+        ON CONFLICT(request) DO NOTHING`).bind(bookingId, owner, code, now, now + 2 * 3600_000, input.request, owner, input.pharmacy, now - 30 * 60_000, Number(legacySampleIds.has(input.pharmacy)),owner),
+        db.prepare("INSERT INTO notifications(id,owner,title,created,read) SELECT ?,?,?,?,0 WHERE changes()>0 ON CONFLICT(id) DO NOTHING").bind(`reserved:${input.request}:patient`,owner,"تم تأكيد الحجز لمدة ساعتين. رمز الاستلام موجود في حجوزاتي.",now),
+        db.prepare("INSERT INTO notifications(id,owner,title,created,read) SELECT ?,p.owner,?,?,0 FROM registered_pharmacies p WHERE p.id=? AND changes()>0 ON CONFLICT(id) DO NOTHING").bind(`reserved:${input.request}:pharmacy`,"حجز جديد مؤكد. افتح الحجوزات للتحقق من موعد الاستلام.",now,input.pharmacy),
+      ]);
+      if (!result[0].meta.changes) {
+        const won=await db.prepare("SELECT id FROM reservations WHERE request=? AND owner=? AND pharmacy=? AND status='active' AND expires>?").bind(input.request,owner,input.pharmacy,now).first();
+        if(!won)throw new HttpError("الطلب محجوز بالفعل أو انتهى تأكيد التوفر. أرسل طلب بحث جديداً.", 409);
+      }
     } else if (input.action === "cancel") {
-      const result = await db.prepare("UPDATE reservations SET status = 'cancelled' WHERE id = ? AND owner = ? AND status = 'active' AND expires > ?").bind(input.reservation, owner, now).run();
-      if (!result.meta.changes) throw new HttpError("الحجز لم يعد نشطاً.", 409);
-      await db.prepare("DELETE FROM reservation_locations WHERE reservation = ?").bind(input.reservation).run();
-      await notify("تم إلغاء الحجز وإبلاغ الصيدلية.").run();
-      const pharmacyOwner = await db.prepare("SELECT p.owner FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ?").bind(input.reservation).first<{ owner: string }>();
-      if (pharmacyOwner) await notify("ألغى المريض حجزاً؛ أصبحت العلبة متاحة.", pharmacyOwner.owner).run();
+      const result=await db.batch([
+        db.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND owner=? AND status='active' AND expires>?").bind(input.reservation,owner,now),
+        db.prepare("INSERT INTO notifications(id,owner,title,created,read) SELECT ?,?,?,?,0 WHERE changes()>0 ON CONFLICT(id) DO NOTHING").bind(`cancelled:${input.reservation}:patient`,owner,"تم إلغاء الحجز وإبلاغ الصيدلية.",now),
+        db.prepare("INSERT INTO notifications(id,owner,title,created,read) SELECT ?,p.owner,?,?,0 FROM reservations b JOIN registered_pharmacies p ON p.id=b.pharmacy WHERE b.id=? AND changes()>0 ON CONFLICT(id) DO NOTHING").bind(`cancelled:${input.reservation}:pharmacy`,"ألغى المريض حجزاً؛ أصبحت العلبة متاحة.",now,input.reservation),
+        db.prepare("DELETE FROM reservation_locations WHERE reservation IN(SELECT id FROM reservations WHERE id=? AND owner=? AND status='cancelled')").bind(input.reservation,owner),
+      ]);
+      if (!result[0].meta.changes&&!await db.prepare("SELECT id FROM reservations WHERE id=? AND owner=? AND status='cancelled'").bind(input.reservation,owner).first())throw new HttpError("الحجز لم يعد نشطاً.",409);
     } else if (input.action === "collect") {
       const pilot = legacySampleIds.has(input.pharmacy);
       const permitted = pilot
@@ -175,10 +203,16 @@ export async function POST(request: Request) {
         : await db.prepare("SELECT b.id FROM reservations b JOIN registered_pharmacies p ON p.id = b.pharmacy WHERE b.id = ? AND b.pharmacy = ? AND p.owner = ? AND p.status = 'approved'").bind(input.reservation, input.pharmacy, owner).first();
       if (!permitted) throw new HttpError("ليس لديك صلاحية الاستلام لهذه الصيدلية.", 403);
       const patient = await db.prepare("SELECT owner FROM reservations WHERE id = ?").bind(input.reservation).first<{ owner: string }>();
-      const result = await db.prepare("UPDATE reservations SET status = 'collected' WHERE id = ? AND pharmacy = ? AND code = ? AND status = 'active' AND expires > ?").bind(input.reservation, input.pharmacy, input.code, now).run();
-      if (!result.meta.changes) throw new HttpError("رمز الاستلام غير صحيح أو الحجز غير نشط.", 409);
-      await db.prepare("DELETE FROM reservation_locations WHERE reservation = ?").bind(input.reservation).run();
-      if (patient) await notify("اكتمل الاستلام من الصيدلية. نتمنى لك دوام الصحة.", patient.owner).run();
+      const result=await db.batch([
+        db.prepare(`UPDATE reservations SET status='collected' WHERE id=? AND pharmacy=? AND code=? AND status='active' AND expires>?
+          AND EXISTS(SELECT 1 FROM registered_pharmacies WHERE id=reservations.pharmacy AND owner=? AND status='approved')
+          AND NOT EXISTS(SELECT 1 FROM service_controls WHERE id=1 AND pickups_paused=1)
+          AND NOT EXISTS(SELECT 1 FROM account_controls WHERE owner=? AND suspended=1)`)
+          .bind(input.reservation,input.pharmacy,input.code,now,owner,owner),
+        db.prepare("INSERT INTO notifications(id,owner,title,created,read) SELECT ?,?,?,?,0 WHERE changes()>0 ON CONFLICT(id) DO NOTHING").bind(`collected:${input.reservation}`,patient?.owner||"","اكتمل الاستلام من الصيدلية. نتمنى لك دوام الصحة.",now),
+        db.prepare("DELETE FROM reservation_locations WHERE reservation IN(SELECT id FROM reservations WHERE id=? AND status='collected')").bind(input.reservation),
+      ]);
+      if (!result[0].meta.changes) throw new HttpError("رمز الاستلام غير صحيح أو الحجز غير نشط.", 409);
     } else if (input.action === "duty") {
       if (legacySampleIds.has(input.pharmacy)) await db.prepare("INSERT INTO pharmacy_settings (owner, pharmacy, duty) VALUES (?, ?, ?) ON CONFLICT(owner, pharmacy) DO UPDATE SET duty = excluded.duty").bind(owner, input.pharmacy, Number(input.enabled)).run();
       else {
@@ -245,7 +279,7 @@ export async function POST(request: Request) {
       if (input.email === user.email.toLowerCase() || await db.prepare("SELECT owner FROM admin_members WHERE email = ?").bind(input.email).first()) throw new HttpError("الحساب عضو في الإدارة بالفعل. استخدم تعديل الصلاحيات.", 409);
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
       await db.batch([db.prepare("INSERT INTO admin_invites (hash, created_by, created, expires, email, permissions) VALUES (?, ?, ?, ?, ?, ?)").bind(await tokenHash(token), owner, now, now + 7 * 24 * 3600_000, input.email, JSON.stringify(input.permissions)), audit(owner, "admin-invite", "pending", `Email-bound, 7 day invitation: ${input.permissions.join(",")}`)]);
-      return json({ ...await snapshot(owner, user.fullName || "مرحباً بك"), invite: token });
+      return json({ ...await snapshot(owner, user.fullName || "مرحباً بك", {}, request), invite: token });
     } else if (input.action === "admin-invite-redeem") {
       const hash = await tokenHash(input.token);
       const invitation = await db.prepare("SELECT created_by, permissions, email FROM admin_invites WHERE hash = ? AND used_by IS NULL AND expires > ?").bind(hash, now).first<{created_by:string;permissions:string;email:string}>();
@@ -274,6 +308,6 @@ export async function POST(request: Request) {
     } else if (input.action === "read-notifications") {
       await db.prepare("UPDATE notifications SET read = 1 WHERE owner = ? AND read = 0").bind(owner).run();
     }
-    return json(await snapshot(owner, user.fullName || "مرحباً بك"));
+    return json(await snapshot(owner, user.fullName || "مرحباً بك", {}, request));
   } catch (error) { return errorResponse(error); }
 }

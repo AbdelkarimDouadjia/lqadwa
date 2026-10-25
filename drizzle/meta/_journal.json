@@ -92,6 +92,20 @@
       "when": 1792099794409,
       "tag": "0012_daily_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792944195271,
+      "tag": "0013_request_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792944285516,
+      "tag": "0014_stock_identity",
+      "breakpoints": true
     }
   ]
 }

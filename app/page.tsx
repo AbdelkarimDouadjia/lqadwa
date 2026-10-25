@@ -7,6 +7,7 @@ import { database } from "@/db";
 import { emptyLandingContent, parseLandingContent } from "@/lib/landing-content";
 import LqadwaApp from "@/components/lqadwa-app";
 import { PublicLanding } from "@/components/public-landing";
+import { currentReleasePolicy } from "@/lib/release-runtime";
 
 export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<{ lang?: string; space?: string }> };
@@ -28,5 +29,5 @@ export default async function Page({ searchParams }: Props) {
   try { const row = await database().prepare("SELECT published_json FROM landing_content WHERE id='main'").first<{ published_json: string }>(); content = parseLandingContent(row?.published_json); } catch { /* Keep the current bundled copy available during a database outage. */ }
   // Avoid contacting Auth at all for the public landing; cookies are never authorization.
   if (query.space || (hasSession && await getAppUser())) return <LqadwaApp initialLandingContent={content} />;
-  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} initialContent={content} />;
+  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} initialContent={content} informationOnly={currentReleasePolicy().mode!=="CORE"} />;
 }

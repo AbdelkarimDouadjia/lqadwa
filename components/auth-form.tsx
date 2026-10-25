@@ -18,11 +18,12 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
   const [message, setMessage] = useState<AuthCopyKey | "">(""), [show, setShow] = useState(false), [returnTo, setReturnTo] = useState("/");
   const form = useForm({ defaultValues: { firstName: "", lastName: "", email: "", password: "" }, shouldUnregister: true });
   const [providers, setProviders] = useState({ google: false, apple: false }), [oauthBusy, setOauthBusy] = useState(false);
+  const [registration, setRegistration] = useState(false);
   const t = (key: AuthCopyKey) => authText(language, key);
   useEffect(() => {
     if (administration) return;
     const controller = new AbortController();
-    void fetch("/api/auth/providers", { cache: "no-store", signal: controller.signal }).then(async r=>r.ok?await r.json() as {google?:boolean;apple?:boolean}:null).then(p=>{if(p&&!controller.signal.aborted)setProviders({google:p.google===true,apple:p.apple===true});}).catch(()=>{});
+    void fetch("/api/auth/providers", { cache: "no-store", signal: controller.signal }).then(async r=>r.ok?await r.json() as {google?:boolean;apple?:boolean;release?:{registration:boolean}}:null).then(p=>{if(p&&!controller.signal.aborted){setProviders({google:p.google===true,apple:p.apple===true});setRegistration(p.release?.registration===true);}}).catch(()=>{});
     return ()=>controller.abort();
   }, [administration]);
   useEffect(() => {
@@ -64,7 +65,7 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
       const body = administration && mode === "login" ? {action:"admin-login",identifier:values.email,password:values.password} : {...values,action:mode,returnTo};
       const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(25000) });
       const result = await response.json() as { error?: string; redirect?: string };
-      if (!response.ok) { setMessage((["CREDENTIALS", "FIELDS", "RATE_LIMIT", "EMAIL_DELIVERY", "PASSWORD"].includes(result.error || "") ? result.error : "UNAVAILABLE") as AuthCopyKey); return; }
+      if (!response.ok) { setMessage((["CREDENTIALS", "FIELDS", "RATE_LIMIT", "EMAIL_DELIVERY", "PASSWORD", "INFORMATION_ONLY"].includes(result.error || "") ? result.error : "UNAVAILABLE") as AuthCopyKey); return; }
       if (result.redirect) { window.location.assign(result.redirect); return; }
       setMessage("CHECK_EMAIL"); form.resetField("password");
     } catch { setMessage("UNAVAILABLE"); }
@@ -73,13 +74,14 @@ export function AuthForm({ initialMode = "login", administration = false }: { in
   return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-title">
     <div className="auth-top"><Link className="auth-brand" href="/" aria-label="LQADWA"><img src="/brand/luqya.png" alt="" width="64" height="64" /><strong>LQADWA<span>لقى دوا</span></strong></Link><NativeSelect aria-label="Language / اللغة" value={language} onChange={e=>setLanguage(e.target.value as Language)}>{[["ar","العربية"],["fr","Français"],["en","English"],["kab","Taqbaylit"]].map(([code,label])=><NativeSelectOption key={code} value={code}>{label}</NativeSelectOption>)}</NativeSelect></div>
     <span className="auth-emblem"><ShieldCheck aria-hidden="true" /></span><h1 id="auth-title">{mode === "login" ? t(administration ? "adminTitle" : "title") : t(mode)}</h1><p className="muted">{t(administration ? "adminIntro" : "intro")}</p>
-    {!administration && mode !== "logout" && mode !== "update" && <div className="auth-tabs">{(["login","register"] as const).map(item=><Button key={item} type="button" variant={mode===item?"default":"outline"} aria-pressed={mode===item} disabled={busy} onClick={()=>changeMode(item)}>{t(item)}</Button>)}</div>}
+    {!administration && !registration && <p className="auth-help" role="status">{t("INFORMATION_ONLY")}</p>}
+    {!administration && mode !== "logout" && mode !== "update" && <div className="auth-tabs">{(["login","register"] as const).filter(item=>item!=="register"||registration).map(item=><Button key={item} type="button" variant={mode===item?"default":"outline"} aria-pressed={mode===item} disabled={busy} onClick={()=>changeMode(item)}>{t(item)}</Button>)}</div>}
     {(mode === "login" || mode === "register") && (providers.google || providers.apple) && <div className="auth-providers">{(["google", "apple"] as const).filter(p=>providers[p]).map(p=><Button key={p} type="button" variant="outline" disabled={busy} onClick={()=>void signInProvider(p)}>{oauthBusy && <LoaderCircle className="spin" aria-hidden="true"/>}{t(p)}</Button>)}<p className="auth-help">{t("emailAlternative")}</p></div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="auth-fields" aria-busy={busy}>
       {fields.map(name=><FormField key={name} control={form.control} name={name} rules={{ required:t("FIELDS"), ...((name==="firstName"||name==="lastName")?{minLength:{value:1,message:t("FIELDS")},maxLength:60}:name==="email"?{...(administration && mode==="login" ? {} : {pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:t("FIELDS")}}),maxLength:254}:{minLength:{value:mode==="login"&&!administration?1:12,message:t("PASSWORD")},maxLength:128}) }} render={({field})=><FormItem><FormLabel>{name==="firstName"||name==="lastName"?profileText(language,name):t(name==="email"&&administration&&mode==="login"?"adminIdentifier":name)}</FormLabel><div className="auth-input"><FormControl><Input {...field} disabled={busy} type={name==="password"?(show?"text":"password"):name==="email"&&!(administration&&mode==="login")?"email":"text"} dir={(name==="firstName"||name==="lastName")?undefined:"ltr"} autoComplete={(name==="firstName"||name==="lastName")?(name==="firstName"?"given-name":"family-name"):name==="email"?administration&&mode==="login"?"username":"email":mode==="login"?"current-password":"new-password"} autoCapitalize="none" spellCheck={(name==="firstName"||name==="lastName")} /></FormControl>{name==="password"&&<button type="button" className="auth-eye" aria-label={t(show?"hide":"show")} onClick={()=>setShow(!show)}>{show?<EyeOff/>:<Eye/>}</button>}</div>{name==="password"&&(mode!=="login"||administration)&&<p className="auth-help">{t("passwordHelp")}</p>}<FormMessage/></FormItem>}/>)}
       {administration && mode==="login" && <p className="auth-help">{t("adminHelp")}</p>}
       {message&&<p className={`auth-message ${message==="CHECK_EMAIL"||message==="changed"?"success":""}`} role="status" aria-live="polite">{t(message)}</p>}
-      <Button type="submit" disabled={busy} className="auth-submit">{busy&&<LoaderCircle className="spin" aria-hidden="true"/>}{t(mode)}</Button>
+      <Button type="submit" disabled={busy || (mode === "register" && !registration)} className="auth-submit">{busy&&<LoaderCircle className="spin" aria-hidden="true"/>}{t(mode)}</Button>
       {mode==="login"&&<Button type="button" variant="ghost" disabled={busy} onClick={()=>changeMode("recover")}>{t("forgot")}</Button>}
       {administration&&mode==="recover"&&<Button type="button" variant="ghost" disabled={busy} onClick={()=>changeMode("login")}>{t("login")}</Button>}
     </form></Form>

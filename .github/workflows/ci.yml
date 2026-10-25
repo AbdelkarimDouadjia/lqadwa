@@ -32,6 +32,7 @@ jobs:
         run: npx --no-install playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - run: npm run test:ocr
+      - run: npm run test:ai-safety
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -58,7 +59,31 @@ jobs:
         run: |
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - run: gradle -p android assembleRelease assembleDebugAndroidTest lintRelease --console=plain --no-daemon
+      - run: gradle -p android assembleRelease assembleDebug assembleDebugAndroidTest lintRelease --console=plain --no-daemon
+      - name: Run native instrumentation on an isolated API 34 emulator
+        timeout-minutes: 12
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-34;google_apis;x86_64'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name lqadwa-ci --package 'system-images;android-34;google_apis;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -avd lqadwa-ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/lqadwa-emulator.log 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          for attempt in $(seq 1 120); do
+            if test "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = 1; then break; fi
+            sleep 2
+          done
+          test "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = 1
+          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
+          "$ANDROID_HOME/platform-tools/adb" install -r android/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          "$ANDROID_HOME/platform-tools/adb" install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          "$ANDROID_HOME/platform-tools/adb" shell am instrument -w dz.lqidwa.pilot.design.test/dz.lqidwa.pilot.NativeDesignTest > /tmp/lqadwa-instrumentation.log
+          cat /tmp/lqadwa-instrumentation.log
+          grep -q 'PASS: native screens' /tmp/lqadwa-instrumentation.log
+          grep -q 'INSTRUMENTATION_CODE: -1' /tmp/lqadwa-instrumentation.log
+          if grep -q 'FAIL:' /tmp/lqadwa-instrumentation.log; then exit 1; fi
       # CI APKs are unsigned: never publish them as distribution packages.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

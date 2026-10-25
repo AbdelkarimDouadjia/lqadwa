@@ -25,8 +25,6 @@ async function noOverflow(page) {
 }
 async function accessible(page) {
   const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
-  // The script-free preview sandbox blocks axe's frame runner; public pages are audited separately above.
-  if (await page.locator('.builder-canvas-frame').count()) builder.exclude('.builder-canvas-frame');
   const result = await builder.analyze();
   expect(result.violations.map(item => ({ id: item.id, impact: item.impact, nodes: item.nodes.map(node => node.target) }))).toEqual([]);
 }
@@ -280,7 +278,7 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
     await expect(page.locator('.builder-layers')).toBeHidden();
     await expect(frame.locator('.builder-page-section')).toHaveCount(0);
     await expect(frame.locator('#questions')).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
     await expect(page.locator('.builder-layers')).toBeVisible();
     await page.getByRole('button', { name: 'Desktop', exact: true }).click();
     await page.getByRole('button', { name: 'Toggle preview theme', exact: true }).click();

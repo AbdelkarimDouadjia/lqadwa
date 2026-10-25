@@ -8,6 +8,7 @@ import { adminPermissions, type AdminPermission } from "@/lib/admin-permissions"
 import type { ManagementRow, ServiceControls } from "@/lib/admin-management";
 import { stopPharmacyBookings } from "@/lib/pharmacy-status";
 import { personalSchema, healthSchema, pharmacyDetailsSchema, parseDetails } from "@/lib/profile-details";
+import { requirePrivilegedSession } from "@/lib/privileged-access";
 
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: privateHeaders });
@@ -22,7 +23,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pharmacy-create"), owner: id, ...pharmacyFields, reason }),
   z.object({ action: z.literal("pharmacy-edit"), id, updated: z.number().int(), ...pharmacyFields, reason }),
   z.object({ action: z.literal("pharmacy-remove"), id, reason }),
-  z.object({ action: z.literal("stock-save"), id: id.optional(), pharmacy: id, name: z.string().trim().min(2).max(100), quantity: z.number().int().min(0).max(9999), reason }),
+  z.object({ action: z.literal("stock-save"), id: id.optional(), pharmacy: id, name: z.string().trim().min(2).max(512), quantity: z.number().int().min(0).max(9999), reason }),
   z.object({ action: z.literal("stock-delete"), id, reason }),
   z.object({ action: z.literal("reservation-cancel"), id, reason }),
   z.object({ action: z.literal("request-stop"), id, reason }),
@@ -37,6 +38,7 @@ function failure(error: unknown) {
 async function access(request: Request) {
   const user = await identity(request), permissions = await adminAccess(user.userId);
   if (!permissions) throw new HttpError("Admin access required", 403);
+  await requirePrivilegedSession(user.userId, request);
   return { owner: user.userId, ...permissions };
 }
 export async function GET(request: Request) {
@@ -125,7 +127,7 @@ export async function POST(request: Request) {
       const duplicate = await db.prepare("SELECT id FROM stock_items WHERE pharmacy=? AND name=? AND id!=?").bind(input.pharmacy,input.name,input.id || "").first();
       if (duplicate) throw new HttpError("Medicine already exists in this inventory; edit its existing entry",409);
       if (input.id && !await db.prepare("SELECT id FROM stock_items WHERE id=? AND pharmacy=?").bind(input.id,input.pharmacy).first()) throw new HttpError("Stock item not found",404);
-      await db.batch([input.id ? db.prepare("UPDATE stock_items SET name=?,quantity=?,updated=? WHERE id=? AND pharmacy=?").bind(input.name,input.quantity,now,input.id,input.pharmacy) : db.prepare("INSERT INTO stock_items (id,pharmacy,name,quantity,updated) VALUES (?,?,?,?,?)").bind(target,input.pharmacy,input.name,input.quantity,now),log]);
+      await db.batch([input.id ? db.prepare("UPDATE stock_items SET medicine_id=CASE WHEN name=? THEN medicine_id ELSE NULL END,catalog_version=CASE WHEN name=? THEN catalog_version ELSE NULL END,identity_json=CASE WHEN name=? THEN identity_json ELSE NULL END,name=?,quantity=?,updated=? WHERE id=? AND pharmacy=?").bind(input.name,input.name,input.name,input.name,input.quantity,now,input.id,input.pharmacy) : db.prepare("INSERT INTO stock_items (id,pharmacy,name,quantity,updated) VALUES (?,?,?,?,?)").bind(target,input.pharmacy,input.name,input.quantity,now),log]);
     } else if (input.action === "stock-delete") {
       if (!await db.prepare("SELECT id FROM stock_items WHERE id=?").bind(input.id).first()) throw new HttpError("Stock item not found",404);
       await db.batch([db.prepare("DELETE FROM stock_items WHERE id=?").bind(input.id),log]);

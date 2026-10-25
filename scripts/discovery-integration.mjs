@@ -60,12 +60,21 @@ try{
  assert.equal((await sql(`SELECT count(*) AS n FROM notifications WHERE substr(owner,1,${suite.length+7})=${quote(suite+'-owner-')};`))[0].results[0].n,50,'One notification per recipient per request');
  const changedRetry=await fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify({...retryBody,medicine:'DIFFERENT LOCAL MEDICINE'})});
  assert.equal(changedRetry.status,409,'A request UUID cannot be reused for a different medicine');
+ await changedRetry.arrayBuffer();
+ for(const change of [{night:true},{radiusKm:1},{origin:{lat:36.75,lng:3.05,consent:true}}]){
+  const conflict=await fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify({...retryBody,...change})});assert.equal(conflict.status,409,'Routing changes conflict with a durable request UUID');await conflict.arrayBuffer();
+ }
+ const invalid=await fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify({...retryBody,token:randomUUID(),medicineId:'miph-2026-08:99999',catalogVersion:'miph-2026-08'})});assert.equal(invalid.status,400);await invalid.arrayBuffer();
+ const identityToken=randomUUID();const canonical=await fetch(base+'/api/app',{method:'POST',headers,body:JSON.stringify({...retryBody,token:identityToken,medicine:'FORGED LABEL',medicineId:'miph-2026-08:00000',catalogVersion:'miph-2026-08',selectionSource:'ocr'})});assert.equal(canonical.status,200);const identified=(await canonical.json()).requests.find(r=>r.id===identityToken);assert(identified.medicine.startsWith('ARTIZ 10MG'));assert(identified.medicine.includes('COMPRIME PELLICULE SECABLE'));assert.equal(identified.verification,'catalog-identified');assert.equal(identified.selectionSource,'ocr');assert.equal(identified.medicineId,'miph-2026-08:00000');
 
  const pharmacy=replies[0].pharmacy,pharmacyOwner=pharmacy.replace(suite+'-',suite+'-owner-');
  const pharmacyToken=randomUUID()+'-'+randomUUID(),pharmacyHash=createHash('sha256').update(pharmacyToken).digest('hex');
- await changedRetry.arrayBuffer();
  await sql(`INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES(${quote(pharmacyHash)},${quote(pharmacyOwner)},${now},${now+600000});`);
  const act=(body,session=token)=>fetch(base+'/api/app',{method:'POST',headers:{'content-type':'application/json','x-lqadwa-session':session},body:JSON.stringify(body)});
+ await sql(`CREATE TRIGGER local_notice_failure BEFORE INSERT ON notifications WHEN NEW.id=${quote(`reply:${request.id}:${pharmacy}`)} BEGIN SELECT RAISE(ABORT,'LOCAL FORCED EVENT FAILURE'); END;`);
+ const interrupted=await act({action:'reply',request:request.id,pharmacy,available:true},pharmacyToken);assert.equal(interrupted.status,503);await interrupted.arrayBuffer();
+ assert.equal((await sql(`SELECT status FROM responses WHERE request=${quote(request.id)} AND pharmacy=${quote(pharmacy)};`))[0].results[0].status,'pending','A notice failure must roll back the state transition');
+ await sql('DROP TRIGGER local_notice_failure;');
  const answers=await Promise.all([true,false].map(available=>act({action:'reply',request:request.id,pharmacy,available},pharmacyToken)));
  assert.equal(answers.filter(r=>r.status===200).length,1,'One concurrent pharmacy reply wins');
  assert(answers.every(r=>[200,403,409].includes(r.status)),'No contradictory reply or race-time server error');
@@ -73,7 +82,9 @@ try{
  await Promise.all(answers.map(response=>response.arrayBuffer()));
  await sql(`UPDATE responses SET status='yes',updated=${Date.now()} WHERE request=${quote(request.id)} AND pharmacy=${quote(pharmacy)};`);
  const bookings=await Promise.all([0,1].map(()=>act({action:'reserve',request:request.id,pharmacy,consent:true})));
- assert.deepEqual(bookings.map(r=>r.status).sort(),[200,409],'One concurrent reservation per request');
+ assert(bookings.every(r=>r.status===200),'Same-pharmacy reservation retries return the existing result');
+ assert.equal((await sql(`SELECT count(*) AS n FROM reservations WHERE request=${quote(request.id)};`))[0].results[0].n,1,'One durable reservation per request');
+ assert.equal((await sql(`SELECT count(*) AS n FROM notifications WHERE id=${quote(`reserved:${request.id}:patient`)};`))[0].results[0].n,1,'Reservation retry produces one patient event');
  const booked=await bookings.find(r=>r.status===200).json(),booking=booked.reservations.find(b=>b.request===request.id);
  const pickups=await Promise.all([0,1].map(()=>act({action:'collect',reservation:booking.id,pharmacy,code:booking.code,checked:true},pharmacyToken)));
  assert.deepEqual(pickups.map(r=>r.status).sort(),[200,409],'Pickup QR cannot be replayed concurrently');
@@ -89,6 +100,15 @@ try{
   cursor=page.nextCursor||'';assert(pages<100);
  }while(cursor);
  assert.equal(seen.size,350,'Cursor traversal must include more than 300 approved pharmacies exactly once');
+ let privateCursor='',privateSeen=new Set(),privatePages=0;
+ do {
+  const response=await fetch(base+'/api/pharmacies',{method:'POST',headers,body:JSON.stringify({city:'oran',night:false,limit:50,...(privateCursor?{cursor:privateCursor}:{})})});assert.equal(response.status,200);const page=await response.json();
+  assert.equal(page.distanceOrigin.type,'wilaya-center');for(const p of page.items){assert(!('owner' in p));if(p.id.startsWith(suite)){assert(!privateSeen.has(p.id));privateSeen.add(p.id);}}
+  privateCursor=page.nextCursor||'';assert(++privatePages<100);
+ }while(privateCursor);
+ assert.equal(privateSeen.size,350,'Authenticated directory must traverse more than 300 pharmacies');
+ assert.equal((await fetch(base+'/api/pharmacies',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({city:'oran'})})).status,403,'Browser discovery requires CSRF origin and an account');
+ assert.equal((await fetch(base+'/api/pharmacies',{method:'POST',headers,body:JSON.stringify({city:'algiers',origin:{lat:36.75,lng:3.05}})})).status,400,'Location must have explicit consent');
  for(const query of ['city=invalid','city=oran&limit=10000','city=oran&cursor=invalid','city=oran&latitude=36.75'])assert.equal((await fetch(base+'/api/v1/pharmacies?'+query)).status,400);
  const first=await(await fetch(base+'/api/v1/pharmacies?city=oran&limit=1')).json();
  assert(first.nextCursor);
@@ -99,6 +119,7 @@ try{
  const fresh=await(await fetch(base+'/api/v1/pharmacies?city=algiers&limit=50')).json();assert(!fresh.items.some(p=>p.id===removed));
  console.log(`PASS: native-compatible request reaches 25 city recipients beyond national cap; ${seen.size} fictional directory rows traversed in ${pages} pages; public field allowlist, validation, duty, suspension, concurrent reply/reservation and pickup replay checks.`);
 }finally{
+ await sql('DROP TRIGGER IF EXISTS local_notice_failure;');
  await sql(`DELETE FROM reservation_locations WHERE reservation IN(SELECT id FROM reservations WHERE owner=${quote(owner)});DELETE FROM reservations WHERE owner=${quote(owner)};DELETE FROM responses WHERE request IN(SELECT id FROM requests WHERE owner=${quote(owner)});DELETE FROM requests WHERE owner=${quote(owner)};DELETE FROM notifications WHERE owner=${quote(owner)} OR substr(owner,1,${suite.length+7})=${quote(suite+'-owner-')};DELETE FROM registered_pharmacies WHERE substr(id,1,${suite.length+1})=${quote(suite+'-')};DELETE FROM mobile_sessions WHERE owner=${quote(owner)} OR substr(owner,1,${suite.length+7})=${quote(suite+'-owner-')};DELETE FROM profiles WHERE id=${quote(owner)} OR substr(id,1,${suite.length+7})=${quote(suite+'-owner-')};`);
  rmdirSync(folder);
 }

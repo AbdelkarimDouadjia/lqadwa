@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
 import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
+import {localAuthFixture} from './local-auth-fixture.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
 // APP_OWNER_EMAIL:owner@example.invalid and SUPABASE_URL:http://127.0.0.1:5888.
@@ -30,25 +30,9 @@ async function sql(command){
  if(!response.ok||!data.success||data.result?.some(result=>!result.success))throw Error(`Local D1 query failed: ${data.errors?.[0]?.message||data.result?.find(result=>!result.success)?.error||response.status}`);
  return data.result.map(result=>({success:result.success,meta:result.meta,results:(result.results?.rows||[]).map(row=>Object.fromEntries(result.results.columns.map((column,index)=>[column,row[index]])))}));
 }
-const record=u=>({...u,aud:'authenticated',role:'authenticated',is_anonymous:false,email_confirmed_at:'2026-01-01T00:00:00Z',user_metadata:{full_name:'LOCAL FICTIONAL ACCOUNT',role:'owner',...(u.id===recipient.id?{first_name:'LOCAL',last_name:'NEW PERSON'}:{})},app_metadata:{provider:'email'}});
 let signupPayload;
-const jwt=u=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),aud:'authenticated',role:'authenticated'})).toString('base64url'),'local-fixture-not-a-signature'].join('.');
-const auth=createServer(async(req,res)=>{
- res.setHeader('content-type','application/json');
- if(req.url.startsWith('/auth/v1/settings'))return res.end(JSON.stringify({external:{google:false,apple:false}}));
- if(req.url.startsWith('/auth/v1/logout'))return res.end('{}');
- if(req.url.startsWith('/auth/v1/signup')){let body='';for await(const part of req)body+=part;signupPayload=JSON.parse(body);return res.end(JSON.stringify({user:record(recipient),session:null}));}
- if(req.url.startsWith('/auth/v1/token')){
-  let body='';for await(const part of req)body+=part;const input=JSON.parse(body||'{}'),u=users.find(u=>u.email===input.email);
-  if(!u||input.password!==password){res.statusCode=400;return res.end(JSON.stringify({code:'invalid_credentials',msg:'Local fixture rejected'}));}
-  return res.end(JSON.stringify({access_token:jwt(u),refresh_token:'local-refresh-'+u.id,expires_in:3600,token_type:'bearer',user:record(u)}));
- }
- if(req.url.startsWith('/auth/v1/user')){
-  let sub='';try{sub=JSON.parse(Buffer.from((req.headers.authorization||'').split('.')[1],'base64url').toString()).sub;}catch{}
-  const u=users.find(u=>u.id===sub);if(u)return res.end(JSON.stringify(record(u)));
- }
- res.statusCode=401;res.end(JSON.stringify({msg:'Local fixture unauthenticated'}));
-});
+const fixture=localAuthFixture(users,password,input=>{signupPayload=input;});
+const auth=fixture.server;
 await new Promise(resolve=>auth.listen(5888,'127.0.0.1',resolve));
 const cookie=response=>response.headers.getSetCookie().map(v=>v.split(';')[0]).filter(v=>!v.endsWith('=')).join('; ');
 async function request(path,body,credential='',expected=200){
@@ -61,6 +45,20 @@ try{
  assert.deepEqual(parseAdminPermissions('invalid'),[]);assert.deepEqual(parseAdminPermissions('["owner","pharmacies","pharmacies","accounts"]'),['pharmacies','accounts']);
  await request('/api/auth',{action:'admin-login',identifier:'admin',password:'short'},'',400);
  await request('/api/auth',{action:'admin-login',identifier:'admin',password:password+'wrong'},'',401);
+ owner.aal='aal1';
+ const firstFactor=await request('/api/auth',{action:'admin-login',identifier:'admin',password});
+ const aal1Cookie=cookie(firstFactor.response);
+ assert.equal((await request('/api/app',null,aal1Cookie)).data.admin,null,'AAL1 owner must not leak admin information from the general endpoint');
+ await request('/api/admin?section=accounts',null,aal1Cookie,403);
+ await request('/api/landing',{action:'load'},aal1Cookie,403);
+ await request('/api/app',{action:'admin-invites-revoke'},aal1Cookie,403);
+ assert.equal((await request('/operations',null,aal1Cookie,307)).response.headers.get('location'),'/operations/security');
+ const factor=(await request('/api/auth/mfa',null,aal1Cookie)).data.factors[0].id;
+ await request('/api/auth/mfa',{action:'verify',factorId:factor,code:'000000'},aal1Cookie,401);
+ const verified=await request('/api/auth/mfa',{action:'verify',factorId:factor,code:'123456'},aal1Cookie);
+ assert.equal(verified.data.verified,true);
+ assert((await request('/api/app',null,cookie(verified.response))).data.admin?.access.isOwner,'Provider-verified step-up grants owner access');
+ owner.aal='aal2';
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
  const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
  const sessions={};for(const u of [delegate,recipient,other]){const login=await request('/api/auth',{action:'login',email:u.email,password});sessions[u.id]=cookie(login.response);await request('/api/app',null,sessions[u.id]);}
@@ -178,6 +176,13 @@ try{
  assert.equal((await request('/api/admin?section=pharmacies&q='+pharmacy,null,rootCookie)).data.rows[0].contactName,'LOCAL PHARMACIST');
  await request('/api/admin',{action:'pharmacy-details',id:pharmacy,details:{...pharmacyDetails,contactName:'LOCAL EDITED CONTACT'},reason:'Local contact correction'},rootCookie);
  assert.equal((await request('/api/profile',null,sessions[other.id])).data.pharmacy.contactName,'LOCAL EDITED CONTACT');
+ await request('/api/stock',{action:'create',name:'FORGED LABEL',medicineId:'miph-2026-08:99999',catalogVersion:'miph-2026-08',quantity:2},sessions[other.id],400);
+ await request('/api/stock',{action:'create',name:'FORGED LABEL',medicineId:'miph-2026-08:00000',catalogVersion:'miph-2026-08',quantity:2},sessions[other.id]);
+ let canonicalStock=(await request('/api/stock?q=ARTIZ',null,sessions[other.id])).data.rows.find(s=>s.medicineId==='miph-2026-08:00000');assert(canonicalStock);assert(canonicalStock.name.includes('COMPRIME PELLICULE SECABLE'));
+ await request('/api/stock',{action:'edit',id:canonicalStock.id,updated:canonicalStock.updated,name:canonicalStock.name,quantity:3},sessions[other.id]);
+ canonicalStock=(await request('/api/stock?q=ARTIZ',null,sessions[other.id])).data.rows.find(s=>s.id===canonicalStock.id);assert.equal(canonicalStock.medicineId,'miph-2026-08:00000','Legacy quantity edits preserve canonical identity');
+ await request('/api/admin',{action:'stock-save',id:canonicalStock.id,pharmacy,name:'LOCAL MANUAL RENAMED',quantity:3,reason:'Local rename'},rootCookie);
+ canonicalStock=(await request('/api/stock?q=LOCAL%20MANUAL%20RENAMED',null,sessions[other.id])).data.rows[0];assert.equal(canonicalStock.medicineId,null);assert.equal(canonicalStock.verification,'unverified','Renaming cannot retain a stale catalog identity');
  await request('/api/profile',{action:'personal',details:personal,health},sessions[other.id],403);
  await request('/api/admin',{action:'stock-save',pharmacy,name:'LOCAL ADMIN ITEM',quantity:7,reason:'Local stock create'},rootCookie);
  const item=(await request('/api/admin?section=inventory&q=LOCAL%20ADMIN%20ITEM',null,rootCookie)).data.rows[0];assert.equal(item.quantity,7);
@@ -192,6 +197,10 @@ try{
  const requestId=randomUUID();await request('/api/app',{action:'search',medicine:'Doliprane 1000 mg',city:'algiers',night:false,token:requestId},sessions[recipient.id]);
  await request('/api/app',{action:'reply',request:requestId,pharmacy,available:true},sessions[other.id]);
  const booking=(await request('/api/app',{action:'reserve',request:requestId,pharmacy,consent:true},sessions[recipient.id])).data.reservations.find(b=>b.request===requestId);assert(booking);
+ const assistant=(await request('/api/assistant',{tool:'request-status',request:requestId},sessions[recipient.id])).data;assert.equal(assistant.request,requestId);assert(!JSON.stringify(assistant).includes(booking.code));assert(assistant.citations[0].url.startsWith('/'));
+ await request('/api/assistant',{tool:'request-status',request:requestId},sessions[other.id],404);
+ await request('/api/assistant',{tool:'request-status',request:requestId,owner:recipient.id},sessions[other.id],400);
+ await request('/api/assistant',{tool:'sql',query:'SELECT * FROM profiles'},rootCookie,400);
  await request('/api/app',{action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},sessions[recipient.id]);
  const bookings=(await request('/api/admin?section=reservations&q='+booking.id,null,rootCookie)).data.rows;assert.equal(bookings.length,1);assert(!('code' in bookings[0]));assert(!('approachLat' in bookings[0]));
  let controls=(await request('/api/admin?section=service',null,rootCookie)).data.service;

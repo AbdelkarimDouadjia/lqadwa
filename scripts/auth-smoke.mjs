@@ -17,7 +17,9 @@ assert.equal((await get('/api/auth',{method:'POST',headers:{origin:'https://evil
 assert.equal((await get('/api/auth',{method:'POST',headers:{origin:base,'content-type':'application/json'},body:JSON.stringify({action:'register',email:'invalid',password:'short',name:'x',role:'admin'})})).status,400);
 assert.equal((await get('/api/auth',{method:'POST',headers:{origin:base,'content-type':'application/json'},body:JSON.stringify({action:'oauth',provider:'chatgpt'})})).status,400);
 const providers=await(await get('/api/auth/providers')).json();
-assert.deepEqual(Object.keys(providers).sort(),['apple','google']);
+assert.deepEqual(Object.keys(providers).sort(),['apple','google','release']);
+assert.deepEqual(Object.keys(providers.release).sort(),['assistant','availabilityRequests','healthCollection','mode','prescriptionAI','registration']);
+assert.equal(providers.release.mode,'CORE');assert.equal(providers.release.registration,true);
 for(const provider of ['google','apple'])if(!providers[provider]){
  const response=await get('/api/auth',{method:'POST',headers:{origin:base,'content-type':'application/json'},body:JSON.stringify({action:'oauth',provider,returnTo:'//evil.invalid'})});
  assert.equal(response.status,409);assert.equal((await response.json()).error,'PROVIDER_UNAVAILABLE');

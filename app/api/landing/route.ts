@@ -3,6 +3,7 @@ import { database } from "@/db";
 import { emptyLandingContent, landingContentSchema, parseLandingContent } from "@/lib/landing-content";
 import { audit, HttpError, identity, isRootAdmin } from "@/lib/access";
 import { limitedJson, privateHeaders, requireMutationOrigin, rateLimit } from "@/lib/http-security";
+import { requirePrivilegedSession } from "@/lib/privileged-access";
 
 export const dynamic = "force-dynamic";
 const landingRequest = z.discriminatedUnion("action", [
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     const input = landingRequest.parse(await limitedJson(request, 524_288));
     const user = await identity(request);
     if (!isRootAdmin(user.userId)) throw new HttpError("صلاحية مالك المنصة مطلوبة.", 403);
+    await requirePrivilegedSession(user.userId, request);
     await rateLimit(user.userId, "landing-content", 30);
     const db = database();
 

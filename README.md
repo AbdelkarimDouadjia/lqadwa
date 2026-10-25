@@ -6,6 +6,8 @@
 
 <p align="center">Find a nearby pharmacy that confirms availability. Reserve, then collect in person.</p>
 
+Maintainer release status (25 October 2026): the 1.1.1 candidate is under review; production remains on its existing 1.1.0 Worker. Publication is gated by exact-commit checks, approved additive migrations, real email/pharmacy acceptance and operator review. See [release readiness](docs/release-readiness.md), [evidence](docs/release-evidence.md), [runbook](docs/release-runbook.md) and [operator actions](docs/operator-actions.md). The candidate defaults to information-only service; experimental OCR and assistant modules are independently OFF. Existing public APK downloads are preserved pending signed-device acceptance.
+
 <p align="center">
   <a href="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml"><img alt="Release checks" src="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Web: Arabic, French, English, Kabyle" src="https://img.shields.io/badge/web-AR%20%7C%20FR%20%7C%20EN%20%7C%20KAB-08776b">

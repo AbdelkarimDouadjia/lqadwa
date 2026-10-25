@@ -23,9 +23,13 @@ public final class NativeDesignTest extends Instrumentation {
  private void assertFalse(String message,boolean condition){if(condition)throw new AssertionError(message);}
  private void assertNotNull(Object value){if(value==null)throw new AssertionError("Missing screenshot");}
  @Override public void onCreate(Bundle arguments){super.onCreate(arguments);start();}
- @Override public void onStart(){Bundle result=new Bundle();try{assertNotNull(getTargetContext().getPackageManager().resolveContentProvider(getTargetContext().getPackageName()+".fileprovider",0));activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));testNativeScreens();result.putString("stream","PASS: native screens, camera provider authority, sign-in Back, role navigation and screenshots\n");finish(-1,result);}catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(1,result);}}
+ @Override public void onStart(){Bundle result=new Bundle();try{assertNotNull(getTargetContext().getPackageManager().resolveContentProvider(getTargetContext().getPackageName()+".fileprovider",0));activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));testDurableRequestIdentity();testNativeScreens();result.putString("stream","PASS: native screens, camera provider authority, sign-in Back, role navigation and screenshots\n");finish(-1,result);}catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(1,result);}}
  private void set(String key,Object value)throws Exception{Field f=MainActivity.class.getDeclaredField(key);f.setAccessible(true);f.set(getActivity(),value);}
  private void call(String name)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(getActivity());}
+ private void testDurableRequestIdentity()throws Exception{
+  SecureSession first=new SecureSession(getTargetContext());String hash="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",owner="LOCAL-DURABLE-REQUEST";
+  try{String token=first.requestToken(owner,hash);assertFalse("Recreating the store must preserve an ambiguous retry UUID",!token.equals(new SecureSession(getTargetContext()).requestToken(owner,hash)));assertFalse("Accounts must not share retry UUIDs",token.equals(first.requestToken(owner+"-OTHER",hash)));first.clearRequest(owner);assertFalse("A completed request permits a new UUID",token.equals(first.requestToken(owner,hash)));}finally{first.clearRequest(owner);first.clearRequest(owner+"-OTHER");}
+ }
  private void render(String lang,String screen,boolean signedIn)throws Exception{
   getInstrumentation().runOnMainSync(()->{try{
    set("resumed",false);set("language",lang);set("screen",screen);set("token",signedIn?"isolated-ui-fixture":"");

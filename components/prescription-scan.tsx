@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { prescriptionMatches, type PrescriptionCandidate } from "@/lib/prescription-match";
 import type { Language } from "@/lib/i18n";
 import type { Worker } from "tesseract.js";
+import { prepareOcrImage } from "@/lib/ocr-safety";
 
 const copy = {
   scan: ["مسح الوصفة", "Scanner une ordonnance", "Scan prescription", "Sken tamedyazt n ṭṭbib"],
@@ -23,18 +24,22 @@ const copy = {
   error: ["تعذّرت القراءة. جرّب صورة أوضح (حتى 8 MB) أو اكتب الاسم يدوياً.", "Lecture impossible. Essayez une image plus nette (8 Mo max.) ou saisissez le nom.", "Could not read image. Try a clearer image (max. 8 MB) or type the name.", "Taɣuri ur teddi ara. Ɛreḍ tawlaft-nniḍen neɣ aru isem."],
   choose: ["راجع التركيز ثم اختر", "Vérifiez le dosage puis choisissez", "Review strength, then choose", "Senqed lqedd, syen fren"],
   close: ["إغلاق ومسح النص", "Fermer et effacer le texte", "Close and clear text", "Mdel, kkes aḍris"],
+  raw: ["النسخة الأصلية المستخرجة (غير متحقق منها)","Transcription originale (non vérifiée)","Original transcription (unverified)","Aḍris aneṣli (ur nettwasenqed ara)"],
+  uncertainty: ["قراءة غير مؤكدة. يجب مراجعة النص مع الصيدلي.","Lecture incertaine. Faites vérifier le texte par le pharmacien.","Uncertain transcription. Have a pharmacist review the text.","Taɣuri ur nettwasenqed ara. Senqed aḍris ɣer usaysi."],
 } as const;
 type Candidate = PrescriptionCandidate;
 
-export function PrescriptionScan({ language, disabled, onSelect }: { language: Language; disabled?: boolean; onSelect: (name: string) => void }) {
+export function PrescriptionScan({ language, disabled, onSelect }: { language: Language; disabled?: boolean; onSelect: (candidate: PrescriptionCandidate) => void }) {
   const index = language === "ar" ? 0 : language === "fr" ? 1 : language === "en" ? 2 : 3;
   const t = (key: keyof typeof copy) => copy[key][index];
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [progress, setProgress] = useState(0);
   const [text, setText] = useState(""), [error, setError] = useState(false), [matched, setMatched] = useState(false), [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [rawText,setRawText]=useState(""),[uncertain,setUncertain]=useState(true);
+  const imageRun=useRef<AbortController|null>(null);
   const camera = useRef<HTMLInputElement>(null), gallery = useRef<HTMLInputElement>(null), worker = useRef<Worker | null>(null), run = useRef(0);
-  useEffect(() => () => { run.current++; void worker.current?.terminate().catch(() => {}); }, []);
+  useEffect(() => () => { run.current++; imageRun.current?.abort(); void worker.current?.terminate().catch(() => {}); }, []);
   useEffect(() => { if (disabled) close(); }, [disabled]);
-  function close() { run.current++; void worker.current?.terminate().catch(() => {}); worker.current = null; setOpen(false); setText(""); setCandidates([]); setMatched(false); setError(false); setBusy(false); }
+  function close() { run.current++; imageRun.current?.abort(); void worker.current?.terminate().catch(() => {}); worker.current = null; setOpen(false); setText("");setRawText("");setUncertain(true); setCandidates([]); setMatched(false); setError(false); setBusy(false); }
   async function match(raw: string, generation: number) {
     const { default: catalog } = await import("@/lib/medicines-2026.json");
     const items = prescriptionMatches(raw, catalog);
@@ -44,23 +49,25 @@ export function PrescriptionScan({ language, disabled, onSelect }: { language: L
     if (!file) return;
     if (!file.type.startsWith("image/") || file.size > 8_000_000) { setText(""); setCandidates([]); setMatched(false); setError(true); return; }
     const generation = ++run.current; setBusy(true); setProgress(0); setError(false); setText(""); setCandidates([]); setMatched(false);
+    setRawText("");setUncertain(true);imageRun.current?.abort();const imageController=new AbortController();imageRun.current=imageController;
     const timeout = setTimeout(() => {
       if (generation !== run.current) return;
-      run.current++; void worker.current?.terminate().catch(() => {}); worker.current = null; setBusy(false); setError(true);
+      run.current++; imageController.abort(); void worker.current?.terminate().catch(() => {}); worker.current = null; setBusy(false); setError(true);
     }, 120000);
     try {
+      const image=await prepareOcrImage(file,imageController.signal);
       const { createWorker } = await import("tesseract.js");
       const current = await createWorker(["ara", "fra", "eng"], 1, { logger: (event) => { if (generation === run.current && event.status === "recognizing text") setProgress(Math.round(event.progress * 100)); } });
       if (generation !== run.current) { await current.terminate(); return; }
       worker.current = current;
       try {
-        const result = await current.recognize(file);
+        const result = await current.recognize(image);
         if (generation !== run.current) return;
-        const raw = result.data.text.trim().slice(0, 15000); setText(raw);
+        const raw = result.data.text.trim().slice(0, 15000); setText(raw);setRawText(raw);setUncertain(result.data.confidence<80);
         if (!raw) setError(true); else await match(raw, generation);
       } finally { if (worker.current === current) { worker.current = null; await current.terminate(); } }
     } catch { if (generation === run.current) setError(true); }
     finally { clearTimeout(timeout); if (generation === run.current) setBusy(false); }
   }
-  return <><button type="button" disabled={disabled} onClick={() => setOpen(true)}><FileScan />{t("scan")}</button><Dialog open={open} onOpenChange={(value) => !value && close()}><DialogContent className="app-dialog prescription-dialog" dir={language === "ar" ? "rtl" : "ltr"} showCloseButton={false}><button className="dialog-close icon-btn" onClick={close} aria-label={t("close")}><X /></button><span className="dialog-symbol"><FileScan /></span><DialogTitle>{t("title")}</DialogTitle><DialogDescription>{t("intro")}</DialogDescription><p className="scan-privacy"><ShieldCheck />{t("privacy")}</p><div className="row"><Button disabled={busy} onClick={() => camera.current?.click()}><Camera />{t("camera")}</Button><Button disabled={busy} variant="outline" onClick={() => gallery.current?.click()}><ImagePlus />{t("photo")}</Button></div><input ref={camera} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} /><input ref={gallery} className="visually-hidden" type="file" accept="image/*" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} />{busy && <div className="ocr-progress" role="status"><span>{t("reading")} {progress}%</span><progress value={progress} max={100} /></div>}{error && <p role="alert" className="journey-error">{t("error")}</p>}{text && <><label htmlFor="prescription-text">{t("text")}</label><textarea id="prescription-text" dir="auto" value={text} maxLength={15000} onChange={(e) => { setText(e.target.value); setCandidates([]); setMatched(false); }} /><Button variant="outline" disabled={busy} onClick={() => void match(text, run.current)}>{t("check")}</Button></>}{candidates.length > 0 && <><h3>{t("match")}</h3><p className="muted">{t("choose")}</p><div className="prescription-matches">{candidates.map((item) => <button key={item.name} onClick={() => { onSelect(item.name); close(); }}><span dir="ltr"><strong>{item.name}</strong><small>{item.ingredient}</small></span><Check /></button>)}</div></>}{matched && !candidates.length && <p className="muted">{t("manual")}</p>}<p className="soft-note">{t("caution")}</p></DialogContent></Dialog></>;
+  return <><button type="button" disabled={disabled} onClick={() => setOpen(true)}><FileScan />{t("scan")}</button><Dialog open={open} onOpenChange={(value) => !value && close()}><DialogContent className="app-dialog prescription-dialog" dir={language === "ar" ? "rtl" : "ltr"} showCloseButton={false}><button className="dialog-close icon-btn" onClick={close} aria-label={t("close")}><X /></button><span className="dialog-symbol"><FileScan /></span><DialogTitle>{t("title")}</DialogTitle><DialogDescription>{t("intro")}</DialogDescription>{rawText&&<details><summary>{t("raw")}</summary><pre dir="auto" style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{rawText}</pre>{uncertain&&<p role="status">{t("uncertainty")}</p>}</details>}<p className="scan-privacy"><ShieldCheck />{t("privacy")}</p><div className="row"><Button disabled={busy} onClick={() => camera.current?.click()}><Camera />{t("camera")}</Button><Button disabled={busy} variant="outline" onClick={() => gallery.current?.click()}><ImagePlus />{t("photo")}</Button></div><input ref={camera} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} /><input ref={gallery} className="visually-hidden" type="file" accept="image/*" onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ""; }} />{busy && <div className="ocr-progress" role="status"><span>{t("reading")} {progress}%</span><progress value={progress} max={100} /></div>}{error && <p role="alert" className="journey-error">{t("error")}</p>}{text && <><label htmlFor="prescription-text">{t("text")}</label><textarea id="prescription-text" dir="auto" value={text} maxLength={15000} onChange={(e) => { setText(e.target.value); setCandidates([]); setMatched(false); }} /><Button variant="outline" disabled={busy} onClick={() => void match(text, run.current)}>{t("check")}</Button></>}{candidates.length > 0 && <><h3>{t("match")}</h3><p className="muted">{t("choose")}</p><div className="prescription-matches">{candidates.map((item) => <button key={item.id} onClick={() => { onSelect(item); close(); }}><span dir="ltr"><strong>{item.name}</strong><small>{item.form} · {item.ingredient}</small></span><Check /></button>)}</div></>}{matched && !candidates.length && <p className="muted">{t("manual")}</p>}<p className="soft-note">{t("caution")}</p></DialogContent></Dialog></>;
 }
