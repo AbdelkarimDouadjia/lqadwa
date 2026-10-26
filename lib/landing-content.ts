@@ -42,6 +42,16 @@ export const emptyLandingContent: LandingContent = {
   version: 1, copy: {}, sections: {}, order: [...landingSectionKeys], blocks: [],
 };
 
+export const landingDraftFileMaxBytes = 524_288;
+const draftFileSchema = z.object({ format: z.literal("lqadwa-landing-draft"), fileVersion: z.literal(1), content: landingContentSchema }).strict();
+export function exportLandingDraft(content: LandingContent) {
+  return JSON.stringify(draftFileSchema.parse({ format: "lqadwa-landing-draft", fileVersion: 1, content }), null, 2);
+}
+export function importLandingDraft(raw: string): LandingContent {
+  if (new TextEncoder().encode(raw).length > landingDraftFileMaxBytes) throw new Error("DRAFT_FILE_TOO_LARGE");
+  return draftFileSchema.parse(JSON.parse(raw)).content;
+}
+
 /** Older saved pages keep their original order until the owner rearranges them. */
 export function landingLayout(content: LandingContent): string[] {
   return content.layout ?? [...content.order, ...content.blocks.map(block => block.id)];

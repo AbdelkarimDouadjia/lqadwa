@@ -107,7 +107,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
     if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => {});
     queueMicrotask(() => setAppMode(new URLSearchParams(window.location.search).get("app") === "1" || window.matchMedia("(display-mode: standalone)").matches));
     const invite = new URLSearchParams(window.location.search).get("admin_invite");
-    if (invite) sessionStorage.setItem("dawa-admin-invite", invite);
+    if (invite && /^[0-9a-f-]{73}$/.test(invite)) sessionStorage.setItem("dawa-admin-invite", invite);
     const stored = localStorage.getItem("dawa-language");
     if (stored === "ar" || stored === "fr" || stored === "en" || stored === "kab") queueMicrotask(() => setLanguage(stored));
     const preferred = localStorage.getItem("dawa-theme") === "dark";
@@ -147,20 +147,24 @@ export default function HomePage({ initialView = "search", initialLandingContent
     return () => { clearInterval(timer); clearInterval(clock); };
   }, [load,preferences.value.refresh,signedOut]);
   useEffect(() => {
-    if (loading || signedOut || inviteClaimed.current) return;
+    if (loading || inviteClaimed.current) return;
     const token = sessionStorage.getItem("dawa-admin-invite");
     if (!token) return;
+    if (signedOut) { if (!error) window.location.replace("/login"); return; }
     inviteClaimed.current = true;
     void (async () => {
+      let discardInvite = false;
       try {
-        const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin-invite-redeem", token }) });
-        const result = await response.json() as AppData & { error?: string };
+        const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin-invite-redeem", token }), signal: AbortSignal.timeout(20000) });
+        const result = await response.json() as AppData & { error?: string; code?: string };
+        if (response.status === 403 && result.code === "MFA_REQUIRED") { window.location.replace("/operations/security"); return; }
+        discardInvite = response.ok || (response.status < 500 && response.status !== 429);
         if (!response.ok) throw new Error(result.error || t("error"));
-        setData(result); toast.success(t("inviteAccepted")); navigate("admin");
+        setData(result); toast.success(t("inviteAccepted")); window.location.replace("/operations");
       } catch (cause) { toast.error(cause instanceof Error ? cause.message : t("error")); }
-      finally { sessionStorage.removeItem("dawa-admin-invite"); window.history.replaceState(null, "", window.location.pathname + window.location.hash); }
+      finally { if (discardInvite) sessionStorage.removeItem("dawa-admin-invite"); window.history.replaceState(null, "", window.location.pathname + window.location.hash); }
     })();
-  }, [loading, signedOut, t, navigate]);
+  }, [loading, signedOut, error, t]);
   useEffect(() => {
     type Context = { registerTool: (tool: unknown, options: { signal: AbortSignal }) => void };
     const context = (document as Document & { modelContext?: Context }).modelContext;

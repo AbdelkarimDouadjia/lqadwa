@@ -1,10 +1,27 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
 
 const widths = [320, 360, 375, 390, 414, 768, 1024, 1440];
 const languages = ['ar', 'fr', 'en', 'kab'];
 const names = { ar: 'العربية', fr: 'Français', en: 'English', kab: 'Taqbaylit' };
+async function resetLocalRateLimits() {
+  const state=process.env.LQADWA_TEST_STATE || '';
+  expect(path.dirname(state)).toBe(path.resolve('.wrangler'));
+  expect(path.basename(state)).toMatch(/^integration-/);
+  // One worker, isolated loopback D1 only: each case gets independent rate buckets.
+  const inspector='http://localhost:5173/cdn-cgi/local/explorer/api/d1/database';
+  const response=await fetch(inspector,{signal:AbortSignal.timeout(5000)});
+  expect(response.ok).toBe(true);
+  const database=(await response.json()).result.find(item=>item.name==='DB');
+  expect(database?.uuid).toBeTruthy();
+  const reset=await fetch(`${inspector}/${database.uuid}/raw`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({batch:[{sql:'DELETE FROM rate_limits'}]}),signal:AbortSignal.timeout(10000)});
+  const data=await reset.json();
+  expect(reset.ok && data.success && data.result.every(item=>item.success)).toBe(true);
+}
 test.beforeEach(async ({ context }) => {
+  await resetLocalRateLimits();
   // Isolated fixtures only. Prevent maps/OAuth/email-provider requests leaving this test.
   await context.route(url => !['localhost', '127.0.0.1'].includes(url.hostname), route => route.abort());
 });
@@ -25,8 +42,6 @@ async function noOverflow(page) {
 }
 async function accessible(page) {
   const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
-  // The script-free preview sandbox blocks axe's frame runner; public pages are audited separately above.
-  if (await page.locator('.builder-canvas-frame').count()) builder.exclude('.builder-canvas-frame');
   const result = await builder.analyze();
   expect(result.violations.map(item => ({ id: item.id, impact: item.impact, nodes: item.nodes.map(node => node.target) }))).toEqual([]);
 }
@@ -120,6 +135,14 @@ test('public information pages render in every language and link into the servic
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
+test('login rate protection remains enforced within each isolated case',async({request})=>{
+  const remaining=600000-Date.now()%600000;
+  if(remaining<5000)await new Promise(resolve=>setTimeout(resolve,remaining+100));
+  const attempt=()=>request.post('/api/auth',{headers:{origin:'https://localhost:5443'},ignoreHTTPSErrors:true,data:{action:'admin-login',identifier:'admin',password:'LOCAL-only-incorrect-passphrase'}});
+  for(let count=0;count<10;count++)expect((await attempt()).status()).toBe(401);
+  const blocked=await attempt();expect(blocked.status()).toBe(429);expect((await blocked.json()).error).toBe('RATE_LIMIT');
+});
+
 for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, scoped navigation, layout matrix and account menu`, async ({ page, context }, info) => {
   await context.addInitScript(() => { localStorage.setItem('dawa-language', 'en'); });
   await page.goto(role === 'owner' ? '/operations/login' : '/login');
@@ -179,7 +202,50 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   await accessible(page);
 });
 
-test('visual editor: real drag-and-drop, live canvas, draft isolation, publication and restoration', async ({ page, context, browser }, info) => {
+test.describe('administrator invitation',()=>{
+// This test injects an HTTP MFA challenge; worker-owned requests bypass page routes.
+test.use({serviceWorkers:'block'});
+test('survives MFA and resumes without granting owner access', async ({ page, context, request }) => {
+  test.setTimeout(90000);page.setDefaultTimeout(15000);
+  const origin='https://localhost:5443',headers={origin},password='LOCAL-only-unique-passphrase';
+  const localRequest={headers,ignoreHTTPSErrors:true};
+  expect((await request.post('/api/auth',{...localRequest,data:{action:'admin-login',identifier:'admin',password}})).status()).toBe(200);
+  const invitation=await request.post('/api/app',{...localRequest,data:{action:'admin-invite-create',email:'recipient@example.invalid',permissions:['audit']}});
+  expect(invitation.status()).toBe(200);const token=(await invitation.json()).invite;
+  let attempts=0,member='';
+  await context.addInitScript(()=>localStorage.setItem('dawa-language','en'));
+  await page.route('**/api/app',async route=>{
+    if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='admin-invite-redeem'&&++attempts===1)return route.fulfill({status:403,json:{error:'LOCAL step-up required',code:'MFA_REQUIRED'}});
+    return route.continue();
+  });
+  try{
+    await page.goto('/?admin_invite='+token);
+    await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel('Email address',{exact:true}).fill('recipient@example.invalid');
+    await page.getByLabel('Password',{exact:true}).fill(password);
+    await page.locator('form').getByRole('button',{name:'Sign in',exact:true}).click();
+    await expect(page).toHaveURL(/\/operations\/security$/,{timeout:30000});
+    expect(await page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
+    member=(await(await page.request.get('/api/app',{ignoreHTTPSErrors:true})).json()).profile.id;
+    await expect(page.locator('#totp-code')).toBeVisible();
+    await page.getByLabel('Language / اللغة').selectOption('en');
+    await page.getByLabel('Six-digit code',{exact:true}).fill('123456');
+    await page.getByRole('button',{name:'Verify access',exact:true}).click();
+    await expect(page).toHaveURL(/\/operations$/,{timeout:30000});await expect(page.getByRole('heading',{name:'Audit trail',exact:true})).toBeVisible();
+    expect(attempts).toBe(2);expect(await page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBeNull();
+    await expect(page.locator('.visual-editor-entry')).toHaveCount(0);
+    const data=await(await page.request.get('/api/app',{ignoreHTTPSErrors:true})).json();expect(data.admin.access).toEqual({isOwner:false,permissions:['audit']});
+  }finally{
+    if(member)await request.post('/api/app',{...localRequest,data:{action:'admin-revoke',owner:member}});
+    await request.post('/api/app',{...localRequest,data:{action:'admin-invites-revoke'}});
+  }
+});
+});
+
+test.describe('visual editor',()=>{
+test.use({serviceWorkers:'block'});
+test('real drag-and-drop, draft files, MFA recovery, publication and restoration', async ({ page, context, browser }, info) => {
   page.setDefaultTimeout(15000);
   const apiOptions = { ignoreHTTPSErrors: true, headers: { origin: 'https://localhost:5443' } };
   await context.addInitScript(() => localStorage.setItem('dawa-language', 'en'));
@@ -233,7 +299,7 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
 
     await frame.getByRole('button', { name: 'Select section: How it works', exact: true }).click();
-    await expect(inspector.locator('h3')).toHaveText('How it works');
+    await expect(inspector.locator('.builder-selection-heading h3')).toHaveText('How it works');
     await page.locator('.builder-panel-tabs').getByRole('button', { name: 'Insert', exact: true }).click();
     // Real pointer drag crosses from the insertion palette into the preview iframe.
     const card = await page.getByRole('button', { name: 'Text section', exact: true }).boundingBox();
@@ -280,12 +346,36 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
     await expect(page.locator('.builder-layers')).toBeHidden();
     await expect(frame.locator('.builder-page-section')).toHaveCount(0);
     await expect(frame.locator('#questions')).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
     await expect(page.locator('.builder-layers')).toBeVisible();
     await page.getByRole('button', { name: 'Desktop', exact: true }).click();
     await page.getByRole('button', { name: 'Toggle preview theme', exact: true }).click();
 
+    const headline=page.getByLabel('Headline - first line',{exact:true}),beforeImport=await headline.inputValue();
+    const downloadReady=page.waitForEvent('download');await page.getByRole('button',{name:'Export draft',exact:true}).click();
+    const download=await downloadReady,draftBytes=await readFile(await download.path());
+    expect(JSON.parse(draftBytes.toString()).format).toBe('lqadwa-landing-draft');
+    await headline.fill('LOCAL EDIT BEFORE IMPORT');
+    const fileInput=page.locator('input[type=file]');
+    await fileInput.setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{"format":"foreign"}')});
+    await expect(page.locator('.builder-request-error')).toHaveText('Choose a valid LQADWA draft file, at most 512 KB.');
+    await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await fileInput.setInputFiles({name:'draft.json',mimeType:'application/json',buffer:draftBytes});
+    await expect(page.getByRole('dialog')).toContainText('Replace only the current draft');
+    await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click();
+    await expect(headline).toHaveValue(beforeImport);
+    await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(headline).toHaveValue('LOCAL EDIT BEFORE IMPORT');
+    await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(headline).toHaveValue(beforeImport);
+    expect((await page.request.get('/api/landing',apiOptions).then(r=>r.json())).content).toEqual(original);
+    const requireMfa=route=>route.request().method()==='POST'&&route.request().postDataJSON()?.action==='save'?route.fulfill({status:403,json:{code:'MFA_REQUIRED',error:'LOCAL authenticator renewal required'}}):route.continue();
+    await page.route('**/api/landing',requireMfa);
+    await page.getByRole('button',{name:'Save draft',exact:true}).click();
+    await expect(page.getByRole('link',{name:'Verify in another tab',exact:true})).toHaveAttribute('target','_blank');
+    await expect(headline).toHaveValue(beforeImport);
+    await page.unroute('**/api/landing',requireMfa);
     await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await expect(page.locator('.builder-session-help')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
     expect((await page.request.get('/api/landing', apiOptions).then(r => r.json())).content).toEqual(original);
     await page.reload();
@@ -340,4 +430,5 @@ test('visual editor: real drag-and-drop, live canvas, draft isolation, publicati
       expect(restored.status()).toBe(200);
     }
   }
+});
 });

@@ -1,0 +1,19 @@
+# Live visual-editor maintenance
+
+The reported failure was on the public site's administration dashboard. Production was still serving the old form-based editor from `fd2f052`; the tested drag-and-drop editor in PR #7 had not been deployed.
+
+This separate maintenance branch starts from current main and brings over the dedicated owner editor: layers, responsive canvas, drag handles, section templates, draft files, undo/redo, locale/theme previews, atomic draft/audit saves, publishing and history. Existing CMS records are accepted. No landing text is automatically published by deployment. The dependency patches include the required Zod record-signature compatibility corrections in the existing stock/directory routes; their workflows are preserved.
+
+The private entry is `/operations/login` → authenticator verification → `/operations/editor`. Enrollment and fresh TOTP are enforced on the server for administration/CMS, including admin data in `/api/app`. A native opaque session cannot elevate even alongside a cookie. Invitations survive sign-in and step-up. Existing administrators must use their own authenticator; no password, recovery bypass or shared code is installed. See [Supabase's MFA guidance](https://supabase.com/docs/guides/auth/auth-mfa) for enrollment and server-side enforcement.
+
+The broader CORE release and experimental assistant/recognition modules remain in PR #7. This maintenance patch does not change the public registration/search/request contract, health collection or existing APKs/signing identity, and does not certify the existing service's unresolved clinical/legal/operator acceptance. It does not introduce the INFORMATION_ONLY switch or enable new AI processing. No migration is required; already-applied production identity columns are preserved.
+
+## Verification and publication
+
+- Local `npm run check` and production build passed. The targeted Chromium editor/API run passed (one browser case, 30.8 seconds), including actual drag, file import/export, MFA recovery, publishing and restoration. Lint and full exact-head CI results belong in the PR receipt; pending jobs are not passes.
+- Additional API checks cover first-factor admin/CMS denial, provider-verified step-up, scoped permissions, idempotent draft retry, stale-version rejection and forced audit-failure rollback. Unit checks reject stale/foreign/missing MFA assurance.
+- Publication must use the protected main branch after required `web` and `android` checks pass. The manual workflow binds an explicit reviewed commit; post-deploy checks compare the actual compiled source commit and reject dirty builds. No branch protection or approval receipt for CORE is bypassed by this private-editor maintenance scope.
+- Before upload, verify live CMS tables, take a fresh protected backup and rehearse recovery. Cloudflare currently rejected its saved credential with code 10000; GitHub has no Cloudflare deployment secrets. Restore authenticated deployment access without sending credentials through chat. No upload has occurred merely because a build passed.
+- Retain the previous Worker reference. Roll back application code rather than restoring an old full database over newer records. If the owner subsequently publishes the new interleaved-layout format, restore a pre-maintenance CMS revision through the current editor before reverting to the old Worker, whose strict parser cannot understand that new layout field. Keep the current draft exported before a deliberate content restore.
+
+Physical Android acceptance, real non-team email acceptance, staffed-pharmacy round trips and the broader launch decisions are separate and remain unverified here. This web-only maintenance patch does not replace or distribute an APK.

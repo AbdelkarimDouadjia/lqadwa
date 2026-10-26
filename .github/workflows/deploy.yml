@@ -1,6 +1,11 @@
 name: Publish approved web release
 on:
   workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit for this maintenance release
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -10,12 +15,18 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     environment: production
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - name: Bind publication to the reviewed commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '24'
@@ -25,7 +36,14 @@ jobs:
       - run: npm run lint
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
-      - run: npx --no-install playwright install --with-deps chromium firefox webkit
+      - name: Install isolated browser-test engines
+        run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          npx --no-install playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - run: npm run test:ocr
       # Fixture overrides are only CLI flags in local checks, never production environment variables.
@@ -39,3 +57,5 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           node --import ./scripts/sites-env.mjs ./node_modules/wrangler/wrangler-dist/cli.js deploy --config dist/server/wrangler.json --keep-vars
       - run: node scripts/public-release-check.mjs
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}

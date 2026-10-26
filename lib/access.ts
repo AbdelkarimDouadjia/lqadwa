@@ -4,7 +4,7 @@ import { getAppUser } from "@/lib/auth";
 import { initialPersonalDetails } from "@/lib/profile-details";
 import { adminPermissions, parseAdminPermissions, type AdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 
-export class HttpError extends Error { constructor(message: string, public status = 400) { super(message); } }
+export class HttpError extends Error { constructor(message: string, public status = 400, public code?: string) { super(message); } }
 export function rootAdminIds() { return (env.APP_ADMIN_IDS?.split(",").map(v => v.trim()).filter(Boolean) || []); }
 export function isRootAdmin(owner: string) { return rootAdminIds().includes(owner) || (import.meta.env.DEV && owner === "local_seedy"); }
 export async function adminAccess(owner: string, db = database()): Promise<AdminAccess | null> {

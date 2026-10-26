@@ -5,6 +5,7 @@ import { adminAccess, audit, HttpError, identity, isAdmin, isRootAdmin } from "@
 import { limitedJson, privateHeaders, rateLimit, requireMutationOrigin } from "@/lib/http-security";
 import { cities } from "@/lib/domain";
 import { adminPermissions, type AdminPermission } from "@/lib/admin-permissions";
+import { requirePrivilegedSession } from "@/lib/privileged-access";
 import type { ManagementRow, ServiceControls } from "@/lib/admin-management";
 import { stopPharmacyBookings } from "@/lib/pharmacy-status";
 import { personalSchema, healthSchema, pharmacyDetailsSchema, parseDetails } from "@/lib/profile-details";
@@ -37,6 +38,7 @@ function failure(error: unknown) {
 async function access(request: Request) {
   const user = await identity(request), permissions = await adminAccess(user.userId);
   if (!permissions) throw new HttpError("Admin access required", 403);
+  await requirePrivilegedSession(user.userId, request);
   return { owner: user.userId, ...permissions };
 }
 export async function GET(request: Request) {
