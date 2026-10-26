@@ -12,7 +12,8 @@ concurrency:
 jobs:
   web:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Ubuntu browser dependencies can exhaust 25 minutes before tests start.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -31,7 +32,15 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
       - name: Install isolated browser-test engines
-        run: npx --no-install playwright install --with-deps chromium firefox webkit
+        run: |
+          # The Azure HTTP mirror exhausted the job budget while downloading packages.
+          # Keep Ubuntu's signed repositories, using the official HTTPS archive.
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          npx --no-install playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - run: npm run test:ocr
       - run: npm run test:ai-safety

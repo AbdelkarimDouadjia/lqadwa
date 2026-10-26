@@ -1,19 +1,24 @@
 import assert from 'node:assert/strict';
 import {localAuthFixture} from './local-auth-fixture.mjs';
 import {randomUUID,createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 // LOCAL ONLY: isolated fictional accounts; never point deletion tests at a live service.
 const origin='http://localhost:5173';
 const fetch=(url,options={})=>globalThis.fetch(origin+url,{signal:AbortSignal.timeout(30000),...options,headers:{connection:'close',...options.headers}});
 const hash=v=>createHash('sha256').update(v).digest('hex');
-function sql(command){return execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to',process.env.LQADWA_TEST_STATE||'.wrangler/state','--command',command,'--json'],{encoding:'utf8',stdio:'pipe'});}
+const execute=promisify(execFile);
+async function sql(command){
+ // The synthetic Auth server shares this event loop; CLI work must not block it.
+ const result=await execute(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to',process.env.LQADWA_TEST_STATE||'.wrangler/state','--command',command,'--json'],{encoding:'utf8'});return result.stdout;
+}
 const now=Date.now(),users=Array.from({length:4},()=>({id:'release-test-'+randomUUID(),token:randomUUID()+'-'+randomUUID()}));
-sql(users.map(u=>`INSERT INTO profiles(id,name,city) VALUES('${u.id}','FICTIONAL RELEASE TEST','algiers');INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(u.token)}','${u.id}',${now},${now+900000});`).join(''));
+await sql(users.map(u=>`INSERT INTO profiles(id,name,city) VALUES('${u.id}','FICTIONAL RELEASE TEST','algiers');INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(u.token)}','${u.id}',${now},${now+900000});`).join(''));
 const [patient,other,pharmacist,secondPharmacist]=users;
 const session=u=>({'x-lqadwa-session':u.token});
 // Start LOCAL Wrangler with --var APP_ADMIN_IDS:local-release-owner; never use this owner on the public host.
 const rootToken=randomUUID()+'-'+randomUUID(), cookie='untrusted-cookie=1';
-sql(`INSERT INTO profiles(id,name,city) VALUES('local-release-owner','LOCAL OWNER','algiers') ON CONFLICT(id) DO NOTHING;INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(rootToken)}','local-release-owner',${now},${now+900000});DELETE FROM rate_limits WHERE key='${hash(`account-write:local-release-owner:${Math.floor(now/3600000)}`)}';`);
+await sql(`INSERT INTO profiles(id,name,city) VALUES('local-release-owner','LOCAL OWNER','algiers') ON CONFLICT(id) DO NOTHING;INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(rootToken)}','local-release-owner',${now},${now+900000});DELETE FROM rate_limits WHERE key='${hash(`account-write:local-release-owner:${Math.floor(now/3600000)}`)}';`);
 const authFixture=localAuthFixture([{id:'local-release-owner',email:'owner@example.invalid'}],'LOCAL-release-only-passphrase');
 await new Promise(resolve=>authFixture.server.listen(5888,'127.0.0.1',resolve));
 try {
@@ -46,12 +51,12 @@ await call({action:'collect',reservation:booking.id,pharmacy:a,code:booking.code
 await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
 assert((await snapshot(pharmacist)).staffBookings.some(r=>r.id===booking.id&&r.approachLat));
 assert(!(await snapshot(secondPharmacist)).staffBookings.some(r=>r.id===booking.id));
-sql(`UPDATE reservation_locations SET updated=${Date.now()-61000} WHERE reservation='${booking.id}';`);
+await sql(`UPDATE reservation_locations SET updated=${Date.now()-61000} WHERE reservation='${booking.id}';`);
 assert.equal((await snapshot(pharmacist)).staffBookings.find(r=>r.id===booking.id).approachLat,null,'Old GPS points must not remain visible');
 await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
 await call({action:'share-location',reservation:booking.id,enabled:false},session(patient));
 assert.equal((await snapshot(pharmacist)).staffBookings.find(r=>r.id===booking.id).approachLat,null,'Withdrawing consent immediately hides location');
-assert.equal(JSON.parse(sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation='${booking.id}';`))[0].results[0].n,0);
+assert.equal(JSON.parse(await sql(`SELECT count(*) AS n FROM reservation_locations WHERE reservation='${booking.id}';`))[0].results[0].n,0);
 await call({action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},session(patient));
 await call({action:'read-notifications'},{...session(patient),origin:'https://evil.invalid'},403);
 assert.equal((await fetch('/api/app',{headers:{cookie,'x-lqadwa-session':'invalid'}})).status,401);
@@ -73,10 +78,10 @@ const secondRequest=randomUUID();await call({action:'search',medicine:'PARACETAM
 await call({action:'delete',confirmation:'LQADWA'},session(pharmacist),200,'/api/account');
 assert.equal((await fetch('/api/app',{headers:session(pharmacist)})).status,401);
 assert.equal((await snapshot(patient)).reservations.find(r=>r.request===secondRequest).status,'cancelled');
-const remaining=JSON.parse(sql(`SELECT count(*) AS n FROM audit_log WHERE target='${a}';SELECT count(*) AS n FROM registered_pharmacies WHERE id='${a}';SELECT count(*) AS n FROM stock_items WHERE pharmacy='${a}';`));for(const r of remaining)assert.equal(r.results[0].n,0);
+const remaining=JSON.parse(await sql(`SELECT count(*) AS n FROM audit_log WHERE target='${a}';SELECT count(*) AS n FROM registered_pharmacies WHERE id='${a}';SELECT count(*) AS n FROM stock_items WHERE pharmacy='${a}';`));for(const r of remaining)assert.equal(r.results[0].n,0);
 await call({action:'delete',confirmation:'LQADWA'},session(patient),200,'/api/account');
 assert.equal((await fetch('/api/app',{headers:session(patient)})).status,401);
-sql(`INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(patient.token)}','${patient.id}',${now},${now+900000});`);
+await sql(`INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES('${hash(patient.token)}','${patient.id}',${now},${now+900000});`);
 assert.equal((await fetch('/api/app',{headers:session(patient)})).status,410,'stale session cannot resurrect deleted account');
 const closed=await(await fetch('/api/account?export=1',{headers:session(patient)})).json();assert.equal(closed.data.requests.length,0);assert.equal(closed.data.reservations.length,0);assert.equal(closed.data.profile.length,0);
 await call({action:'reopen',confirmation:'LQADWA'},session(patient),403,'/api/account');
@@ -84,7 +89,7 @@ assert.equal((await snapshot(other)).profile.name,'FICTIONAL RELEASE TEST');
 assert.equal((await snapshot(secondPharmacist)).ownPharmacy.id,b);
 const bucket=Math.floor(Date.now()/60000);
 // The local SQL CLI may cross a minute boundary before the HTTP assertion.
-sql([bucket,bucket+1].map(b=>`INSERT INTO rate_limits(key,count,expires) VALUES('${hash(`pickup-attempt:${secondPharmacist.id}:${b}`)}',10,${(b+1)*60000}) ON CONFLICT(key) DO UPDATE SET count=10;`).join(''));
+await sql([bucket,bucket+1].map(b=>`INSERT INTO rate_limits(key,count,expires) VALUES('${hash(`pickup-attempt:${secondPharmacist.id}:${b}`)}',10,${(b+1)*60000}) ON CONFLICT(key) DO UPDATE SET count=10;`).join(''));
 await call({action:'collect',reservation:booking.id,pharmacy:b,code:booking.code,checked:true},session(secondPharmacist),429);
 await call({action:'delete',confirmation:'LQADWA'},session(other),200,'/api/account');await call({action:'delete',confirmation:'LQADWA'},session(secondPharmacist),200,'/api/account');
 assert.equal((await fetch('/api/health')).status,200);
