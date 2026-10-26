@@ -302,8 +302,28 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
     await expect(inspector.locator('.builder-selection-heading h3')).toHaveText('How it works');
     await page.locator('.builder-panel-tabs').getByRole('button', { name: 'Insert', exact: true }).click();
     // Real pointer drag crosses from the insertion palette into the preview iframe.
-    const card = await page.getByRole('button', { name: 'Text section', exact: true }).boundingBox();
-    const target = await journey.boundingBox();
+    let card = await page.getByRole('button', { name: 'Text section', exact: true }).boundingBox();
+    let target = await journey.boundingBox();
+    expect(card).toBeTruthy(); expect(target).toBeTruthy();
+    // Releasing a dragged template outside the page must not become a palette click.
+    await page.getByRole('button', { name: 'Text section', exact: true }).dragTo(page.locator('.builder-canvas-toolbar'));
+    await expect(page.locator('.builder-template')).toHaveCount(2);
+    await expect(frame.locator('[data-editor-node]')).toHaveCount(7);
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + target.width / 2, target.y + Math.min(target.height - 10, target.height * .75), { steps: 15 });
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.locator('.builder-template')).toHaveCount(2);
+    await expect(frame.locator('[data-editor-node]')).toHaveCount(7);
+    await page.getByRole('button', { name: 'Text section', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(rows).toHaveCount(7);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(rows).toHaveCount(6);
+    await page.locator('.builder-panel-tabs').getByRole('button', { name: 'Insert', exact: true }).click();
+    card = await page.getByRole('button', { name: 'Text section', exact: true }).boundingBox();
+    target = await journey.boundingBox();
     expect(card).toBeTruthy(); expect(target).toBeTruthy();
     await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
     await page.mouse.down();
