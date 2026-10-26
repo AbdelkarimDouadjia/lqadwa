@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "provenance": "Synthetic text authored for this repository; contains no patient records. This is a safety/candidate benchmark, not evidence of handwriting recognition accuracy.",
+  "rights": "Repository test-fixture license; no third-party prescription dataset or training permission implied.",
+  "samples": [
+    {"id":"printed-brand","raw":"ARTIZ 10MG","expectedBrand":"ARTIZ","uncertain":false},
+    {"id":"missing-strength","raw":"ARTIZ ... mg","expectedBrand":"ARTIZ","uncertain":true},
+    {"id":"confusable","raw":"ART1Z unclear","expectedBrand":null,"uncertain":true},
+    {"id":"no-whole-brand","raw":"notARTIZ","expectedBrand":null,"uncertain":true},
+    {"id":"unknown","raw":"unreadable handwriting","expectedBrand":null,"uncertain":true}
+  ]
+}

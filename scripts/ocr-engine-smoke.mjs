@@ -4,6 +4,7 @@ import {createWorker} from 'tesseract.js';
 import {createRequire} from 'node:module';
 import {mkdirSync,readFileSync} from 'node:fs';
 import {prescriptionMatches} from '../lib/prescription-match.ts';
+import {transcriptionMetrics} from '../lib/ocr-evaluation.ts';
 const require=createRequire(import.meta.url);
 const sharp=require(require.resolve('sharp',{paths:[require.resolve('miniflare')]}));
 mkdirSync('.cloudflare/ocr-cache',{recursive:true});
@@ -14,5 +15,6 @@ try {
  assert.match(data.text,/DOLIPRANE/i);assert.match(data.text,/AUGMENTIN/i);assert.match(data.text,/500/);
  const matches=prescriptionMatches(data.text,JSON.parse(readFileSync('lib/medicines-2026.json','utf8')));
  assert(matches.some(m=>m.name.startsWith('DOLIPRANE ')));assert(matches.some(m=>m.name.startsWith('AUGMENTIN ')));
+ console.log(JSON.stringify({engine:'Tesseract.js',fixture:'synthetic-printed-latin',metrics:transcriptionMetrics('ORDONNANCE DOLIPRANE 500 MG AUGMENTIN 1 G',data.text),handwritingEvaluated:false,clinicalVerification:false,autoSelection:false}));
  console.log('PASS: actual Arabic/French/English Tesseract worker read a synthetic printed prescription and matched both real catalog brands. Not a handwriting or physical-phone acceptance test.');
 } finally {await worker.terminate();}

@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { database } from "@/db";
 import { getAppUser } from "@/lib/auth";
+import { releasePolicy } from "@/lib/release-policy";
 import { initialPersonalDetails } from "@/lib/profile-details";
 import { adminPermissions, parseAdminPermissions, type AdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 
-export class HttpError extends Error { constructor(message: string, public status = 400) { super(message); } }
+export class HttpError extends Error { constructor(message: string, public status = 400, public code?: string) { super(message); } }
 export function rootAdminIds() { return (env.APP_ADMIN_IDS?.split(",").map(v => v.trim()).filter(Boolean) || []); }
 export function isRootAdmin(owner: string) { return rootAdminIds().includes(owner) || (import.meta.env.DEV && owner === "local_seedy"); }
 export async function adminAccess(owner: string, db = database()): Promise<AdminAccess | null> {
@@ -24,6 +25,9 @@ export async function identity(request?: Request, options: { allowClosed?: boole
     if (row) user = { userId: row.owner, fullName: row.name, displayName: row.name, email: "", personalDetails:initialPersonalDetails(undefined) };
   }
   if (!user) throw new HttpError("سجّل الدخول لحفظ طلباتك بأمان.", 401);
+  // A direct provider signup must not bootstrap an app profile in information mode.
+  if (!options.allowClosed && releasePolicy(env).mode !== "CORE" && !isRootAdmin(user.userId)
+    && !await database().prepare("SELECT id FROM profiles WHERE id=?").bind(user.userId).first()) throw new HttpError("Existing accounts only while the information service is active.",403,"INFORMATION_ONLY");
   if (!options.allowClosed && await database().prepare("SELECT hash FROM closed_accounts WHERE hash = ?").bind(await tokenHash(user.userId)).first()) throw new HttpError("Account deleted. Visit /account-data to join again. / الحساب محذوف.", 410);
   if (!options.allowSuspended && !isRootAdmin(user.userId) && await database().prepare("SELECT owner FROM account_controls WHERE owner = ? AND suspended = 1").bind(user.userId).first()) throw new HttpError("تم تعليق الحساب. تواصل مع إدارة المنصة.", 403);
   return user;

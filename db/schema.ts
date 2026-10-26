@@ -40,6 +40,7 @@ export const registeredPharmacies = sqliteTable("registered_pharmacies", {
 export const stockItems = sqliteTable("stock_items", {
   id: text("id").primaryKey(), pharmacy: text("pharmacy").notNull().references(() => registeredPharmacies.id),
   name: text("name").notNull(), quantity: integer("quantity").notNull(), updated: integer("updated").notNull(),
+  medicineId: text("medicine_id"), catalogVersion: text("catalog_version"), identityJson: text("identity_json"),
 }, (t) => [uniqueIndex("idx_stock_items_pharmacy_name").on(t.pharmacy, t.name)]);
 
 export const adminMembers = sqliteTable("admin_members", {
@@ -90,3 +91,8 @@ export const landingContent = sqliteTable("landing_content", {
 export const landingContentRevisions = sqliteTable("landing_content_revisions", {
   id: text("id").primaryKey(), actor: text("actor").notNull(), createdAt: integer("created_at").notNull(), contentJson: text("content_json").notNull(),
 }, t => [index("landing_content_revisions_created_idx").on(t.createdAt)]);
+export const requestIdentity = sqliteTable("request_identity", {
+  request: text("request").primaryKey().references(() => requests.id, { onDelete: "cascade" }),
+  medicineId: text("medicine_id"), catalogVersion: text("catalog_version"), identityJson: text("identity_json").notNull(),
+  selectionSource: text("selection_source").notNull(), verification: text("verification").notNull(), payloadJson: text("payload_json").notNull(),
+});

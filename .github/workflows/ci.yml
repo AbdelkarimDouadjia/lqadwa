@@ -12,7 +12,8 @@ concurrency:
 jobs:
   web:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Ubuntu browser dependencies can exhaust 25 minutes before tests start.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -23,15 +24,26 @@ jobs:
           cache: npm
       - run: npm run install:ci
       - run: npm run check
+      - name: Emulator runner failure-control regressions (no device)
+        run: node scripts/android-runner-smoke.mjs
       - name: Discovery unit and scale regression (local SQLite)
         run: npm run test:discovery
       - run: npm run lint
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
       - name: Install isolated browser-test engines
-        run: npx --no-install playwright install --with-deps chromium firefox webkit
+        run: |
+          # The Azure HTTP mirror exhausted the job budget while downloading packages.
+          # Keep Ubuntu's signed repositories, using the official HTTPS archive.
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          npx --no-install playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - run: npm run test:ocr
+      - run: npm run test:ai-safety
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -58,7 +70,32 @@ jobs:
         run: |
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - run: gradle -p android assembleRelease assembleDebugAndroidTest lintRelease --console=plain --no-daemon
+      - run: gradle -p android assembleRelease assembleDebug assembleDebugAndroidTest lintRelease --console=plain --no-daemon
+      - name: Run native instrumentation on an isolated API 34 emulator
+        timeout-minutes: 12
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/lqadwa-avd
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+          # Headless QEMU still links libpulse; it is absent on this runner image.
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y libpulse0
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'platform-tools' 'system-images;android-34;google_apis;x86_64'
+          mkdir -p "$ANDROID_AVD_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name lqadwa-ci --device pixel_6 --path "$ANDROID_AVD_HOME/lqadwa-ci.avd" --package 'system-images;android-34;google_apis;x86_64'
+          test -s "$ANDROID_AVD_HOME/lqadwa-ci.avd/config.ini"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx lqadwa-ci
+          bash scripts/android-instrumentation.sh
+      - name: Preserve emulator and instrumentation diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-instrumentation
+          path: |
+            .cloudflare/android-instrumentation/*.log
+            .cloudflare/android-instrumentation/*.txt
+          retention-days: 7
       # CI APKs are unsigned: never publish them as distribution packages.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

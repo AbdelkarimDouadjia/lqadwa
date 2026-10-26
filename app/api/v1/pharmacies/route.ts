@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const city = z.enum(cities.map(c => c.id) as [string, ...string[]]);
 const schema = z.object({
   city, night: z.enum(["true", "false"]).default("false"),
-  limit: z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(50)).default("50"),
+  limit: z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(50)).default(50),
   radiusKm: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).transform(Number).pipe(z.number().min(0).max(100)).optional(),
   cursor: z.string().min(1).max(512).regex(/^[A-Za-z0-9_-]+$/).optional(),
 }).strict();

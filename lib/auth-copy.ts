@@ -1,5 +1,6 @@
 import type { Language } from "./i18n";
 const copy = {
+  INFORMATION_ONLY: ["التسجيل والطلبات غير متاحين حالياً. يمكنك الاطلاع على المعلومات أو الدخول إلى حسابك الحالي.", "Les inscriptions et demandes sont fermées. Les informations et l’accès aux comptes existants restent disponibles.", "Registration and new requests are closed. Information and existing account access remain available.", "Ajerred d yisutar imaynuten medlen. Talɣut d unekcum ɣer yimiḍanen llan."],
   adminTitle: ["دخول المالك والإدارة", "Connexion propriétaire et administrateurs", "Owner and admin sign-in", "Anekcum n bab d tedbelt"],
   adminIntro: ["مساحة خاصة بالحسابات المصرّح لها. المالك وحده يضيف المديرين ويحدد صلاحياتهم.", "Espace privé réservé aux comptes autorisés. Seul le propriétaire attribue les accès.", "Private space for authorized accounts. Only the owner appoints admins and sets their permissions.", "Aḥric uslig i yimiḍanen yettwaqeblen. D bab kan i yefkan izerfan."],
   adminIdentifier: ["اسم المستخدم أو البريد الإلكتروني", "Nom d’utilisateur ou e-mail", "Username or email", "Isem n useqdac neɣ imayl"],

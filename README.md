@@ -6,6 +6,8 @@
 
 <p align="center">Find a nearby pharmacy that confirms availability. Reserve, then collect in person.</p>
 
+Maintainer release status (25 October 2026): the 1.1.1 candidate is under review; production remains on its existing 1.1.0 Worker. Explicitly approved additive migrations 0013/0014 are applied and verified, with pre/post backups restored locally. Publication still requires exact-commit checks, real email/pharmacy acceptance and operator review. See [release readiness](docs/release-readiness.md), [evidence](docs/release-evidence.md), [runbook](docs/release-runbook.md), [operator actions](docs/operator-actions.md) and the [owner/editor handover](docs/owner-handover.md). The candidate defaults to information-only service; experimental OCR and assistant modules are independently OFF. Existing public APK downloads are preserved pending signed-device acceptance.
+
 <p align="center">
   <a href="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml"><img alt="Release checks" src="https://github.com/AbdelkarimDouadjia/lqadwa/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Web: Arabic, French, English, Kabyle" src="https://img.shields.io/badge/web-AR%20%7C%20FR%20%7C%20EN%20%7C%20KAB-08776b">
@@ -41,6 +43,8 @@ These are real captures of the public Arabic “How it works” page on 18 Octob
 | Pharmacy | Apply for approval, answer nearby requests, manage manually entered stock notes, handle reservations, and verify pickup at the counter. |
 | Owner / delegated admin | Review pharmacy applications, manage accounts and service controls, inspect scoped analytics, update landing-page content, and assign or revoke permission-scoped admin access. The admin route is protected and is not linked from public navigation. |
 | Native Android | Native Material screens for search, reservations, map, account, pharmacy operations, OCR review, QR pickup and the new in-app service guide. It is not a WebView wrapper. |
+
+The owner’s [visual page editor](https://lqadwa.lqadwa-dz.workers.dev/operations/editor) has a dedicated canvas, draggable layers, section insertion, contextual text/style controls, four-language editing, responsive previews, undo/redo, private drafts and versioned publication. It uses the actual public page components; owner authorization is enforced on the page and API. See [the operating guide](OPERATIONS.md#visual-page-editor-25-october-2026).
 
 ### Trust and service limits
 

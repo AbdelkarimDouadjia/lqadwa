@@ -9,6 +9,8 @@ import { adminLoginEmail } from "@/lib/admin-login";
 import { createDeviceSession } from "@/lib/device-session";
 import { oauthProviders } from "@/lib/oauth-providers";
 import { initialPersonalDetails } from "@/lib/profile-details";
+import { requireCoreAction, currentReleasePolicy } from "@/lib/release-runtime";
+import { isRootAdmin } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 const email = z.string().trim().email().max(254);
@@ -30,6 +32,7 @@ export async function POST(request: Request) {
     const input = schema.parse(await limitedJson(request));
     const ip = request.headers.get("cf-connecting-ip") || "local";
     await rateLimit(ip, `auth-${input.action}`, input.action === "recover" || input.action === "register" ? 3 : 15, 600);
+    requireCoreAction(input.action);
     const client = await authClient();
     if (input.action === "oauth") {
       if (!(await oauthProviders())[input.provider]) return json({ error: "PROVIDER_UNAVAILABLE" }, 409);
@@ -51,6 +54,9 @@ export async function POST(request: Request) {
       await rateLimit(address, "auth-account-login", 10, 600);
       const { data, error } = await client.auth.signInWithPassword({email:address, password:input.password});
       if (error || !data.user?.email_confirmed_at || data.user.is_anonymous) return json({ error: "CREDENTIALS" }, 401);
+      if (currentReleasePolicy().mode !== "CORE" && !isRootAdmin(data.user.id) && !await database().prepare("SELECT id FROM profiles WHERE id=?").bind(data.user.id).first()) {
+        await client.auth.signOut({scope:"local"});return json({error:"INFORMATION_ONLY"},403);
+      }
       if (input.action === "admin-login") {
         const blocked = await database().prepare("SELECT 1 AS blocked FROM closed_accounts WHERE hash = ? UNION ALL SELECT 1 FROM account_controls WHERE owner = ? AND suspended = 1 LIMIT 1").bind(await tokenHash(data.user.id), data.user.id).first();
         if (blocked || !await isAdmin(data.user.id)) { await client.auth.signOut({scope:"local"}); return json({error:"CREDENTIALS"},401); }
@@ -88,7 +94,7 @@ export async function POST(request: Request) {
     return json({ ok: true, redirect: "/login?changed=1" });
   } catch (error) {
     if (error instanceof z.ZodError) return json({ error: "FIELDS" }, 400);
-    if (error instanceof HttpError) return json({ error: error.status === 429 ? "RATE_LIMIT" : "FIELDS" }, error.status);
+    if (error instanceof HttpError) return json({ error: error.code || (error.status === 429 ? "RATE_LIMIT" : "FIELDS") }, error.status);
     console.error("Authentication unavailable");
     return json({ error: "UNAVAILABLE" }, 503);
   }

@@ -3,6 +3,8 @@ import { database } from "@/db";
 import { identity, HttpError, audit, isAdmin } from "@/lib/access";
 import { requireMutationOrigin, limitedJson, privateHeaders, rateLimit } from "@/lib/http-security";
 import { personalSchema, healthSchema, pharmacyDetailsSchema, parseDetails } from "@/lib/profile-details";
+import { currentReleasePolicy } from "@/lib/release-runtime";
+import { healthUpdateAllowed } from "@/lib/release-policy";
 
 export const dynamic = "force-dynamic";
 const schema = z.discriminatedUnion("action", [
@@ -21,7 +23,7 @@ export async function GET(request: Request) {
     await rateLimit(user.userId, "profile-details-read", 60);
     const profile = await db.prepare("SELECT details,health FROM profiles WHERE id=?").bind(user.userId).first<{details:string;health:string}>();
     const pharmacy = await db.prepare("SELECT details FROM registered_pharmacies WHERE owner=?").bind(user.userId).first<{details:string}>();
-    return json({ details: parseDetails(personalSchema, profile?.details), health: parseDetails(healthSchema, profile?.health), pharmacy: pharmacy ? parseDetails(pharmacyDetailsSchema, pharmacy.details) : null });
+    return json({ details: parseDetails(personalSchema, profile?.details), health: parseDetails(healthSchema, profile?.health), healthCollection:currentReleasePolicy().healthCollection, pharmacy: pharmacy ? parseDetails(pharmacyDetailsSchema, pharmacy.details) : null });
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
@@ -30,6 +32,10 @@ export async function POST(request: Request) {
     const user = await identity(request), db = database(), input = schema.parse(await limitedJson(request,8192));
     await rateLimit(user.userId, "profile-details-write", 30);
     if (input.action === "personal") {
+      if (input.health && !currentReleasePolicy().healthCollection) {
+        const previous = await db.prepare("SELECT health FROM profiles WHERE id=?").bind(user.userId).first<{health:string}>();
+        if (!healthUpdateAllowed(parseDetails(healthSchema, previous?.health), input.health)) throw new HttpError("New health notes are disabled. Existing notes can be kept or cleared; sharing can be withdrawn.", 403, "HEALTH_COLLECTION_DISABLED");
+      }
       if (input.health && (await isAdmin(user.userId) || await db.prepare("SELECT id FROM registered_pharmacies WHERE owner=?").bind(user.userId).first())) throw new HttpError("Health notes are available to client profiles",403);
       if (!await db.prepare("SELECT id FROM profiles WHERE id=?").bind(user.userId).first()) throw new HttpError("Open your account first", 409);
       const name = [input.details.firstName, input.details.lastName].filter(Boolean).join(" ");

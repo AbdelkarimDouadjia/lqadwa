@@ -18,7 +18,7 @@ assert.ok(read('app/page.tsx').includes('<PublicLanding'));
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /CheckBox examples|t\("demoMode"\)/);
 assert.ok(read('app/api/app/route.ts').includes('demo: z.literal(false).default(false)'));
 assert.ok(read('app/privacy/page.tsx').includes('n’a pas été validée par un relecteur kabylophone'));
-assert.ok(read('android/app/build.gradle').includes("versionCode 15; versionName '1.1.0'"));
+assert.ok(read('android/app/build.gradle').includes("versionCode 16; versionName '1.1.1'"));
 assert.equal((read('components/app-install.tsx').match(/v=\$\{version\}/g)||[]).length,2,'APK links follow the package version');
 assert.doesNotMatch(read('android/app/src/main/java/dz/lqidwa/pilot/MainActivity.java'), /android\.webkit|new WebView/);
 assert.match(read('android/app/src/main/AndroidManifest.xml'), /android:authorities="\$\{applicationId\}\.fileprovider"/, 'Camera FileProvider follows the debug/release application id');

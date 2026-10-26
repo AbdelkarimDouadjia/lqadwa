@@ -7,13 +7,14 @@ import { database } from "@/db";
 import { emptyLandingContent, parseLandingContent } from "@/lib/landing-content";
 import LqadwaApp from "@/components/lqadwa-app";
 import { PublicLanding } from "@/components/public-landing";
+import { currentReleasePolicy } from "@/lib/release-runtime";
 
 export const dynamic = "force-dynamic";
-type Props = { searchParams: Promise<{ lang?: string; space?: string }> };
+type Props = { searchParams: Promise<{ lang?: string; space?: string; admin_invite?: string }> };
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const query = await searchParams, store = await cookies();
   const language = publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value));
-  const privatePage = !!query.space || store.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+  const privatePage = !!query.space || !!query.admin_invite || store.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
   const languages = { "ar-DZ": publicUrl("ar"), "fr-DZ": publicUrl("fr"), en: publicUrl("en"), kab: publicUrl("kab"), "x-default": publicUrl("ar") };
   return {
     title: `${ex(language, "intro")} | LQADWA`, description: ex(language, "lead"),
@@ -27,6 +28,6 @@ export default async function Page({ searchParams }: Props) {
   let content = emptyLandingContent;
   try { const row = await database().prepare("SELECT published_json FROM landing_content WHERE id='main'").first<{ published_json: string }>(); content = parseLandingContent(row?.published_json); } catch { /* Keep the current bundled copy available during a database outage. */ }
   // Avoid contacting Auth at all for the public landing; cookies are never authorization.
-  if (query.space || (hasSession && await getAppUser())) return <LqadwaApp initialLandingContent={content} />;
-  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} initialContent={content} />;
+  if (query.space || (query.admin_invite && /^[0-9a-f-]{73}$/.test(query.admin_invite)) || (hasSession && await getAppUser())) return <LqadwaApp initialLandingContent={content} />;
+  return <PublicLanding initialLanguage={publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value))} initialDark={store.get("lqadwa-theme")?.value === "dark"} initialContent={content} informationOnly={currentReleasePolicy().mode!=="CORE"} />;
 }

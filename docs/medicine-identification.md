@@ -1,0 +1,17 @@
+# Medicine identity and uncertainty
+
+The frozen catalog currently contains 5,425 records from the repository's August 2026 nomenclature snapshot. The [Ministry's nomenclature index](https://www.miph.gov.dz/fr/nomenclature-nationale-des-produits-pharmaceutiques/) lists that version. This work did not replace the source spreadsheet or certify its transcription, current regulatory status, commercial reuse rights or availability. A pharmacist/operator must govern source updates and corrections.
+
+Each row has an immutable-within-version ID `miph-2026-08:NNNNN`. Registration alone is not unique in this source, so it is not used as the primary key. Never reorder/update the frozen JSON in place: publish a new version and an explicit crosswalk while retaining old identity snapshots. Review withdrawals/renewals from official sources independently. Catalog membership never means a medicine is in stock or suitable for a patient.
+
+`lib/medicine-catalog-manifest.json` records the ordered canonical JSON fingerprint and record count. The required safety check verifies both against the runtime catalog version, catching accidental edits, deletions and reordering that would change indexed medicine IDs. The fingerprint verifies source consistency; it does not certify clinical acceptance or reuse rights.
+
+Identity includes catalog version, brand, ingredient, strength, pharmaceutical form and registration. The server resolves IDs against its own frozen index and builds the display label. Forged labels cannot overwrite that identity; unknown IDs or mismatched versions return 400. Display names include form so equal brand/strength with distinct forms stay distinguishable. Normalization handles accents, Arabic diacritics/digits, common letter variants and decimal separators. Numeric tokens are exact: 50 cannot match 500. Prefix candidates require explicit selection; there is no fuzzy auto-selection or automatic strength/form guess.
+
+Requests snapshot identity and selection source (`manual`, `catalog`, `ocr`) in an additive table. The full routing payload binds idempotency to medicine, version, source, wilaya, duty, radius and explicitly consented coarse origin. Same-payload retries keep the first recipient set. Changed payloads return 409. Historical requests without identity remain unverified; they are not retroactively matched. Old Android free-text payloads are accepted as unverified manual entries in CORE mode.
+
+Stock can be linked to a selected catalog ID. Quantity-only legacy edits preserve identity. A manual rename clears stale identity; it cannot relabel one medicine while retaining another medicine's ID. Stock is pharmacist-maintained and is not automatically promoted into a live availability response. Inventory editing retains optimistic version checks and pharmacy ownership checks.
+
+`catalog-identified` means only a selected product was found in the frozen catalog. **Every prescription remains clinically unverified.** OCR text, recognition scores, patient selection and a clicked confirmation never validate handwriting, prescribe a dose or authorize substitution. Bring the original prescription where required; the dispensing pharmacist makes the professional decision.
+
+Images and full OCR text stay on-device. Only the chosen medicine identity/name is submitted for a request. New health-note collection is independently disabled; existing notes and consent are preserved/erasable. No new retention policy or training collection was introduced.

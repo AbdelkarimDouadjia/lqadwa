@@ -5,7 +5,7 @@ export type PublicPharmacyRow = {
   id: string; name: string; address: string; city: string; latitude: number;
   longitude: number; phone: string; duty: number; hours: string;
 };
-export type DiscoveryOptions = { city: string; night: boolean; limit: number; radiusKm?: number; after?: { score: number; id: string } };
+export type DiscoveryOptions = { city: string; night: boolean; limit: number; radiusKm?: number; origin?: { lat: number; lng: number }; after?: { score: number; id: string } };
 type RankedRow = PublicPharmacyRow & { score: number };
 
 export function pharmacyFromRow(row: PublicPharmacyRow): Pharmacy {
@@ -21,7 +21,7 @@ export function pharmacyFromRow(row: PublicPharmacyRow): Pharmacy {
 export async function discoverPharmacies(db: D1Database, options: DiscoveryOptions): Promise<RankedRow[]> {
   const center = cities.find(city => city.id === options.city);
   if (!center) throw new Error("Unknown discovery city");
-  const query = discoveryQuery({ ...options, lat: center.lat, lng: center.lng, excluded: [...legacySampleIds] });
+  const query = discoveryQuery({ ...options, lat: options.origin?.lat ?? center.lat, lng: options.origin?.lng ?? center.lng, excluded: [...legacySampleIds] });
   const result = await db.prepare(query.sql).bind(...query.parameters).all<RankedRow>();
   return result.results;
 }

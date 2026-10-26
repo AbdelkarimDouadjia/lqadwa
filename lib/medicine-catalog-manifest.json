@@ -1,0 +1,9 @@
+{
+  "catalogVersion": "miph-2026-08",
+  "records": 5425,
+  "sha256": "82d262b3993c244f31ea05f75676e399d8aa678f387fd5306afa54e096f00e4b",
+  "hashEncoding": "SHA-256 of UTF-8 JSON.stringify(parsed records), preserving record order",
+  "source": "https://www.miph.gov.dz/fr/nomenclature-nationale-des-produits-pharmaceutiques/",
+  "clinicalAcceptance": "pending pharmacist review",
+  "commercialReuseRights": "operator verification required"
+}

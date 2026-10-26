@@ -21,10 +21,10 @@ export async function GET(request: Request) {
     const limit = 1000, offset = page * limit;
     const rows = await db.batch([
       db.prepare("SELECT name, city, details, health FROM profiles WHERE id = ?").bind(owner),
-      db.prepare("SELECT id, medicine, city, created FROM requests WHERE owner = ? ORDER BY created, id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
+      db.prepare("SELECT r.id,r.medicine,r.city,r.created,i.medicine_id,i.catalog_version,i.identity_json,i.selection_source,COALESCE(i.verification,'unverified') AS verification,i.payload_json FROM requests r LEFT JOIN request_identity i ON i.request=r.id WHERE r.owner=? ORDER BY r.created,r.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT b.id, b.request, b.pharmacy, b.created, b.expires, b.status FROM reservations b WHERE b.owner = ? ORDER BY b.created, b.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT name, address, city, latitude, longitude, phone, license, status, hours, created, details FROM registered_pharmacies WHERE owner = ?").bind(owner),
-      db.prepare("SELECT s.name, s.quantity, s.updated FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy WHERE p.owner = ? ORDER BY s.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
+      db.prepare("SELECT s.name,s.quantity,s.updated,s.medicine_id,s.catalog_version,s.identity_json FROM stock_items s JOIN registered_pharmacies p ON p.id=s.pharmacy WHERE p.owner=? ORDER BY s.id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT title, created, read FROM notifications WHERE owner = ? ORDER BY created, id LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT s.request, s.pharmacy, s.status, s.updated FROM responses s JOIN requests r ON r.id = s.request WHERE r.owner = ? ORDER BY s.request, s.pharmacy LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),
       db.prepare("SELECT l.reservation, l.latitude, l.longitude, l.updated FROM reservation_locations l JOIN reservations b ON b.id = l.reservation WHERE b.owner = ? ORDER BY l.reservation LIMIT ? OFFSET ?").bind(owner, limit + 1, offset),

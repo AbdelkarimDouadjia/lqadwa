@@ -1,5 +1,13 @@
 # LQADWA operations — owner handover
 
+## Visual page editor (25 October 2026)
+
+The owner opens **Visual website editor** from `/operations`, or goes directly to `/operations/editor`. The editor is a separate workspace with a layer tree, a live responsive page canvas, and properties for the selected section. Delegated administrators, pharmacies and patients cannot open it or call its write API.
+
+Drag a section handle in the layer tree or on the canvas to rearrange the page. Insert text or signup sections by dragging an insertion card onto a section on the canvas, or click a card to insert after the current selection. Custom sections can sit between built-in sections. The properties panel supports four languages, visibility, movement, duplication, deletion, background treatment and alignment. The introductory section stays first; the pharmacy directory continues to use approved pharmacy data automatically. Keyboard users can use the move buttons or Alt+Up/Down on a handle. Touch users can drag a handle within its panel or use the same move buttons.
+
+Desktop/tablet/mobile controls resize a real iframe viewport; zoom and preview theme affect the preview only. **Preview draft** hides editor controls and hidden/untranslated content. **Save draft** stores private work. **Publish for visitors** saves any outstanding valid edits, then publishes after confirmation. **Previous published versions** can restore the public page; a separately saved unpublished draft is retained. Undo/redo tracks the current session and a leave warning protects unsaved changes. A competing edit returns a version conflict instead of overwriting another owner's work. Existing content remains compatible and this release requires no database migration or paid service.
+
 ## Public pages, branded emails and native onboarding (1.1.0)
 
 The shared public header contains no admin/account actions. Authenticated desktop/mobile navigation is role-specific; server-side permissions remain authoritative. The footer hides pharmacy onboarding from existing pharmacy/admin workspaces. Public how-it-works, pharmacy, safety, pricing and help pages are localized in Arabic, French, English and Kabyle. Rounded branding and `app/design-refinement.css` keep colors consistent across light/dark menus, forms, workspaces and public sections. `scripts/design-smoke.mjs` checks contrast in both modes as part of CI. Native Android has a DayNight theme switch, themed cards and active navigation plus the in-app three-step pickup guide. No new device permission or paid API is needed.

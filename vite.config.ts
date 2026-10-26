@@ -1,5 +1,6 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import { execFileSync } from "node:child_process";
 
 export default defineConfig(async () => {
   // Use Miniflare's local Request.cf placeholder unless fetching is requested.
@@ -17,6 +18,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: { __LQADWA_BUILD__: JSON.stringify({ commit: execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim(), tree:execFileSync("git",["rev-parse","HEAD^{tree}"],{encoding:"utf8"}).trim(), dirty:execFileSync("git",["status","--porcelain"],{encoding:"utf8"}).trim().length>0 }) },
     server: { host: "127.0.0.1" },
     plugins: [
       vinext(),

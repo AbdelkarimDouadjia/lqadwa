@@ -1,14 +1,17 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Eye, Globe2, History, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, Globe2, GripVertical, History, Layers3, LayoutTemplate, LockKeyhole, Monitor, Moon, MousePointer2, PanelLeft, Plus, Redo2, RotateCcw, Save, Send, Settings2, Smartphone, Sun, Tablet, Trash2, Type, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { LandingPage } from "@/components/landing-page";
-import { emptyLandingContent, type LandingContent, type LandingCopyKey, type LandingSectionKey } from "@/lib/landing-content";
+import { LandingEditorCanvas } from "@/components/landing-editor-canvas";
+import { emptyLandingContent, landingContentSchema, landingLayout, landingSectionKeys, reorderLanding, exportLandingDraft, importLandingDraft, landingDraftFileMaxBytes, type LandingContent, type LandingCopyKey, type LandingSectionKey } from "@/lib/landing-content";
 import { landingDefaultCopy } from "@/lib/landing-copy";
 import type { Language } from "@/lib/i18n";
 
@@ -43,6 +46,53 @@ const words = {
   confirmPublish: ["سيصبح هذا النص مرئياً لكل زوار الموقع. هل تريد المتابعة؟", "Ce contenu sera visible par tous les visiteurs. Continuer ?", "This copy will be visible to every site visitor. Continue?", "Aḍris-a ad d-yban i yal amdan. Kemmel?"], confirmRestore: ["سيحل هذا المحتوى محل المنشور الحالي فوراً. هل تريد المتابعة؟", "Cette version remplacera immédiatement le contenu publié. Continuer ?", "This will immediately replace the current published page. Continue?", "Lversion-a ad ibeddel agbur yettwassen tura. Kemmel?"],
   hero: ["المقدمة", "Introduction", "Introduction", "Tazwart"], tools: ["المزايا", "Fonctionnalités", "Features", "Tiwuriwin"], offer: ["العرض", "Offre", "Offer", "L’offre"], android: ["تطبيق Android", "Application Android", "Android app", "Asnas Android"], faq: ["الأسئلة", "Questions", "FAQ", "Isteqsiyen"],
 } as const;
+const studioWords = {
+  draftTools: ["نسخة ملف للمسودة", "Fichier du brouillon", "Draft file backup", "Afaylu n uqerru"],
+  exportDraft: ["تنزيل المسودة", "Exporter le brouillon", "Export draft", "Sider aqerru"],
+  importDraft: ["استيراد مسودة", "Importer un brouillon", "Import draft", "Kcem-d aqerru"],
+  importHelp: ["يستبدل الملف المسودة الحالية فقط. لا يتغير المنشور قبل الحفظ والنشر، ويمكنك التراجع.", "Le fichier remplace seulement le brouillon actuel. Rien ne sera publié automatiquement ; vous pouvez annuler.", "Replace only the current draft from this file. Nothing is published automatically. You can undo this change.", "Afaylu ad ibeddel aqerru kan. Ulac asissen awurman; tzemreḍ ad tuɣaleḍ."],
+  invalidFile: ["اختر ملف مسودة LQADWA صالحاً بحجم لا يتجاوز 512 كيلوبايت.", "Choisissez un fichier de brouillon LQADWA valide de 512 Ko maximum.", "Choose a valid LQADWA draft file, at most 512 KB.", "Fren afaylu n uqerru LQADWA ameɣtu, ddaw 512 KB."],
+  verifySession: ["تجديد التحقق في نافذة أخرى", "Vérifier dans un autre onglet", "Verify in another tab", "Senqed deg usfaylu nniḍen"],
+  verifyHelp: ["جدّد التحقق في النافذة الأخرى ثم أعد الحفظ هنا. تبقى تعديلات الصفحة مفتوحة في هذه النافذة.", "Vérifiez votre accès dans l’autre onglet, puis réessayez ici. Vos modifications restent ouvertes dans cet onglet.", "Verify access in the other tab, then retry here. Your current canvas edits stay open in this tab.", "Senqed anekcum deg usfaylu nniḍen, sakin ales dagi. Ibeddilen ad qqimen dagi."],
+  studio: ["محرر الموقع", "Éditeur du site", "Website editor", "Amaẓrag n usmel"],
+  dashboard: ["لوحة الإدارة", "Tableau de bord", "Dashboard", "Tafelwit n tedbelt"],
+  layers: ["الأقسام", "Calques", "Layers", "Iḥricen"], insert: ["إضافة", "Insérer", "Insert", "Rnu"],
+  canvas: ["الصفحة", "Page", "Canvas", "Asebter"], properties: ["الخصائص", "Propriétés", "Properties", "Timahilin"],
+  drag: ["اسحب لترتيب القسم", "Glisser pour réordonner", "Drag to reorder section", "Smutti aḥric"],
+  dragHelp: ["اسحب من المقبض لترتيب الأقسام، أو استخدم زري التحريك.", "Glissez une poignée pour déplacer une section, ou utilisez les flèches.", "Drag a handle to reorder sections, or use the move buttons.", "Smutti aḥric s ufus neɣ s tqeffalin."],
+  selectHelp: ["اضغط على أي قسم في الصفحة لتعديله.", "Cliquez sur une section de la page pour la modifier.", "Select any section on the canvas to edit it.", "Fren aḥric deg usebter i ubeddel."],
+  select: ["تحديد القسم", "Sélectionner la section", "Select section", "Fren aḥric"],
+  moveUp: ["تحريك للأعلى", "Monter", "Move up", "Sali"], moveDown: ["تحريك للأسفل", "Descendre", "Move down", "Sader"],
+  undo: ["تراجع", "Annuler", "Undo", "Err-d"], redo: ["إعادة", "Rétablir", "Redo", "Ales"],
+  desktop: ["حاسوب", "Ordinateur", "Desktop", "Aselkim"], tablet: ["لوحي", "Tablette", "Tablet", "Tafelwit"], mobile: ["هاتف", "Téléphone", "Mobile", "Asawal"],
+  fit: ["ملاءمة", "Ajuster", "Fit", "Sezg"], zoom: ["التكبير", "Zoom", "Zoom", "Asemɣer"],
+  appearance: ["المظهر", "Apparence", "Appearance", "Timeẓri"],
+  alignment: ["المحاذاة", "Alignement", "Alignment", "Asemsawi"],
+  soft: ["خلفية ناعمة", "Fond doux", "Soft surface", "Agilil aleqqaq"], plain: ["بسيط", "Sobre", "Plain", "Aḥerfi"], brand: ["لون العلامة", "Couleur de marque", "Brand color", "Ini n usmel"],
+  start: ["محاذاة البداية", "Aligner au début", "Align to start", "Di tazwara"], center: ["توسيط", "Centrer", "Center", "Deg tlemmast"],
+  textSection: ["قسم نصي", "Section de texte", "Text section", "Aḥric n uḍris"], ctaSection: ["دعوة للتسجيل", "Appel à l’inscription", "Signup call to action", "Asekles"],
+  templateHelp: ["اسحب إلى الصفحة، أو اضغط لإضافته بعد القسم المحدد.", "Glissez vers la page, ou cliquez pour insérer après la sélection.", "Drag onto the canvas, or click to insert after the selection.", "Smutti ɣer usebter neɣ senned i tmerna."],
+  limit: ["يمكن إضافة ثمانية أقسام مخصصة كحد أقصى.", "Vous pouvez ajouter huit sections personnalisées au maximum.", "You can add up to eight custom sections.", "Tzemreḍ ad ternuḍ 8 n yiḥricen."],
+  duplicate: ["نسخ القسم", "Dupliquer la section", "Duplicate section", "Nɣel aḥric"],
+  hide: ["إخفاء القسم", "Masquer la section", "Hide section", "Ffer aḥric"], show: ["إظهار القسم", "Afficher la section", "Show section", "Sken aḥric"],
+  hidden: ["مخفي عن الزوار", "Masqué aux visiteurs", "Hidden from visitors", "Yeffar i yimdanen"],
+  fixed: ["موضع ثابت", "Position fixe", "Fixed position", "Adeg ur ibeddilen"],
+  directoryHelp: ["دليل الصيدليات · يُحدّث تلقائياً من الصيدليات المعتمدة", "Annuaire · Alimenté automatiquement par les pharmacies approuvées", "Pharmacy directory · Automatically populated from approved pharmacies", "Amahraz n tsaymitin · Yettili s wudem awurman"],
+  missing: ["أضف عنواناً ونصاً بهذه اللغة ليظهر القسم للزوار.", "Ajoutez un titre et un texte dans cette langue pour afficher cette section.", "Add a heading and body in this language to show this section to visitors.", "Rnu azwel d uḍris s tutlayt-a i uskan n uḥric."],
+  required: ["أدخل نصاً أو استعد النص الأصلي.", "Saisissez un texte ou rétablissez le texte d’origine.", "Enter copy or reset to the default.", "Aru aḍris neɣ err-d aḍris amezwaru."],
+  unsavedShort: ["تغييرات غير محفوظة", "Modifications non enregistrées", "Unsaved changes", "Ibeddilen ur nettwasekles ara"],
+  savedShort: ["المسودة محفوظة", "Brouillon enregistré", "Draft saved", "Aqerru yettwasekles"],
+  saving: ["جارٍ الحفظ…", "Enregistrement…", "Saving…", "Asekles…"],
+  cancel: ["إلغاء", "Annuler", "Cancel", "Sefsex"], confirm: ["تأكيد", "Confirmer", "Confirm", "Sentem"],
+  leave: ["مغادرة دون حفظ؟", "Quitter sans enregistrer ?", "Leave without saving?", "Ffeɣ war asekles?"],
+  leaveHelp: ["تُفقد التغييرات غير المحفوظة. يمكنك حفظ المسودة أولاً.", "Les modifications non enregistrées seront perdues. Vous pouvez d’abord enregistrer le brouillon.", "Unsaved edits will be lost. You can save your draft first.", "Ibeddilen ur nettwasekles ara ad ṛuḥen."],
+  publishHelp: ["تُحفظ تغييراتك ثم تُنشر للزوار بكل اللغات. يمكنك استعادة النسخة السابقة من السجل.", "Vos modifications seront enregistrées puis publiées dans toutes les langues. Vous pourrez restaurer une version précédente.", "Your changes will be saved, then published in every language. You can restore the previous page from history.", "Ibeddilen ad ttwaseklsen, sakin ad d-banen i yimdanen."],
+  historyHelp: ["استعادة النسخة تغيّر الصفحة المنشورة فوراً. تبقى أي مسودة محفوظة وغير منشورة متاحة للتحرير.", "La restauration remplace la page publiée immédiatement. Un brouillon enregistré non publié est conservé.", "Restoring replaces the live page immediately. Any saved unpublished draft is preserved.", "Err-d lversion ad ibeddel asebter yettwassen tura."],
+  changed: ["تم تحديث ترتيب الأقسام.", "L’ordre des sections a été modifié.", "Section order updated.", "Amizwer n yiḥricen ibeddel."],
+  previewTheme: ["تغيير مظهر المعاينة", "Changer le thème de l’aperçu", "Toggle preview theme", "Beddel timeẓri"],
+  editing: ["العودة للتحرير", "Revenir à l’édition", "Back to editing", "Uɣal ɣer ubeddel"],
+} as const;
+const editorWords = { ...words, ...studioWords };
 const groups: { title: string; fields: { key: LandingCopyKey; multiline?: boolean }[] }[] = [
   { title: "hero", fields: [{ key: "titleA" }, { key: "titleB" }, { key: "lead", multiline: true }, { key: "explore" }, { key: "clientFree" }] },
   { title: "journey", fields: [{ key: "journey" }, { key: "search" }, { key: "scanHelp", multiline: true }, { key: "confirm" }, { key: "confirmHelp", multiline: true }, { key: "collect" }, { key: "collectHelp", multiline: true }] },
@@ -68,108 +118,240 @@ const indexOf = (language: Language) => language === "ar" ? 0 : language === "fr
 function defaultCopy(language: Language, key: LandingCopyKey): string {
   return landingDefaultCopy(language, key);
 }
-function newBlock(): LandingContent["blocks"][number] {
-  return { id: crypto.randomUUID(), enabled: true, target: "none", copy: {} };
+type ContentBlock = LandingContent["blocks"][number];
+function BlockProperties({ block, language, working, w, update }: {
+  block: ContentBlock; language: Language; working: boolean; w: (key: keyof typeof editorWords) => string; update: (change: (value: ContentBlock) => ContentBlock) => void;
+}) {
+  const id = (key: string) => `block-${block.id}-${key}`;
+  return <fieldset className="builder-copy-fields" disabled={working}>
+    <legend>{w("textSection")}</legend>
+    {(["heading", "body", "button"] as const).map(key => <div className="builder-field" key={key}>
+      <label htmlFor={id(key)}>{w(key === "button" ? "buttonText" : key)}</label>
+      {key === "body" ? <Textarea id={id(key)} rows={4} maxLength={600} value={block.copy[language]?.body ?? ""} onChange={event => update(value => ({ ...value, copy: { ...value.copy, [language]: { ...value.copy[language], body: event.target.value } } }))} /> : <Input id={id(key)} maxLength={key === "heading" ? 100 : 80} value={block.copy[language]?.[key] ?? ""} onChange={event => update(value => ({ ...value, copy: { ...value.copy, [language]: { ...value.copy[language], [key]: event.target.value } } }))} />}
+    </div>)}
+    <p className="builder-panel-hint">{w("missing")}</p>
+    <div className="builder-field"><label htmlFor={id("target")}>{w("buttonDestination")}</label><select id={id("target")} value={block.target} onChange={event => update(value => ({ ...value, target: event.target.value as typeof value.target }))}>{(["none", "search", "pharmacy", "directory", "journey"] as const).map(key => <option key={key} value={key}>{w(key === "none" ? "noButton" : key)}</option>)}</select></div>
+    <div className="builder-field"><label htmlFor={id("tone")}>{w("appearance")}</label><select id={id("tone")} value={block.appearance?.tone ?? "soft"} onChange={event => update(value => ({ ...value, appearance: { align: value.appearance?.align ?? "start", tone: event.target.value as "soft" | "plain" | "brand" } }))}>{(["soft", "plain", "brand"] as const).map(key => <option key={key} value={key}>{w(key)}</option>)}</select></div>
+    <div className="builder-field"><label htmlFor={id("align")}>{w("alignment")}</label><select id={id("align")} value={block.appearance?.align ?? "start"} onChange={event => update(value => ({ ...value, appearance: { tone: value.appearance?.tone ?? "soft", align: event.target.value as "start" | "center" } }))}>{(["start", "center"] as const).map(key => <option key={key} value={key}>{w(key)}</option>)}</select></div>
+  </fieldset>;
 }
-
 export function AdminLandingEditor({ language }: { language: Language }) {
-  const i = indexOf(language), t = (key: keyof typeof words) => words[key][i];
-  const [draft, setDraft] = useState<LandingContent>(emptyLandingContent), [published, setPublished] = useState<LandingContent>(emptyLandingContent);
-  const [savedDraft, setSavedDraft] = useState<LandingContent>(emptyLandingContent), [version, setVersion] = useState(0), [publishedVersion, setPublishedVersion] = useState(0), [revisions, setRevisions] = useState<Revision[]>([]);
-  const [selectedLanguage, setSelectedLanguage] = useState<Language | null>(null), [working, setWorking] = useState(false), [loaded, setLoaded] = useState(false), [loadError, setLoadError] = useState(false), [preview, setPreview] = useState(false);
-  const contentLanguage = selectedLanguage ?? language;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
-  const hasUnpublished = dirty || JSON.stringify(savedDraft) !== JSON.stringify(published);
-  const w = (key: keyof typeof words) => words[key][i];
+  const router = useRouter();
+  const i = indexOf(language), w = (key: keyof typeof editorWords) => editorWords[key][i];
+  const [history, setHistory] = useState<{ past: LandingContent[]; present: LandingContent; future: LandingContent[] }>({ past: [], present: emptyLandingContent, future: [] });
+  const draft = history.present;
+  const [published, setPublished] = useState<LandingContent>(emptyLandingContent), [savedDraft, setSavedDraft] = useState<LandingContent>(emptyLandingContent);
+  const [version, setVersion] = useState(0), [publishedVersion, setPublishedVersion] = useState(0), [revisions, setRevisions] = useState<Revision[]>([]);
+  const [contentLanguage, setContentLanguage] = useState(language), [requestedSelection, setSelected] = useState("hero");
+  const [working, setWorking] = useState(false), [loaded, setLoaded] = useState(false), [loadError, setLoadError] = useState(false), [requestError, setRequestError] = useState("");
+  const [preview, setPreview] = useState(false), [leftTab, setLeftTab] = useState<"layers" | "insert">("layers"), [showHistory, setShowHistory] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"layers" | "canvas" | "properties">("canvas"), [device, setDevice] = useState(1280), [zoom, setZoom] = useState<number | "fit">("fit"), [theme, setTheme] = useState<"light" | "dark">("light");
+  const [pending, setPending] = useState<{ kind: "publish" | "delete" | "restore" | "leave" | "import"; revision?: Revision } | null>(null);
+  const [pendingImport, setPendingImport] = useState<LandingContent | null>(null), [mfaNeeded, setMfaNeeded] = useState(false);
+  const importFile = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState<string | null>(null), [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null), [announcement, setAnnouncement] = useState("");
+  const dragRef = useRef<string | null>(null), dropRef = useRef<typeof drop>(null), canvasRef = useRef<HTMLDivElement>(null);
+  const pointerDrag = useRef(false);
+  const suppressPaletteClick = useRef(false);
+  const selected = requestedSelection === "hero" || (landingSectionKeys as readonly string[]).includes(requestedSelection) || draft.blocks.some(block => block.id === requestedSelection) ? requestedSelection : "hero";
+  const layout = landingLayout(draft), selectedBlock = draft.blocks.find(block => block.id === selected);
+  const selectedGroup = groups.find(group => group.title === selected);
+  const isBuiltIn = (id: string): id is LandingSectionKey => (landingSectionKeys as readonly string[]).includes(id);
+  const hidden = (id: string) => isBuiltIn(id) ? draft.sections[id] === false : draft.blocks.find(block => block.id === id)?.enabled === false;
+  const name = (id: string) => id === "hero" ? w("hero") : isBuiltIn(id) ? w(sectionLabels[id]) : draft.blocks.find(block => block.id === id)?.copy[contentLanguage]?.heading || w("textSection");
+  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft), hasUnpublished = dirty || JSON.stringify(savedDraft) !== JSON.stringify(published);
+  const valid = landingContentSchema.safeParse(draft).success;
+  function setDraft(update: (current: LandingContent) => LandingContent) {
+    if (working) return;
+    setHistory(current => {
+      const next = update(current.present);
+      if (JSON.stringify(next) === JSON.stringify(current.present)) return current;
+      return { past: [...current.past.slice(-49), current.present], present: next, future: [] };
+    });
+  }
+  function undo() { if (!working) setHistory(h => h.past.length ? { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] } : h); }
+  function redo() { if (!working) setHistory(h => h.future.length ? { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) } : h); }
   const call = useCallback(async <T extends object = Record<string, unknown>,>(body: Record<string, unknown>): Promise<T> => {
-    const response = await fetch("/api/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const result = await response.json() as T & { error?: string };
+    const response = await fetch("/api/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+    const result = await response.json() as T & { error?: string; code?: string };
+    if (response.status === 403 && result.code === "MFA_REQUIRED") setMfaNeeded(true);
+    if (response.ok) setMfaNeeded(false);
     if (!response.ok) throw new Error(result.error || "Landing request failed.");
     return result;
   }, []);
   const reload = useCallback(async () => {
-    try {
-      const result = await call<LandingState>({ action: "load" });
-      setLoadError(false); setDraft(result.draft); setSavedDraft(result.draft); setPublished(result.published); setVersion(result.draftVersion); setPublishedVersion(result.publishedVersion); setRevisions(result.revisions); setLoaded(true);
-    } catch { setLoadError(true); }
+    const result = await call<LandingState>({ action: "load" });
+    setLoadError(false); setHistory({ past: [], present: result.draft, future: [] }); setSavedDraft(result.draft); setPublished(result.published);
+    setVersion(result.draftVersion); setPublishedVersion(result.publishedVersion); setRevisions(result.revisions); setLoaded(true);
   }, [call]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void reload(); }, 0);
+    const timer = window.setTimeout(() => { void reload().catch(() => setLoadError(true)); }, 0);
     return () => window.clearTimeout(timer);
   }, [reload]);
-  function updateCopy(key: LandingCopyKey, value: string) {
-    setDraft(current => ({ ...current, copy: { ...current.copy, [contentLanguage]: { ...current.copy[contentLanguage], [key]: value } } }));
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  function select(id: string, scroll = true) {
+    setSelected(id); setShowHistory(false);
+    if (scroll) canvasRef.current?.querySelector("iframe")?.contentDocument?.querySelector(`[data-editor-node="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-  function resetCopy(key: LandingCopyKey) {
+  function updateCopy(key: LandingCopyKey, value?: string) {
     setDraft(current => {
-      const locale = { ...current.copy[contentLanguage] }; delete locale[key];
-      return { ...current, copy: { ...current.copy, [contentLanguage]: locale } };
+      const copy = { ...current.copy[contentLanguage] }; if (value === undefined) delete copy[key]; else copy[key] = value;
+      const locales = { ...current.copy }; if (Object.keys(copy).length) locales[contentLanguage] = copy; else delete locales[contentLanguage];
+      return { ...current, copy: locales };
     });
   }
-  function reorder(key: LandingSectionKey, delta: number) {
+  function updateBlock(update: (block: NonNullable<typeof selectedBlock>) => NonNullable<typeof selectedBlock>) {
+    setDraft(current => ({ ...current, blocks: current.blocks.map(block => block.id === selected ? update(block) : block) }));
+  }
+  function toggle(id: string) {
+    setDraft(current => isBuiltIn(id) ? { ...current, sections: { ...current.sections, [id]: current.sections[id] === false } } : { ...current, blocks: current.blocks.map(block => block.id === id ? { ...block, enabled: !block.enabled } : block) });
+  }
+  function move(id: string, delta: number) {
+    const target = layout[layout.indexOf(id) + delta];
+    if (target) { setDraft(current => reorderLanding(current, id, target, delta > 0)); setAnnouncement(w("changed")); }
+  }
+  function add(template: string, target = selected, after = true) {
+    if (working || draft.blocks.length >= 8) return;
+    const id = crypto.randomUUID(), cta = template === "template:cta";
+    const block: NonNullable<typeof selectedBlock> = { id, enabled: true, target: cta ? "search" : "none", appearance: { tone: cta ? "brand" : "soft", align: cta ? "center" : "start" }, copy: { [contentLanguage]: { heading: defaultCopy(contentLanguage, cta ? "titleA" : "tools"), body: defaultCopy(contentLanguage, cta ? "lead" : "routeBody"), ...(cta ? { button: defaultCopy(contentLanguage, "explore") } : {}) } } };
     setDraft(current => {
-      const order = [...current.order], from = order.indexOf(key), to = Math.max(0, Math.min(order.length - 1, from + delta));
-      if (to === from) return current;
-      order.splice(from, 1); order.splice(to, 0, key); return { ...current, order };
+      const order = [...landingLayout(current)], index = order.indexOf(target);
+      order.splice(index < 0 ? 0 : index + Number(after), 0, id);
+      return { ...current, blocks: [...current.blocks, block], layout: order };
     });
+    setLeftTab("layers"); select(id, false); setMobilePanel("properties");
+  }
+  function duplicate() {
+    if (!selectedBlock || draft.blocks.length >= 8) return;
+    const block = { ...structuredClone(selectedBlock), id: crypto.randomUUID() };
+    setDraft(current => {
+      const order = [...landingLayout(current)]; order.splice(order.indexOf(selected) + 1, 0, block.id);
+      return { ...current, blocks: [...current.blocks, block], layout: order };
+    });
+    select(block.id, false);
+  }
+  function clearDrag() { dragRef.current = null; dropRef.current = null; pointerDrag.current = false; setDragging(null); setDrop(null); }
+  function setDropTarget(id: string, after: boolean) { const next = { id, after }; dropRef.current = next; setDrop(next); }
+  function finishDrop(id: string, after: boolean) {
+    const source = dragRef.current;
+    if (source?.startsWith("template:")) add(source, id, after);
+    else if (source) { setDraft(current => reorderLanding(current, source, id, after)); select(source, false); setAnnouncement(w("changed")); }
+    clearDrag();
+  }
+  function dragOver(event: DragEvent<HTMLElement>, id: string) {
+    if (!dragRef.current || working) return;
+    event.preventDefault(); event.stopPropagation();
+    event.dataTransfer.dropEffect = dragRef.current.startsWith("template:") ? "copy" : "move";
+    const rect = event.currentTarget.getBoundingClientRect(); setDropTarget(id, event.clientY > rect.top + rect.height / 2);
+  }
+  function touchStart(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    if (working) return;
+    suppressPaletteClick.current = false;
+    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); pointerDrag.current = true; dragRef.current = id; setDragging(id);
+  }
+  function touchMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!pointerDrag.current || !dragRef.current) return;
+    let doc = event.currentTarget.ownerDocument, x=event.clientX, y=event.clientY;
+    const sourceFrame=doc.defaultView?.frameElement as HTMLIFrameElement|null;
+    if(sourceFrame){const rect=sourceFrame.getBoundingClientRect();x=rect.left+x*rect.width/sourceFrame.clientWidth;y=rect.top+y*rect.height/sourceFrame.clientHeight;doc=sourceFrame.ownerDocument;}
+    let hit=doc.elementFromPoint(x,y);
+    if(hit?.tagName==="IFRAME"){const frame=hit as HTMLIFrameElement,rect=frame.getBoundingClientRect();if(frame.contentDocument){x=(x-rect.left)*frame.clientWidth/rect.width;y=(y-rect.top)*frame.clientHeight/rect.height;doc=frame.contentDocument;hit=doc.elementFromPoint(x,y);}}
+    const target=hit?.closest<HTMLElement>("[data-editor-drop]");
+    if (target) { const rect = target.getBoundingClientRect(); setDropTarget(target.dataset.editorDrop!, y > rect.top + rect.height / 2); }
+    else {dropRef.current=null;setDrop(null);}
+    const scroller = target?.closest<HTMLElement>("[data-editor-scroll]") ?? doc.scrollingElement;
+    if (scroller) { const rect = scroller.getBoundingClientRect(); if (y < Math.max(0, rect.top) + 50) scroller.scrollBy(0, -20); else if (y > Math.min(doc.documentElement.clientHeight, rect.bottom) - 50) scroller.scrollBy(0, 20); }
+  }
+  function pointerEnd(){if(pointerDrag.current&&dragRef.current&&dropRef.current){suppressPaletteClick.current=dragRef.current.startsWith("template:");finishDrop(dropRef.current.id,dropRef.current.after);}else clearDrag();}
+  function dragHandle(id: string) {
+    return <button type="button" className="builder-drag-handle" draggable={false} disabled={working} aria-label={`${w("drag")}: ${name(id)}`} title={w("drag")} onPointerDown={event => touchStart(event, id)} onPointerMove={touchMove} onPointerUp={pointerEnd} onPointerCancel={clearDrag} onKeyDown={event => { if (event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); move(id, event.key === "ArrowUp" ? -1 : 1); } }}><GripVertical aria-hidden="true" /></button>;
+  }
+  function dropProps(id: string) {
+    return { "data-editor-drop": id, "data-drop": drop?.id === id ? drop.after ? "after" : "before" : undefined, onDragOver: (event: DragEvent<HTMLElement>) => dragOver(event, id), onDrop: (event: DragEvent<HTMLElement>) => { if (dragRef.current) { event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); finishDrop(id, event.clientY > rect.top + rect.height / 2); } } };
+  }
+  async function persist() {
+    if (!dirty) return version;
+    const result = await call<{ draftVersion: number }>({ action: "save", draftVersion: version, content: draft });
+    setVersion(result.draftVersion); setSavedDraft(draft); return result.draftVersion;
+  }
+  function failed(error: unknown) { const message = error instanceof Error ? error.message : w("failed"); setRequestError(message); toast.error(message); }
+  function downloadDraft() {
+    const url = URL.createObjectURL(new Blob([exportLandingDraft(draft)], { type: "application/json;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "LQADWA-landing-draft.json"; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function readDraft(file?: File) {
+    if (!file || working) return;
+    setWorking(true);
+    try { if (file.size > landingDraftFileMaxBytes) throw Error(); setPendingImport(importLandingDraft(await file.text())); setPending({ kind: "import" }); }
+    catch { failed(new Error(w("invalidFile"))); }
+    finally { setWorking(false); if (importFile.current) importFile.current.value = ""; }
   }
   async function save() {
-    setWorking(true);
+    if (working || !dirty || !valid) return;
+    setWorking(true); setRequestError("");
+    try { await persist(); toast.success(w("saved")); } catch (error) { failed(error); } finally { setWorking(false); }
+  }
+  async function confirmAction() {
+    if (!pending || working) return;
+    if (pending.kind === "import") {
+      if (pendingImport) { setDraft(() => pendingImport); select("hero"); }
+      setPendingImport(null); setPending(null); return;
+    }
+    if (pending.kind === "leave") { router.push("/operations"); return; }
+    if (pending.kind === "delete") {
+      setDraft(current => ({ ...current, blocks: current.blocks.filter(block => block.id !== selected), layout: landingLayout(current).filter(id => id !== selected) }));
+      select("hero"); setPending(null); return;
+    }
+    setWorking(true); setRequestError("");
     try {
-      const result = await call<{ draftVersion: number }>({ action: "save", draftVersion: version, content: draft });
-      setVersion(result.draftVersion); setSavedDraft(draft); toast.success(t("saved"));
-    } catch (error) { toast.error(error instanceof Error ? error.message : t("failed")); }
-    finally { setWorking(false); }
+      if (pending.kind === "publish") { const draftVersion = await persist(); await call({ action: "publish", draftVersion }); }
+      else if (pending.revision) await call({ action: "restore", draftVersion: version, revision: pending.revision.id });
+      await reload(); setPending(null); toast.success(w("publishedToast"));
+    } catch (error) { failed(error); } finally { setWorking(false); }
   }
-  async function publish() {
-    if (dirty || !window.confirm(w("confirmPublish"))) return;
-    setWorking(true);
-    try {
-      const result = await call<{ draftVersion?: number; publishedVersion?: number; unchanged?: boolean }>({ action: "publish", draftVersion: version });
-      setVersion(result.draftVersion ?? version); setPublishedVersion(result.publishedVersion ?? publishedVersion);
-      setPublished(savedDraft); await reload(); toast.success(result.unchanged ? w("unchanged") : w("publishedToast"));
-    } catch (error) { toast.error(error instanceof Error ? error.message : w("failed")); }
-    finally { setWorking(false); }
+  function renderSection(id: string, node: ReactNode) {
+    const fixed = id === "hero", missing = draft.blocks.some(block => block.id === id && (!block.copy[contentLanguage]?.heading?.trim() || !block.copy[contentLanguage]?.body?.trim()));
+    return <section className={`builder-page-section ${selected === id ? "is-selected" : ""} ${hidden(id) ? "is-hidden" : ""} ${dragging === id ? "is-dragging" : ""}`} data-editor-node={id} {...(fixed ? {} : dropProps(id))} onClick={() => select(id, false)} aria-label={name(id)}>
+      <div className="builder-section-label">{fixed ? <LockKeyhole aria-hidden="true" /> : dragHandle(id)}<button type="button" onClick={() => select(id, false)} aria-label={`${w("select")}: ${name(id)}`}>{name(id)}</button>{hidden(id) && <span><EyeOff aria-hidden="true" />{w("hidden")}</span>}</div>
+      <div inert>{missing ? <div className="builder-missing-section"><Type aria-hidden="true" /><p>{w("missing")}</p></div> : node}</div>
+    </section>;
   }
-  async function restore(revision: Revision) {
-    if (dirty || !window.confirm(w("confirmRestore"))) return;
-    setWorking(true);
-    try {
-      await call({ action: "restore", draftVersion: version, revision: revision.id }); await reload(); toast.success(w("publishedToast"));
-    } catch (error) { toast.error(error instanceof Error ? error.message : w("failed")); }
-    finally { setWorking(false); }
-  }
-  function updateBlock(id: string, update: (block: LandingContent["blocks"][number]) => LandingContent["blocks"][number]) {
-    setDraft(current => ({ ...current, blocks: current.blocks.map(block => block.id === id ? update(block) : block) }));
-  }
-  function moveBlock(index: number, delta: number) {
-    setDraft(current => { const blocks = [...current.blocks], to = Math.max(0, Math.min(blocks.length - 1, index + delta)); [blocks[index], blocks[to]] = [blocks[to], blocks[index]]; return { ...current, blocks }; });
-  }
-
-  return <section className="panel landing-editor" dir={language === "ar" ? "rtl" : "ltr"} aria-labelledby="landing-editor-title">
-    <div className="landing-editor-heading"><span className="landing-editor-icon"><Globe2 aria-hidden="true" /></span><div><h2 id="landing-editor-title">{w("title")}</h2><p>{w("help")}</p></div></div>
-    {!loaded ? <div className="landing-editor-load" role={loadError ? "alert" : "status"}>{loadError ? <><p>{w("failed")}</p><Button variant="outline" onClick={() => void reload()}><RotateCcw />{w("retry")}</Button></> : <p>{w("loading")}</p>}</div> : <>
-      <div className="landing-editor-status"><span className={`landing-status-dot ${hasUnpublished ? "is-draft" : "is-live"}`} />{hasUnpublished ? w("unpublished") : w("published")}<span className="landing-editor-version">v{publishedVersion}</span></div>
-      <div className="landing-editor-toolbar"><label>{w("language")}<select className="landing-editor-select" value={contentLanguage} onChange={event => setSelectedLanguage(event.target.value as Language)} disabled={working}>{Object.entries(localeName).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><div className="landing-editor-actions"><Button type="button" variant="outline" disabled={working} onClick={() => setPreview(true)}><Eye />{w("preview")}</Button><Button type="button" disabled={working || !dirty} onClick={() => void save()}><Save />{w("save")}</Button><Button type="button" variant="secondary" disabled={working || dirty || !hasUnpublished} onClick={() => void publish()}><Send />{working ? w("publishing") : w("publish")}</Button></div></div>
-      {dirty && <p className="landing-editor-unsaved" role="status">{w("unsaved")}</p>}
-      <div className="landing-editor-layout">
-        <section className="landing-editor-fields" aria-label={w("title")}>
-          {groups.map(group => <fieldset className="landing-editor-group" key={group.title}>
-            <legend>{w(group.title as keyof typeof words)}</legend>
-            <div className="landing-editor-field-grid">{group.fields.map(({ key, multiline }) => {
-              const label = fieldLabels[key][i], value = draft.copy[contentLanguage]?.[key] ?? defaultCopy(contentLanguage, key);
-              return <label className={multiline ? "landing-editor-field is-wide" : "landing-editor-field"} key={key}>{label}<div className="landing-editor-input-row">{multiline ? <Textarea maxLength={600} rows={3} value={value} disabled={working} onChange={event => updateCopy(key, event.target.value)} /> : <Input maxLength={600} value={value} disabled={working} onChange={event => updateCopy(key, event.target.value)} />}<Button type="button" variant="ghost" className="landing-reset-field" title={w("reset")} aria-label={`${w("reset")}: ${label}`} disabled={working || draft.copy[contentLanguage]?.[key] === undefined} onClick={() => resetCopy(key)}><RotateCcw aria-hidden="true" /></Button></div></label>;
-            })}</div>
-          </fieldset>)}
+  return <main className={`landing-editor builder ${preview ? "is-preview" : ""}`} dir={language === "ar" ? "rtl" : "ltr"} data-mobile-panel={mobilePanel} onKeyDown={event => {
+    if (event.key === "Escape") { clearDrag(); setPreview(false); }
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key.toLowerCase() === "s") { event.preventDefault(); void save(); }
+    else if (!(event.target as HTMLElement).closest("input,textarea,select,[contenteditable]") && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); }
+  }}>
+    <header className="builder-header"><div className="builder-identity"><a href="/operations" className="builder-back" aria-label={w("dashboard")} title={w("dashboard")} onClick={event => { if (dirty) { event.preventDefault(); setPending({ kind: "leave" }); } }}><ArrowLeft aria-hidden="true" /></a><img src="/brand/luqya.png" alt="LQADWA" width="36" height="36" /><div><h1>{w("studio")}</h1><span>{w("title")}</span></div></div><div className="builder-history-controls"><Button variant="ghost" size="icon" aria-label={w("undo")} title={`${w("undo")} · Ctrl+Z`} disabled={working || !history.past.length} onClick={undo}><Undo2 /></Button><Button variant="ghost" size="icon" aria-label={w("redo")} title={`${w("redo")} · Ctrl+Shift+Z`} disabled={working || !history.future.length} onClick={redo}><Redo2 /></Button><Button variant="ghost" size="icon" aria-label={w("history")} title={w("history")} aria-pressed={showHistory} onClick={() => { setShowHistory(value => !value); setMobilePanel("properties"); }}><History /></Button></div><div className="builder-publish-actions"><Button variant="outline" disabled={!loaded || working} aria-pressed={preview} onClick={() => setPreview(value => !value)}><Eye /><span>{w(preview ? "editing" : "preview")}</span></Button><Button variant="outline" disabled={!loaded || working || !dirty || !valid} onClick={() => void save()}><Save /><span>{w(working ? "saving" : "save")}</span></Button><Button disabled={!loaded || working || !hasUnpublished || !valid} onClick={() => setPending({ kind: "publish" })}><Send /><span>{w("publish")}</span></Button></div></header>
+    {mfaNeeded && <aside className="builder-session-help" role="alert"><p>{w("verifyHelp")}</p><a href="/operations/security" target="_blank" rel="noopener noreferrer">{w("verifySession")}</a></aside>}
+    {!loaded ? <div className="builder-loading" role={loadError ? "alert" : "status"}><LayoutTemplate aria-hidden="true" /><h2>{w(loadError ? "failed" : "loading")}</h2>{loadError ? <Button variant="outline" onClick={() => void reload().catch(() => setLoadError(true))}><RotateCcw />{w("retry")}</Button> : <div className="builder-loading-lines"><i /><i /><i /></div>}</div> : <>
+      <nav className="builder-mobile-tabs" aria-label={w("studio")}>{([["layers", PanelLeft], ["canvas", Monitor], ["properties", Settings2]] as const).map(([panel, Icon]) => <button key={panel} aria-current={mobilePanel === panel ? "page" : undefined} onClick={() => setMobilePanel(panel)}><Icon aria-hidden="true" />{w(panel)}</button>)}</nav>
+      <div className="builder-workspace">
+        <aside className="builder-layers" aria-label={w("layers")}><div className="builder-panel-tabs">{(["layers", "insert"] as const).map(tab => <button key={tab} aria-pressed={leftTab === tab} onClick={() => setLeftTab(tab)}>{tab === "layers" ? <Layers3 aria-hidden="true" /> : <Plus aria-hidden="true" />}{w(tab)}</button>)}</div><div className="builder-layer-scroll" data-editor-scroll>
+          {leftTab === "layers" ? <><div className="builder-page-label"><Globe2 aria-hidden="true" />{w("title")}</div><ol className="builder-layer-list"><li className={`builder-layer ${selected === "hero" ? "is-selected" : ""}`}><span className="builder-fixed-icon"><LockKeyhole aria-hidden="true" /></span><button className="builder-layer-name" onClick={() => select("hero")} aria-pressed={selected === "hero"}>{w("hero")}<small>{w("fixed")}</small></button></li>{layout.map(id => <li key={id} className={`builder-layer ${selected === id ? "is-selected" : ""} ${hidden(id) ? "is-hidden" : ""} ${dragging === id ? "is-dragging" : ""}`} {...dropProps(id)}>{dragHandle(id)}<button className="builder-layer-name" onClick={() => select(id)} aria-pressed={selected === id}>{name(id)}</button><button className="builder-visibility" disabled={working} aria-label={`${w(hidden(id) ? "show" : "hide")}: ${name(id)}`} onClick={() => toggle(id)}>{hidden(id) ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></li>)}</ol><Button className="builder-add-section" variant="outline" onClick={() => setLeftTab("insert")}><Plus />{w("add")}</Button><p className="builder-panel-hint">{w("dragHelp")}</p></> : <><h2 className="builder-panel-title">{w("add")}</h2><p className="builder-panel-hint">{w("templateHelp")}</p>{(["text", "cta"] as const).map(template => <button key={template} className={`builder-template template-${template}`} disabled={working || draft.blocks.length >= 8} draggable={false} onPointerDown={event=>touchStart(event,`template:${template}`)} onPointerMove={touchMove} onPointerUp={pointerEnd} onPointerCancel={clearDrag} onClick={()=>{if(suppressPaletteClick.current){suppressPaletteClick.current=false;return;}add(`template:${template}`);}}><span className="builder-template-drawing" aria-hidden="true"><i /><i /><i />{template === "cta" && <b />}</span><span>{w(template === "cta" ? "ctaSection" : "textSection")}<Plus aria-hidden="true" /></span></button>)}{draft.blocks.length >= 8 && <p className="builder-panel-hint">{w("limit")}</p>}</>}
+        </div></aside>
+        <section className="builder-canvas" aria-label={w("canvas")} ref={canvasRef}><div className="builder-canvas-toolbar"><div className="builder-device-switch" role="group" aria-label={w("preview")}>{([[1280, Monitor, "desktop"], [768, Tablet, "tablet"], [390, Smartphone, "mobile"]] as const).map(([width, Icon, label]) => <button key={width} aria-label={w(label)} title={w(label)} aria-pressed={device === width} onClick={() => setDevice(width)}><Icon aria-hidden="true" /></button>)}</div><span className="builder-viewport-size" dir="ltr">{device}px</span><div className="builder-canvas-options"><button aria-label={w("previewTheme")} title={w("previewTheme")} onClick={() => setTheme(value => value === "light" ? "dark" : "light")}>{theme === "light" ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}</button><label><span className="sr-only">{w("zoom")}</span><select value={zoom} onChange={event => setZoom(event.target.value === "fit" ? "fit" : Number(event.target.value))}><option value="fit">{w("fit")}</option>{[0.5, 0.75, 1].map(value => <option key={value} value={value}>{value * 100}%</option>)}</select></label></div></div>
+          <LandingEditorCanvas onEscape={()=>{clearDrag();setPreview(false);}} width={device} zoom={zoom} theme={theme} language={contentLanguage} title={w("preview")}><div className="app-shell landing-editor-preview" onClickCapture={event => { if ((event.target as HTMLElement).closest("a")) event.preventDefault(); }}><div className="builder-preview-brand"><img src="/brand/luqya.png" width="32" height="32" alt="" /><strong>LQADWA.</strong><span>{w("title")}</span></div><div className="builder-preview-content"><LandingPage language={contentLanguage} content={draft} renderEditorSection={preview ? undefined : renderSection}><div className="builder-directory-placeholder"><Globe2 aria-hidden="true" /><p>{w("directoryHelp")}</p></div></LandingPage></div></div></LandingEditorCanvas>
+          <div className="builder-canvas-hint"><MousePointer2 aria-hidden="true" />{w(preview ? "preview" : "selectHelp")}</div>
         </section>
-        <aside className="landing-editor-side"><section className="landing-section-order"><h3>{w("sections")}</h3><ol>{draft.order.map((key, index) => <li key={key}><Checkbox checked={draft.sections[key] !== false} disabled={working} aria-label={`${w(sectionLabels[key])}: ${w("visible")}`} onCheckedChange={checked => setDraft(current => ({ ...current, sections: { ...current.sections, [key]: checked === true } }))} /><span>{w(sectionLabels[key])}</span><Button type="button" variant="outline" disabled={working || index === 0} aria-label={`↑ ${w(sectionLabels[key])}`} onClick={() => reorder(key, -1)}><ArrowUp /></Button><Button type="button" variant="outline" disabled={working || index === draft.order.length - 1} aria-label={`↓ ${w(sectionLabels[key])}`} onClick={() => reorder(key, 1)}><ArrowDown /></Button></li>)}</ol></section>
-          <section className="landing-custom-blocks"><div className="landing-custom-title"><h3>{w("add")}</h3><Button type="button" variant="outline" disabled={working || draft.blocks.length >= 8} onClick={() => setDraft(current => ({ ...current, blocks: [...current.blocks, newBlock()] }))}><Plus />{w("add")}</Button></div><p>{w("addHelp")}</p>
-            {draft.blocks.map((block, index) => <fieldset className="landing-custom-block" key={block.id}><legend>{w("add")} {index + 1}</legend><div className="landing-custom-toolbar"><label className="landing-visible-toggle"><Checkbox checked={block.enabled} disabled={working} onCheckedChange={checked => updateBlock(block.id, value => ({ ...value, enabled: checked === true }))} />{w("visible")}</label><Button type="button" variant="outline" disabled={working || index === 0} aria-label={`${w("add")} ${index + 1} ↑`} onClick={() => moveBlock(index, -1)}><ArrowUp /></Button><Button type="button" variant="outline" disabled={working || index === draft.blocks.length - 1} aria-label={`${w("add")} ${index + 1} ↓`} onClick={() => moveBlock(index, 1)}><ArrowDown /></Button><Button type="button" variant="outline" disabled={working} aria-label={w("remove")} onClick={() => { if (window.confirm(w("deleteQuestion"))) setDraft(current => ({ ...current, blocks: current.blocks.filter(value => value.id !== block.id) })); }}><Trash2 /></Button></div><label>{w("heading")}<Input maxLength={100} value={block.copy[contentLanguage]?.heading || ""} disabled={working} onChange={event => updateBlock(block.id, value => ({ ...value, copy: { ...value.copy, [contentLanguage]: { ...value.copy[contentLanguage], heading: event.target.value } } }))} /></label><label>{w("body")}<Textarea maxLength={600} rows={3} value={block.copy[contentLanguage]?.body || ""} disabled={working} onChange={event => updateBlock(block.id, value => ({ ...value, copy: { ...value.copy, [contentLanguage]: { ...value.copy[contentLanguage], body: event.target.value } } }))} /></label><label>{w("buttonText")}<Input maxLength={80} value={block.copy[contentLanguage]?.button || ""} disabled={working} onChange={event => updateBlock(block.id, value => ({ ...value, copy: { ...value.copy, [contentLanguage]: { ...value.copy[contentLanguage], button: event.target.value } } }))} /></label><label>{w("buttonDestination")}<select className="landing-editor-select" value={block.target} disabled={working} onChange={event => updateBlock(block.id, value => ({ ...value, target: event.target.value as typeof value.target }))}><option value="none">{w("noButton")}</option><option value="search">{w("search")}</option><option value="pharmacy">{w("pharmacy")}</option><option value="directory">{w("directory")}</option><option value="journey">{w("journey")}</option></select></label></fieldset>)}
-          </section>
-          <section className="landing-revision-history"><h3><History />{w("history")}</h3>{revisions.length ? revisions.map(revision => <article key={revision.id}><span>{new Date(revision.created_at).toLocaleString(language === "ar" ? "ar-DZ" : language === "kab" ? "fr-DZ" : `${language}-DZ`)}</span><Button type="button" variant="outline" disabled={working || dirty} onClick={() => void restore(revision)}><RotateCcw />{w("restore")}</Button></article>) : <p>{w("noHistory")}</p>}</section>
-        </aside>
-      </div>
+        <aside className="builder-inspector" aria-label={w("properties")}><div className="builder-inspector-heading"><Settings2 aria-hidden="true" /><h2>{w(showHistory ? "history" : "properties")}</h2></div><div className="builder-inspector-scroll" data-editor-scroll>{showHistory ? <section className="landing-revision-history"><p className="builder-panel-hint">{w("historyHelp")}</p>{revisions.length ? revisions.map(revision => <article key={revision.id}><span>{new Date(revision.created_at).toLocaleString(language === "ar" ? "ar-DZ" : language === "kab" ? "fr-DZ" : `${language}-DZ`)}</span><Button variant="outline" disabled={working || dirty} onClick={() => setPending({ kind: "restore", revision })}><RotateCcw />{w("restore")}</Button></article>) : <p className="builder-panel-hint">{w("noHistory")}</p>}{dirty && <p className="builder-panel-hint">{w("unsaved")}</p>}</section> : <>
+          <div className="builder-selection-heading"><span>{w("select")}</span><h3>{name(selected)}</h3></div><div className="builder-field builder-language"><label htmlFor="editor-content-language">{w("language")}</label><select id="editor-content-language" value={contentLanguage} disabled={working} onChange={event => setContentLanguage(event.target.value as Language)}>{Object.entries(localeName).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></div>
+          {selected !== "hero" && (isBuiltIn(selected) || selectedBlock) && <><label className="builder-visible"><Checkbox checked={!hidden(selected)} disabled={working} onCheckedChange={() => toggle(selected)} />{w("visible")}</label><div className="builder-section-actions"><Button variant="outline" size="icon" title={w("moveUp")} aria-label={w("moveUp")} disabled={working || layout.indexOf(selected) <= 0} onClick={() => move(selected, -1)}><ArrowUp /></Button><Button variant="outline" size="icon" title={w("moveDown")} aria-label={w("moveDown")} disabled={working || layout.indexOf(selected) === layout.length - 1} onClick={() => move(selected, 1)}><ArrowDown /></Button>{selectedBlock && <><Button variant="outline" size="icon" title={w("duplicate")} aria-label={w("duplicate")} disabled={working || draft.blocks.length >= 8} onClick={duplicate}><Copy /></Button><Button variant="outline" size="icon" className="builder-delete" title={w("remove")} aria-label={w("remove")} disabled={working} onClick={() => setPending({ kind: "delete" })}><Trash2 /></Button></>}</div></>}
+          {selectedGroup && <fieldset className="builder-copy-fields" disabled={working}><legend>{w("title")}</legend>{selectedGroup.fields.map(({ key, multiline }) => {
+            const label = fieldLabels[key][i], value = draft.copy[contentLanguage]?.[key] ?? defaultCopy(contentLanguage, key), empty = !value.trim();
+            return <div className="builder-field" key={key}><div className="builder-field-label"><label htmlFor={`copy-${key}`}>{label}</label><button type="button" title={w("reset")} aria-label={`${w("reset")}: ${label}`} disabled={working || draft.copy[contentLanguage]?.[key] === undefined} onClick={() => updateCopy(key)}><RotateCcw aria-hidden="true" /></button></div>{multiline ? <Textarea id={`copy-${key}`} maxLength={600} rows={4} value={value} aria-invalid={empty} aria-describedby={empty ? `error-${key}` : undefined} onChange={event => updateCopy(key, event.target.value)} /> : <Input id={`copy-${key}`} maxLength={600} value={value} aria-invalid={empty} aria-describedby={empty ? `error-${key}` : undefined} onChange={event => updateCopy(key, event.target.value)} />}{empty && <span className="builder-field-error" id={`error-${key}`}>{w("required")}</span>}</div>;
+          })}</fieldset>}
+          {selectedBlock && <BlockProperties block={selectedBlock} language={contentLanguage} working={working} w={w} update={updateBlock} />}
+          {!selectedGroup && !selectedBlock && <p className="builder-panel-hint">{w("selectHelp")}</p>}
+        </>}<section className="builder-draft-tools" aria-label={w("draftTools")}><h3>{w("draftTools")}</h3><div><Button variant="outline" disabled={working || !valid} onClick={downloadDraft}><Download aria-hidden="true" />{w("exportDraft")}</Button><Button variant="outline" disabled={working} onClick={() => importFile.current?.click()}><Upload aria-hidden="true" />{w("importDraft")}</Button></div><input ref={importFile} type="file" accept="application/json,.json" className="sr-only" aria-label={w("importDraft")} disabled={working} tabIndex={-1} onChange={event => void readDraft(event.target.files?.[0])} /></section></div></aside>
+      </div><footer className="builder-statusbar"><span role="status">{dirty ? <><span className="builder-status-dot" />{w("unsavedShort")}</> : <><Check aria-hidden="true" />{w(hasUnpublished ? "savedShort" : "published")}</>}</span>{requestError && <span className="builder-request-error" role="alert">{requestError}</span>}<span className="builder-version">v{publishedVersion} · {localeName[contentLanguage]}</span></footer>
     </>}
-    <Dialog open={preview} onOpenChange={setPreview}><DialogContent className="landing-preview-dialog" dir={contentLanguage === "ar" ? "rtl" : "ltr"}><DialogTitle>{w("preview")}</DialogTitle><DialogDescription>{dirty ? w("unsaved") : w("help")}</DialogDescription><div className="landing-preview-scroll"><LandingPage language={contentLanguage} content={draft} hideDirectory /></div></DialogContent></Dialog>
-  </section>;
+    <span className="sr-only" aria-live="polite">{announcement}</span>
+    <Dialog open={!!pending} onOpenChange={open => { if (!open && !working) setPending(null); }}><DialogContent className="builder-confirm" dir={language === "ar" ? "rtl" : "ltr"}><DialogTitle>{pending?.kind === "import" ? w("importDraft") : pending?.kind === "leave" ? w("leave") : pending?.kind === "delete" ? w("remove") : pending?.kind === "restore" ? w("restore") : w("publish")}</DialogTitle><DialogDescription>{pending?.kind === "import" ? w("importHelp") : pending?.kind === "leave" ? w("leaveHelp") : pending?.kind === "delete" ? w("deleteQuestion") : pending?.kind === "restore" ? w("historyHelp") : w("publishHelp")}</DialogDescription><div className="builder-confirm-actions"><Button variant="outline" disabled={working} onClick={() => setPending(null)}>{w("cancel")}</Button><Button disabled={working} onClick={() => void confirmAction()}>{w(working ? "saving" : "confirm")}</Button></div></DialogContent></Dialog>
+  </main>;
 }
