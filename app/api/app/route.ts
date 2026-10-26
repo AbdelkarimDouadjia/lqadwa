@@ -78,7 +78,8 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   directory.push(...await relatedPharmacies(db, associatedIds, new Set(directory.map(p => p.id))));
   let admin: AppData["admin"] = null;
   const access = await adminAccess(owner, db);
-  if (access && await recentPrivilegedSession(owner, request)) {
+  const privileged = access && await recentPrivilegedSession(owner, request);
+  if (access && privileged) {
     const can = (permission: typeof adminPermissions[number]) => access.permissions.includes(permission);
     const empty = () => db.prepare("SELECT NULL WHERE 0");
     const roots = rootAdminIds();
@@ -112,6 +113,7 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     ownPharmacy: ownPharmacy || null,
     staffRequests: results[8].results as StaffRequest[], staffBookings: results[9].results as StaffBooking[], stock: results[10].results as StockItem[],
     role: admin ? "admin" : ownPharmacy ? "pharmacist" : "client", admin,
+    adminStepUpRequired: Boolean(access && !privileged && !request?.headers.has("x-lqadwa-session")),
   };
 }
 export async function GET(request: Request) {

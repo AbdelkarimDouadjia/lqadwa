@@ -439,6 +439,18 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
     await page.getByRole('button', { name: 'هاتف', exact: true }).click();
     await noOverflow(page); await accessible(page);
     await page.screenshot({ path: `.cloudflare/e2e/${info.project.name}-visual-editor-ar-mobile.png`, fullPage: true });
+    // Polling must ask for renewed assurance before replacing the admin workspace.
+    await page.clock.install();
+    let stepUpExpired=false;
+    const adminSnapshot=await page.request.get('/api/app',apiOptions).then(response=>response.json());
+    await page.route('**/api/app',route=>stepUpExpired&&route.request().method()==='GET'
+      ?route.fulfill({status:200,json:{...adminSnapshot,admin:null,role:'client',adminStepUpRequired:true}}):route.continue());
+    await page.goto('/operations');
+    await expect(page.locator('.visual-editor-entry')).toBeVisible();
+    stepUpExpired=true;
+    await page.clock.fastForward(31_000);
+    await expect(page).toHaveURL(/\/operations\/security$/);
+    await expect(page.locator('#totp-code')).toBeVisible();
   } finally {
     // Local fixtures only: restore the published content even when an assertion fails.
     const state = await load();

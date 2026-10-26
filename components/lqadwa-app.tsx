@@ -94,6 +94,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
       if (sequence !== latest.current) return;
       if ([401,403,410].includes(response.status)) { setData(blank); setModal(null); setPosition(null); setNotificationsOpen(false); setSignedOut(true); first.current = true; setLoading(false); setError(response.status === 403 ? tr(language, "applicationSuspended") : response.status === 410 ? tr(language, "signInRequired") : ""); return; }
       if (!response.ok) throw new Error(result.error || "Load failed");
+      if (result.adminStepUpRequired) { window.location.replace("/operations/security"); return; }
       setData(result); setSignedOut(false); setError("");
       if (first.current) {
         setCity(result.profile.city);

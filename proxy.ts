@@ -17,7 +17,7 @@ export async function proxy(request: NextRequest) {
   const authRoot = request.nextUrl.pathname === "/" && request.cookies.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
   if (request.nextUrl.pathname === "/") response.headers.set("Cache-Control", "private, no-store");
   // Keep early redirects protected, without refreshing Auth on public/API paths.
-  if (!authRoot && !["/connect", "/operations"].includes(request.nextUrl.pathname)) return secured(response);
+  if (!authRoot && !["/connect", "/operations", "/operations/editor", "/operations/security"].includes(request.nextUrl.pathname)) return secured(response);
   const settings = authConfig();
   const client = createServerClient(settings.url, settings.key, {
     cookieOptions: authCookieOptions,

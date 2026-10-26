@@ -49,6 +49,7 @@ try{
  const firstFactor=await request('/api/auth',{action:'admin-login',identifier:'admin',password});
  const aal1Cookie=cookie(firstFactor.response);
  assert.equal((await request('/api/app',null,aal1Cookie)).data.admin,null,'First-factor sessions cannot read admin data');
+ assert.equal((await request('/api/app',null,aal1Cookie)).data.adminStepUpRequired,true,'First-factor admin access must explicitly request step-up');
  await request('/api/admin?section=accounts',null,aal1Cookie,403);
  assert.equal((await request('/api/landing',{action:'load'},aal1Cookie,403)).data.code,'MFA_REQUIRED');
  await request('/api/app',{action:'admin-invites-revoke'},aal1Cookie,403);
@@ -61,6 +62,20 @@ try{
  owner.aal='aal2';
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
  const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
+ const authCookieName=rootCookie.split('; ').find(value=>/^sb-.+-auth-token=/.test(value)).split('=')[0];
+ for(const path of ['/operations/editor','/operations/security']){
+  const expired=fixture.session(owner,'aal2',-60),encoded='base64-'+Buffer.from(JSON.stringify(expired)).toString('base64url');
+  const refreshed=await request(path,null,`${authCookieName}=${encoded}`);
+  const refreshedCookie=cookie(refreshed.response);
+  assert(refreshedCookie.includes(authCookieName+'='),`${path} must persist rotated authentication cookies`);
+  assert.equal((await request('/api/landing',{action:'load'},refreshedCookie)).response.status,200,'The rotated cookie must work on the subsequent editor API call');
+ }
+ owner.mfaTime=Math.floor(Date.now()/1000)-601;
+ const staleCookie=cookie((await request('/api/auth',{action:'admin-login',identifier:'admin',password})).response);
+ const staleSnapshot=(await request('/api/app',null,staleCookie)).data;
+ assert.equal(staleSnapshot.admin,null);assert.equal(staleSnapshot.adminStepUpRequired,true,'Expired step-up is explicit rather than silently demoting the administrator');
+ await request('/api/landing',{action:'load'},staleCookie,403);
+ delete owner.mfaTime;
  const sessions={};for(const u of [delegate,recipient,other]){const login=await request('/api/auth',{action:'login',email:u.email,password});sessions[u.id]=cookie(login.response);await request('/api/app',null,sessions[u.id]);}
  assert.equal((await request('/api/profile',null,sessions[recipient.id])).data.details.lastName,'NEW PERSON','Verified signup names initialize the profile');
  await request('/api/auth',{action:'register',email:'fresh@example.invalid',password,firstName:'LOCAL'},'',400);
