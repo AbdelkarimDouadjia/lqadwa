@@ -21,6 +21,8 @@ The post-migration backup (13,669 bytes; SHA-256 `81dd27d06ae6a410e8b15de2037c44
 
 Follow-up editor work adds validated local draft-file export/import with confirmation and Undo, an MFA-renewal link that preserves the open canvas, idempotent identical save retries, and atomic draft/audit commits. The isolated API regression forces audit failure and verifies rollback; targeted Chromium editor workflow passed in 45.1s, including actual drag, files, invalid-input rejection, MFA error recovery, publication/history and accessibility/layout checks. The ordered medicine-catalog fingerprint check passed. Local pre- and post-migration restore rehearsals both passed. Consult PR #7 exact-head CI for combined cross-browser/native follow-up results.
 
+At `3de5d2d`, local editor-only checks passed in Chromium, Firefox and WebKit (3 tests, 3.0 minutes). [CI run 40241831153](https://github.com/AbdelkarimDouadjia/lqadwa/actions/runs/40241831153) passed Android build/lint and actual Linux-emulator instrumentation. Web check/lint/audit/build passed (28 lint warnings, zero errors; zero reported production dependency vulnerabilities), but the browser suite finished 19/21: the final WebKit invitation/editor logins received HTTP 429. The combined API/browser suite reused the synthetic owner across all engines in one ten-minute account-rate window. The isolated editor run did not exhaust that bucket. The browser fixture now clears only its isolated loopback D1 rate counters before each case; no production limiter or authentication endpoint is changed. An additional case in each engine verifies that ten incorrect owner logins return 401 and the eleventh returns 429 `RATE_LIMIT`. Current-head full-suite evidence remains required; this failed run is not a pass. OCR/AI steps after that failure were not run in this CI run.
+
 | Command / check | Observed result |
 |---|---|
 | `npm run check` | Exit 0: TypeScript, source/security guards, branding, route/auth/navigation, contrast, OCR candidates, editor schema/reorder, new release/MFA/medicine regressions |
@@ -48,7 +50,7 @@ Follow-up editor work adds validated local draft-file export/import with confirm
 | Real phone signed install/upgrade | Not run |
 | Real non-team mailbox signup/recovery | Not run; no authorized inbox supplied |
 | Live pharmacy round trip | Not run; participating pharmacy acceptance not supplied |
-| Production data/account/provider changes | Not performed |
+| Production account/provider changes or application deployment | Not performed; approved additive database schema changes are recorded above |
 
 The initial integration run failed an old assertion expecting identical reservation retries to return 409. Intended behavior now returns the existing reservation; regression asserts one durable reservation and one patient event. An intentionally failing local notification trigger produces a 503 and verifies the reply state rolls back. Injected errors are not treated as successful production behavior.
 

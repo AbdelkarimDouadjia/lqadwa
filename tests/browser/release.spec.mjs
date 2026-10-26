@@ -1,11 +1,27 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {readFile} from 'node:fs/promises';
+import path from 'node:path';
 
 const widths = [320, 360, 375, 390, 414, 768, 1024, 1440];
 const languages = ['ar', 'fr', 'en', 'kab'];
 const names = { ar: 'العربية', fr: 'Français', en: 'English', kab: 'Taqbaylit' };
+async function resetLocalRateLimits() {
+  const state=process.env.LQADWA_TEST_STATE || '';
+  expect(path.dirname(state)).toBe(path.resolve('.wrangler'));
+  expect(path.basename(state)).toMatch(/^integration-/);
+  // One worker, isolated loopback D1 only: each case gets independent rate buckets.
+  const inspector='http://localhost:5173/cdn-cgi/local/explorer/api/d1/database';
+  const response=await fetch(inspector,{signal:AbortSignal.timeout(5000)});
+  expect(response.ok).toBe(true);
+  const database=(await response.json()).result.find(item=>item.name==='DB');
+  expect(database?.uuid).toBeTruthy();
+  const reset=await fetch(`${inspector}/${database.uuid}/raw`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({batch:[{sql:'DELETE FROM rate_limits'}]}),signal:AbortSignal.timeout(10000)});
+  const data=await reset.json();
+  expect(reset.ok && data.success && data.result.every(item=>item.success)).toBe(true);
+}
 test.beforeEach(async ({ context }) => {
+  await resetLocalRateLimits();
   // Isolated fixtures only. Prevent maps/OAuth/email-provider requests leaving this test.
   await context.route(url => !['localhost', '127.0.0.1'].includes(url.hostname), route => route.abort());
 });
@@ -117,6 +133,14 @@ test('public information pages render in every language and link into the servic
   await page.getByRole('menuitem', { name: /English/ }).click();
   await expect(page).toHaveURL(/\/for-pharmacies\?lang=en$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
+test('login rate protection remains enforced within each isolated case',async({request})=>{
+  const remaining=600000-Date.now()%600000;
+  if(remaining<5000)await new Promise(resolve=>setTimeout(resolve,remaining+100));
+  const attempt=()=>request.post('/api/auth',{headers:{origin:'https://localhost:5443'},ignoreHTTPSErrors:true,data:{action:'admin-login',identifier:'admin',password:'LOCAL-only-incorrect-passphrase'}});
+  for(let count=0;count<10;count++)expect((await attempt()).status()).toBe(401);
+  const blocked=await attempt();expect(blocked.status()).toBe(429);expect((await blocked.json()).error).toBe('RATE_LIMIT');
 });
 
 for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, scoped navigation, layout matrix and account menu`, async ({ page, context }, info) => {
