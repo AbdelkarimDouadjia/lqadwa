@@ -93,6 +93,8 @@ scripts/                   CI checks, OCR, local fixtures and Android release to
 
 Public information pages include how it works, pharmacy participation, safety, pricing, help and privacy in Arabic, French, English and Kabyle. Account/workspace navigation is role-specific; the private owner route is not shown in public menus.
 
+Owners can manage seven public page areas in the [multi-page visual content workspace](docs/content-workspace.md): independent drafts/history, movable sections and introduction, seven block types, editable card/step/FAQ items, responsive layout controls and four-language previews. The protected legal policy and account-deletion controls stay intact. Dashboard counts and task badges use authorized account data; the optional WebGL decoration starts off and respects motion preferences.
+
 ## Run locally
 
 Requirements: Node.js 24, Java 17, Android SDK 36, Android build-tools 35.0.0 and Gradle 8.13.

@@ -172,6 +172,18 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   if (role !== 'client') expect(navText).not.toContain('My bookings');
   await expect(page.locator('.product-desktop-nav button')).toHaveCount(role === 'client' ? 3 : 1);
   expect(navText.length).toBeGreaterThan(0);
+  await expect(page.locator('.workspace-overview')).toBeVisible();
+  await page.getByRole('button',{name:'Visual effect',exact:true}).click();
+  await expect(page.locator('.workspace-ambient')).toHaveCount(1);
+  await page.getByRole('button',{name:'Visual effect',exact:true}).click();
+  await expect(page.locator('.workspace-ambient')).toHaveCount(0);
+  if(role==='pharmacy'){
+    await expect(page.locator('.profile-details-form')).toHaveCount(0);
+    await page.locator('.workspace-overview .workspace-metric-grid button').nth(2).click();
+    await expect(page.locator('.inventory-workspace')).toBeVisible();
+    await page.locator('.workspace-overview .workspace-metric-grid button').first().click();
+    await expect(page.locator('.inventory-workspace')).toHaveCount(0);
+  }
   if (role === 'owner') {
     await expect(page.locator('.visual-editor-entry')).toBeVisible();
     await expect(page.locator('.visual-editor-entry a')).toHaveAttribute('href', '/operations/editor?lang=en');
@@ -198,6 +210,7 @@ for (const role of ['client', 'pharmacy', 'owner']) test(`${role}: real login, s
   await page.locator('.product-avatar').click(); await expect(page.getByRole('menu')).toBeVisible();
   await page.getByRole('menuitem').filter({ has: page.locator('svg') }).first().click();
   await expect(page.locator('.account-grid')).toBeVisible();
+  if(role==='pharmacy')await expect(page.locator('#details-pharmacy-contactName')).toBeVisible();
   await expect(page.getByRole('menu')).toHaveCount(0);
   await accessible(page);
 });
@@ -245,6 +258,54 @@ test('survives MFA and resumes without granting owner access', async ({ page, co
 
 test.describe('visual editor',()=>{
 test.use({serviceWorkers:'block'});
+test('multiple pages, repeatable items and movable introduction stay isolated', async ({ page, context }, info) => {
+  const options={ignoreHTTPSErrors:true,headers:{origin:'https://localhost:5443'}};
+  const api=async body=>{const response=await page.request.post('/api/landing',{...options,data:body});expect(response.status()).toBe(200);return response.json();};
+  await context.addInitScript(()=>localStorage.setItem('dawa-language','en'));
+  expect((await page.request.post('/api/auth',{...options,data:{action:'admin-login',identifier:'admin',password:'LOCAL-only-unique-passphrase'}})).status()).toBe(200);
+  const home=(await page.request.get('/api/landing',options)).json(), original=(await api({action:'load',page:'help'})).published;
+  try {
+    await page.setViewportSize({width:1440,height:1000});
+    await page.goto('/operations/editor?page=help&lang=en');
+    await expect(page.getByLabel('Page',{exact:true})).toHaveValue('help');
+    await expect(page.locator('.builder-workspace')).toBeVisible();
+    await page.locator('.builder-panel-tabs').getByRole('button',{name:'Insert',exact:true}).click();
+    await page.getByRole('button',{name:'Cards',exact:true}).click();
+    await page.getByLabel('Heading',{exact:true}).fill('LOCAL FLEXIBLE HELP');
+    await page.getByRole('button',{name:'Add item',exact:true}).click();
+    await page.getByLabel('Item heading',{exact:true}).nth(1).fill('LOCAL SECOND ITEM');
+    await page.getByLabel('Item body',{exact:true}).nth(1).fill('LOCAL EXPLANATION');
+    await page.getByLabel('Columns',{exact:true}).selectOption('3');
+    await page.getByLabel('Section width',{exact:true}).selectOption('narrow');
+    const frame=page.frameLocator('.builder-canvas-frame');
+    await expect(frame.getByText('LOCAL SECOND ITEM',{exact:true})).toBeVisible();
+    await page.getByLabel('Page',{exact:true}).selectOption('safety');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('button',{name:'Cancel',exact:true}).click();
+    await expect(page.getByLabel('Page',{exact:true})).toHaveValue('help');
+    const layer=page.locator('.builder-layer').filter({has:page.getByRole('button',{name:'LOCAL FLEXIBLE HELP',exact:true})});
+    await layer.locator('.builder-drag-handle').dragTo(page.locator('.builder-layer[data-editor-drop="hero"]'),{targetPosition:{x:80,y:4}});
+    await expect(frame.locator('[data-editor-node]').first()).toContainText('LOCAL FLEXIBLE HELP');
+    await page.getByRole('button',{name:'Save draft',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Save draft',exact:true})).toBeDisabled();
+    expect(await(await page.request.get('/help?lang=en',options)).text()).not.toContain('LOCAL FLEXIBLE HELP');
+    await page.getByRole('button',{name:'Publish for visitors',exact:true}).click();
+    await page.getByRole('button',{name:'Confirm',exact:true}).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await(await page.request.get('/help?lang=en',options)).text()).toContain('LOCAL FLEXIBLE HELP');
+    expect(await(await page.request.get('/api/landing',options)).json()).toEqual(await home);
+    await page.reload();await expect(frame.getByText('LOCAL SECOND ITEM',{exact:true})).toBeVisible();
+    await page.screenshot({path:`.cloudflare/e2e/${info.project.name}-multipage-editor.png`,fullPage:true});
+    await page.getByLabel('Page',{exact:true}).selectOption('privacy');
+    await expect(page.getByText('Add content here; the legal policy and account-deletion controls remain intact.',{exact:true})).toBeVisible();
+    expect(await(await page.request.get('/privacy',options)).text()).toContain('href="/account-data"');
+    await page.setViewportSize({width:390,height:844});await noOverflow(page);
+  } finally {
+    const current=await api({action:'load',page:'help'});
+    const saved=await api({action:'save',page:'help',draftVersion:current.draftVersion,content:original});
+    await api({action:'publish',page:'help',draftVersion:saved.draftVersion});
+  }
+});
 test('real drag-and-drop, draft files, MFA recovery, publication and restoration', async ({ page, context, browser }, info) => {
   page.setDefaultTimeout(15000);
   const apiOptions = { ignoreHTTPSErrors: true, headers: { origin: 'https://localhost:5443' } };
@@ -265,7 +326,7 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
   };
   const original = (await load()).published;
   const frame = page.frameLocator('.builder-canvas-frame');
-  const rows = page.locator('.builder-layer-list [data-editor-drop]');
+  const rows = page.locator('.builder-layer-list [data-editor-drop]:not([data-editor-drop="hero"])');
   const inspector = page.locator('.builder-inspector');
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -307,14 +368,14 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
     expect(card).toBeTruthy(); expect(target).toBeTruthy();
     // Releasing a dragged template outside the page must not become a palette click.
     await page.getByRole('button', { name: 'Text section', exact: true }).dragTo(page.locator('.builder-canvas-toolbar'));
-    await expect(page.locator('.builder-template')).toHaveCount(2);
+    await expect(page.locator('.builder-template')).toHaveCount(7);
     await expect(frame.locator('[data-editor-node]')).toHaveCount(7);
     await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
     await page.mouse.down();
     await page.mouse.move(target.x + target.width / 2, target.y + Math.min(target.height - 10, target.height * .75), { steps: 15 });
     await page.keyboard.press('Escape');
     await page.mouse.up();
-    await expect(page.locator('.builder-template')).toHaveCount(2);
+    await expect(page.locator('.builder-template')).toHaveCount(7);
     await expect(frame.locator('[data-editor-node]')).toHaveCount(7);
     await page.getByRole('button', { name: 'Text section', exact: true }).focus();
     await page.keyboard.press('Enter');
@@ -406,7 +467,7 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const live = (await page.request.get('/api/landing', apiOptions).then(r => r.json())).content;
     expect(live.copy.en.titleA).toBe('Find medicine nearby');
-    expect(live.layout[1]).toBe(customId); expect(live.sections.faq).toBe(false);
+    expect(live.layout[live.layout.indexOf('journey')+1]).toBe(customId); expect(live.sections.faq).toBe(false);
     const guest = await browser.newPage({ baseURL: 'https://localhost:5443', ignoreHTTPSErrors: true });
     try {
       await guest.goto('/?lang=en');

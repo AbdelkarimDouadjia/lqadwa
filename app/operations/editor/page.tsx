@@ -6,14 +6,17 @@ import { identity, isRootAdmin } from "@/lib/access";
 import { publicLanguage } from "@/lib/public-page";
 import { AdminLandingEditor } from "@/components/admin-landing-editor";
 import { recentPrivilegedSession } from "@/lib/privileged-access";
+import { contentPageKeys } from "@/lib/landing-content";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "LQADWA · Page editor", robots: { index: false, follow: false } };
 
-export default async function LandingEditorPage({ searchParams }: { searchParams: Promise<{ lang?: string }> }) {
+export default async function LandingEditorPage({ searchParams }: { searchParams: Promise<{ lang?: string; page?: string }> }) {
   if (!await getAppUser()) redirect("/operations/login");
   try { if (!isRootAdmin((await identity()).userId)) notFound(); } catch { notFound(); }
   if (!await recentPrivilegedSession((await identity()).userId)) redirect("/operations/security");
-  const language = publicLanguage((await searchParams).lang, publicLanguage((await cookies()).get("lqadwa-language")?.value));
-  return <><AdminLandingEditor language={language} /><Toaster position="bottom-center" toastOptions={{ style: { background: "var(--card)", color: "var(--foreground)", borderColor: "var(--border)" } }} /></>;
+  const query = await searchParams;
+  const page = contentPageKeys.find(page => page === query.page) ?? "home";
+  const language = publicLanguage(query.lang, publicLanguage((await cookies()).get("lqadwa-language")?.value));
+  return <><AdminLandingEditor key={page} page={page} language={language} /><Toaster position="bottom-center" toastOptions={{ style: { background: "var(--card)", color: "var(--foreground)", borderColor: "var(--border)" } }} /></>;
 }

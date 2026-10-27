@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
 import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
+import {defaultPageContent} from '../lib/content-pages.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
@@ -95,6 +96,28 @@ try{
  await request('/operations/editor',null,sessions[delegate.id],404);
  assert((await request('/operations/editor?lang=en',null,rootCookie)).data.includes('builder-header'),'Owner gets the separate visual editor');
  const initialLanding=(await request('/api/landing')).data.content;assert.deepEqual(initialLanding,emptyLandingContent);
+ await request('/api/landing?page=not-a-page',null,'',400);
+ const helpDefault=defaultPageContent('help'), helpDraft=structuredClone(helpDefault);helpDraft.copy.en.titleA='LOCAL HELP DRAFT';
+ await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},'',401);
+ await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},sessions[delegate.id],403);
+ await request('/api/landing',{action:'save',page:'safety',draftVersion:0,content:helpDraft},rootCookie,400);
+ assert.equal((await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},rootCookie)).data.draftVersion,1);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'Public reads expose only the published page');
+ assert.equal((await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},rootCookie)).data.draftVersion,1,'Identical retry is page-scoped');
+ await request('/api/landing',{action:'publish',page:'help',draftVersion:1},rootCookie);
+ assert((await request('/help?lang=en')).data.includes('LOCAL HELP DRAFT'),'Published help content reaches server-rendered page');
+ assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Editing help cannot overwrite home');
+ const helpState=(await request('/api/landing',{action:'load',page:'help'},rootCookie)).data,helpRevision=helpState.revisions[0];assert(helpRevision);
+ assert.equal((await request('/api/landing',{action:'load'},rootCookie)).data.revisions.length,0,'History is page-scoped');
+ const safetyDraft=defaultPageContent('safety');await request('/api/landing',{action:'save',page:'safety',draftVersion:0,content:safetyDraft},rootCookie);
+ await request('/api/landing',{action:'restore',page:'safety',draftVersion:1,revision:helpRevision.id},rootCookie,404);
+ await request('/api/landing',{action:'restore',page:'help',draftVersion:2,revision:helpRevision.id},rootCookie);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'Restoring help returns its own default');
+ const corruptRevision=randomUUID();await sql(`INSERT INTO landing_content_revisions(id,actor,created_at,content_json) VALUES (${quote(corruptRevision)},${quote(owner.id)},${Date.now()},'${JSON.stringify({page:'help',version:99})}');`);
+ await request('/api/landing',{action:'restore',page:'help',draftVersion:3,revision:corruptRevision},rootCookie,409);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'An invalid revision cannot publish an empty fallback');
+ await sql("DELETE FROM landing_content WHERE id IN ('page:help','page:safety');DELETE FROM landing_content_revisions WHERE json_extract(content_json,'$.page') IN ('help','safety');");
+ console.log('PASS: multi-page draft isolation, bound page IDs, server-rendered publication, page-scoped retry/history and cross-page restore rejection.');
  await request('/api/landing',{action:'load'},'',401);
  await request('/api/landing',{action:'load'},sessions[delegate.id],403);
  const invalidLanding=structuredClone(emptyLandingContent);invalidLanding.blocks=[{id:randomUUID(),enabled:true,target:'javascript:alert(1)',copy:{ar:{heading:'LOCAL'}}}];
