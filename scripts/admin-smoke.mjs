@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {adminLoginEmail} from '../lib/admin-login.ts';
 import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.ts';
 import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
+import {defaultPageContent} from '../lib/content-pages.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
@@ -39,6 +40,10 @@ async function request(path,body,credential='',expected=200){
  const response=await fetch(base+path,{method:body?'POST':'GET',headers:{connection:'close',...(body?{origin:base,'content-type':'application/json'}:{}),...(credential?{cookie:credential}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual',signal:AbortSignal.timeout(20000)});
  const raw=await response.text(),data=response.headers.get('content-type')?.includes('application/json')?JSON.parse(raw):raw;
  assert((Array.isArray(expected)?expected:[expected]).includes(response.status),`${body?.action||path}: expected ${expected}, received ${response.status}: ${typeof data==='object'?data.error:raw.slice(0,2000)}`);return {response,data};
+}
+async function resetLandingQuota(){
+ const bucket=Math.floor(Date.now()/60000),keys=[bucket-1,bucket,bucket+1].map(value=>quote(hash(`landing-content:${owner.id}:${value}`)));
+ await sql(`DELETE FROM rate_limits WHERE key IN (${keys.join(',')});`);
 }
 try{
  assert.equal(adminLoginEmail(' ADMIN ',owner.email),owner.email);assert.equal(adminLoginEmail('Admin',undefined),'');assert.equal(adminLoginEmail(delegate.email,owner.email),delegate.email);
@@ -95,6 +100,40 @@ try{
  await request('/operations/editor',null,sessions[delegate.id],404);
  assert((await request('/operations/editor?lang=en',null,rootCookie)).data.includes('builder-header'),'Owner gets the separate visual editor');
  const initialLanding=(await request('/api/landing')).data.content;assert.deepEqual(initialLanding,emptyLandingContent);
+ await resetLandingQuota();
+ if(Date.now()%60000>57000)await new Promise(resolve=>setTimeout(resolve,60100-Date.now()%60000));
+ const quotaBucket=Math.floor(Date.now()/60000),quotaKey=hash(`landing-content:${owner.id}:${quotaBucket}`);
+ await sql(`INSERT INTO rate_limits(key,count,expires) VALUES (${quote(quotaKey)},29,${(quotaBucket+1)*60000}) ON CONFLICT(key) DO UPDATE SET count=29;`);
+ await request('/api/landing',{action:'load'},rootCookie);await request('/api/landing',{action:'load'},rootCookie,429);await resetLandingQuota();
+ await request('/api/landing?page=not-a-page',null,'',400);
+ const helpDefault=defaultPageContent('help'), helpDraft=structuredClone(helpDefault);helpDraft.copy.en.titleA='LOCAL HELP DRAFT';
+ await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},'',401);
+ await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},sessions[delegate.id],403);
+ await request('/api/landing',{action:'save',page:'safety',draftVersion:0,content:helpDraft},rootCookie,400);
+ assert.equal((await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},rootCookie)).data.draftVersion,1);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'Public reads expose only the published page');
+ assert.equal((await request('/api/landing',{action:'save',page:'help',draftVersion:0,content:helpDraft},rootCookie)).data.draftVersion,1,'Identical retry is page-scoped');
+ await request('/api/landing',{action:'publish',page:'help',draftVersion:1},rootCookie);
+ assert((await request('/help?lang=en')).data.includes('LOCAL HELP DRAFT'),'Published help content reaches server-rendered page');
+ assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Editing help cannot overwrite home');
+ const helpState=(await request('/api/landing',{action:'load',page:'help'},rootCookie)).data,helpRevision=helpState.revisions[0];assert(helpRevision);
+ assert.equal((await request('/api/landing',{action:'load'},rootCookie)).data.revisions.length,0,'History is page-scoped');
+ const safetyDraft=defaultPageContent('safety');await request('/api/landing',{action:'save',page:'safety',draftVersion:0,content:safetyDraft},rootCookie);
+ await request('/api/landing',{action:'restore',page:'safety',draftVersion:1,revision:helpRevision.id},rootCookie,404);
+ const malformedRevision=randomUUID();await sql(`INSERT INTO landing_content_revisions(id,actor,created_at,content_json) VALUES (${quote(malformedRevision)},${quote(owner.id)},${Date.now()},'not-json');`);
+ await request('/api/landing',{action:'load',page:'help'},rootCookie);await request('/api/landing',{action:'load'},rootCookie);
+ await request('/api/landing',{action:'save',page:'help',draftVersion:2,content:helpDefault},rootCookie);
+ await request('/api/landing',{action:'publish',page:'help',draftVersion:3},rootCookie);
+ await request('/api/landing',{action:'restore',page:'help',draftVersion:4,revision:helpRevision.id},rootCookie);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'Restoring help returns its own default');
+ const corruptRevision=randomUUID();await sql(`INSERT INTO landing_content_revisions(id,actor,created_at,content_json) VALUES (${quote(corruptRevision)},${quote(owner.id)},${Date.now()},'${JSON.stringify({page:'help',version:99})}');`);
+ await request('/api/landing',{action:'restore',page:'help',draftVersion:5,revision:corruptRevision},rootCookie,409);
+ await request('/api/landing',{action:'restore',page:'help',draftVersion:5,revision:malformedRevision},rootCookie,404);
+ assert.deepEqual((await request('/api/landing?page=help')).data.content,helpDefault,'An invalid revision cannot publish an empty fallback');
+ assert.equal((await sql(`SELECT count(*) AS n FROM landing_content_revisions WHERE id=${quote(malformedRevision)}`))[0].results[0].n,1,'Damaged history is preserved for operator recovery');
+ await sql(`DELETE FROM landing_content_revisions WHERE id=${quote(malformedRevision)};DELETE FROM landing_content WHERE id IN ('page:help','page:safety');DELETE FROM landing_content_revisions WHERE json_extract(content_json,'$.page') IN ('help','safety');`);
+ console.log('PASS: multi-page draft isolation, bound page IDs, server-rendered publication, page-scoped retry/history and cross-page restore rejection.');
+ await resetLandingQuota();
  await request('/api/landing',{action:'load'},'',401);
  await request('/api/landing',{action:'load'},sessions[delegate.id],403);
  const invalidLanding=structuredClone(emptyLandingContent);invalidLanding.blocks=[{id:randomUUID(),enabled:true,target:'javascript:alert(1)',copy:{ar:{heading:'LOCAL'}}}];
@@ -105,6 +144,7 @@ try{
  await request('/api/landing',{action:'save',draftVersion:0,content:largeInvalidLanding},rootCookie,400);
  const draftLanding=structuredClone(emptyLandingContent);draftLanding.copy={ar:{titleA:'LOCAL OWNER DRAFT'}};draftLanding.sections={journey:false,pharmacy:false,faq:false};
  draftLanding.blocks=[{id:randomUUID(),enabled:true,target:'journey',copy:{ar:{heading:'LOCAL SECTION',body:'LOCAL BODY',button:'LOCAL CTA'} }},{id:randomUUID(),enabled:true,target:'none',copy:{ar:{heading:'',body:'',button:''}}}];
+ draftLanding.blocks.push({id:randomUUID(),enabled:true,target:'none',copy:{ar:{heading:'LOCAL INCOMPLETE LEGACY HEADING'}}});
  const draftSaved=await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie);assert.equal(draftSaved.data.draftVersion,1);
  assert.deepEqual((await request('/api/landing')).data.content,emptyLandingContent,'Unsaved public copy is never exposed');
  assert.equal((await request('/api/landing',{action:'save',draftVersion:0,content:draftLanding},rootCookie)).data.draftVersion,1,'Identical lost-response retries recover the committed draft');
@@ -119,6 +159,7 @@ try{
  const draftLoaded=await request('/api/landing',{action:'load'},rootCookie);assert.equal(draftLoaded.data.draft.copy.ar.titleA,'LOCAL OWNER DRAFT');assert.equal(draftLoaded.data.draft.blocks[1].copy.ar.heading,'');
  const publishedLanding=await request('/api/landing',{action:'publish',draftVersion:1},rootCookie);assert.equal(publishedLanding.data.publishedVersion,1);
  assert.equal((await request('/api/landing')).data.content.copy.ar.titleA,'LOCAL OWNER DRAFT');
+ assert.doesNotMatch((await request('/')).data,/<h2[^>]*>LOCAL INCOMPLETE LEGACY HEADING<\/h2>/,'Legacy incomplete sections remain hidden after the upgrade');
  const publishedHtml=(await request('/')).data;for(const id of ['how-it-works','for-pharmacies','questions'])assert(!publishedHtml.includes(`href="#${id}"`),`Hidden section link ${id} remains visible`);
  const revision=(await request('/api/landing',{action:'load'},rootCookie)).data.revisions[0];assert(revision);
  const unpublishedDraft=structuredClone(draftLanding);unpublishedDraft.copy.ar.titleA='LOCAL UNSAVED DRAFT';
@@ -246,8 +287,17 @@ try{
  await request('/api/app',{action:'admin-revoke',owner:owner.id},rootCookie,403);
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['audit']},rootCookie);
  const restricted=await request('/api/app',null,sessions[delegate.id]);assert.equal(restricted.data.admin.applications.length,0);assert.equal(restricted.data.admin.inventory.length,0);assert(restricted.data.admin.activity.length>0);
+ assert.deepEqual(restricted.data.admin.workload,{},'Audit permission does not reveal other workloads');
  await request('/api/app',{action:'admin-review',pharmacy,status:'suspended'},sessions[delegate.id],403);
  await request('/api/app',{action:'admin-pharmacy-edit',pharmacy,name:'FICTIONAL LOCAL PHARMACY',address:'LOCAL FIXTURE NOT A REAL PHARMACY',phone:'0550000000',hours:'08:00 - 20:00'},sessions[delegate.id],403);
+ await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['pharmacies']},rootCookie);
+ const pharmacyWorkload=(await request('/api/app',null,sessions[delegate.id])).data.admin.workload;
+ const expectedPending=(await sql("SELECT count(*) AS n FROM registered_pharmacies WHERE status='pending'"))[0].results[0].n;
+ assert.deepEqual(pharmacyWorkload,{pendingPharmacies:expectedPending},'Pharmacy delegates receive the actual pending count only');
+ await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts']},rootCookie);
+ const accountWorkload=(await request('/api/app',null,sessions[delegate.id])).data.admin.workload;assert.equal(typeof accountWorkload.accounts,'number');assert.deepEqual(Object.keys(accountWorkload),['accounts']);
+ await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['operations']},rootCookie);
+ const operationWorkload=(await request('/api/app',null,sessions[delegate.id])).data.admin.workload;assert.equal(typeof operationWorkload.requests,'number');assert.equal(typeof operationWorkload.reservations,'number');assert(!('accounts' in operationWorkload));
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts','analytics']},rootCookie);
  await request('/api/admin?section=requests',null,sessions[delegate.id],403);
  await request('/api/app',{action:'admin-permissions',owner:delegate.id,permissions:['accounts','analytics','operations']},rootCookie);
@@ -263,6 +313,7 @@ try{
  const pending=await request('/api/app',{action:'admin-invite-create',email:recipient.email,permissions:['analytics']},rootCookie);await request('/api/app',{action:'admin-invites-revoke'},rootCookie);await request('/api/app',{action:'admin-invite-redeem',token:pending.data.invite},sessions[recipient.id],409);
  console.log('PASS: owner alias/password verification, verified-email invitation binding, single use, editable metadata denial, scoped reads/writes, immediate permission updates, protected owner and revoked access. Fixtures are LOCAL only.');
   await sql(`DELETE FROM landing_content_revisions;DELETE FROM landing_content;DELETE FROM audit_log WHERE actor=${quote(owner.id)} AND action LIKE 'landing-%';`);
+ await resetLandingQuota();
  if (process.argv.includes('--review') || process.argv.includes('--browser')) {
   await request('/api/app',{action:'admin-review',pharmacy,status:'approved'},rootCookie);
   if (process.argv.includes('--browser')) {

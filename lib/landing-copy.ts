@@ -1,5 +1,5 @@
-import { editorialText } from "@/lib/editorial-copy";
-import { ex } from "@/lib/experience-copy";
+import { editorialText } from "./editorial-copy.ts";
+import { ex } from "./experience-copy.ts";
 import type { LandingCopyKey } from "@/lib/landing-content";
 import type { Language } from "@/lib/i18n";
 

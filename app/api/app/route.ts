@@ -94,10 +94,15 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
       can("pharmacies") ? db.prepare("SELECT s.id, s.pharmacy, s.name, s.quantity, s.updated, p.name AS pharmacyName FROM stock_items s JOIN registered_pharmacies p ON p.id = s.pharmacy ORDER BY s.updated DESC LIMIT 200") : empty(),
       roots.length ? db.prepare(`SELECT id, name FROM profiles WHERE id IN (${roots.map(() => "?").join(",")})`).bind(...roots) : empty(),
       can("analytics") ? db.prepare("SELECT count(*) AS n FROM registered_pharmacies") : empty(),
+      can("pharmacies") ? db.prepare("SELECT count(*) AS n FROM registered_pharmacies WHERE status='pending'") : empty(),
+      can("accounts") && !can("analytics") ? db.prepare("SELECT count(*) AS n FROM profiles") : empty(),
+      can("operations") && !can("analytics") ? db.prepare("SELECT count(*) AS n FROM requests") : empty(),
+      can("operations") && !can("analytics") ? db.prepare("SELECT count(*) AS n FROM reservations") : empty(),
     ]);
     const count = (index: number) => Number((rows[index].results[0] as { n?: number } | undefined)?.n || 0);
     admin = {
       applications: rows[0].results as Registered[], applicationsCount: count(9), users: count(1), searches: count(2), bookings: count(3), canInvite: access.isOwner, access,
+      workload: { ...(can("pharmacies") ? { pendingPharmacies: count(10) } : {}), ...(can("accounts") ? { accounts: count(can("analytics") ? 1 : 11) } : {}), ...(can("operations") ? { requests: count(can("analytics") ? 2 : 12), reservations: count(can("analytics") ? 3 : 13) } : {}) },
       owners: roots.map(id => ({id, name: (rows[8].results as {id:string;name:string}[]).find(p => p.id === id)?.name || ""})),
       accounts: (rows[4].results as (NonNullable<AppData["admin"]>["accounts"][number] & {member?:string})[]).map(({member,...a}) => ({...a, protected: a.id === owner || isRootAdmin(a.id) || (!access.isOwner && Boolean(member))})),
       members: (rows[5].results as {owner:string;name:string;created:number;email:string;permissions:string}[]).map(a => ({...a, permissions:parseAdminPermissions(a.permissions)})),
