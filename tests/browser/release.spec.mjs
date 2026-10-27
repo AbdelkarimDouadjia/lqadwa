@@ -220,8 +220,8 @@ test('survives MFA and resumes without granting owner access', async ({ page, co
   });
   try{
     await page.goto('/?admin_invite='+token);
-    await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
     await expect(page).toHaveURL(/\/login$/);
+    expect(await page.evaluate(()=>sessionStorage.getItem('dawa-admin-invite'))).toBe(token);
     await page.getByLabel('Email address',{exact:true}).fill('recipient@example.invalid');
     await page.getByLabel('Password',{exact:true}).fill(password);
     await page.locator('form').getByRole('button',{name:'Sign in',exact:true}).click();
