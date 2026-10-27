@@ -7,6 +7,7 @@ import { personalSchema, parseDetails } from "@/lib/profile-details";
 import { database } from "@/db";
 import { pharmacyFromRow, relatedPharmacies, type PublicPharmacyRow } from "@/lib/pharmacy-discovery";
 import { createAvailabilityRequest } from "@/lib/request-service";
+import { recentPrivilegedSession, requirePrivilegedSession } from "@/lib/privileged-access";
 import { inAlgeriaBounds, publicPharmacyColumns } from "@/lib/pharmacy-discovery-query.mjs";
 import { cities, legacySampleIds, type AppData, type Booking, type Notice, type Reply, type RequestRecord, type PharmacyApplication, type StaffRequest, type StaffBooking, type StockItem } from "@/lib/domain";
 
@@ -42,12 +43,12 @@ const json = (value: unknown, status = 200) => Response.json(value, { status, he
 type Registered = PharmacyApplication & { owner: string };
 
 function errorResponse(error: unknown) {
-  if (error instanceof HttpError) return json({ error: error.message }, error.status);
+  if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status);
   if (error instanceof z.ZodError) return json({ error: "تحقق من البيانات المدخلة ثم أعد المحاولة." }, 400);
   console.error("Application request failed", error instanceof Error ? error.name : "unknown");
   return json({ error: "تعذّر الاتصال بالخدمة. بياناتك الحالية محفوظة؛ حاول مجدداً." }, 503);
 }
-async function snapshot(owner: string, fallbackName: string, initialDetails: unknown = {}): Promise<AppData> {
+async function snapshot(owner: string, fallbackName: string, initialDetails: unknown = {}, request?: Request): Promise<AppData> {
   const db = database();
   const now = Date.now();
   await db.batch([
@@ -77,7 +78,8 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
   directory.push(...await relatedPharmacies(db, associatedIds, new Set(directory.map(p => p.id))));
   let admin: AppData["admin"] = null;
   const access = await adminAccess(owner, db);
-  if (access) {
+  const privileged = access && await recentPrivilegedSession(owner, request);
+  if (access && privileged) {
     const can = (permission: typeof adminPermissions[number]) => access.permissions.includes(permission);
     const empty = () => db.prepare("SELECT NULL WHERE 0");
     const roots = rootAdminIds();
@@ -111,10 +113,11 @@ async function snapshot(owner: string, fallbackName: string, initialDetails: unk
     ownPharmacy: ownPharmacy || null,
     staffRequests: results[8].results as StaffRequest[], staffBookings: results[9].results as StaffBooking[], stock: results[10].results as StockItem[],
     role: admin ? "admin" : ownPharmacy ? "pharmacist" : "client", admin,
+    adminStepUpRequired: Boolean(access && !privileged && !request?.headers.has("x-lqadwa-session")),
   };
 }
 export async function GET(request: Request) {
-  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك", "personalDetails" in user ? user.personalDetails : {})); }
+  try { const user = await identity(request); await rateLimit(user.userId, "snapshot", 30); await maintainEphemeralData(); return json(await snapshot(user.userId, user.fullName || "مرحباً بك", "personalDetails" in user ? user.personalDetails : {}, request)); }
   catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {
@@ -122,6 +125,7 @@ export async function POST(request: Request) {
     requireMutationOrigin(request);
     const input = actionSchema.parse(await limitedJson(request));
     const user = await identity(request);
+    if (input.action.startsWith("admin-")) await requirePrivilegedSession(user.userId, request);
     const owner = user.userId, db = database(), now = Date.now(), ownerHash = await tokenHash(user.userId);
     await rateLimit(owner, input.action === "collect" ? "pickup-attempt" : "mutation", input.action === "collect" ? 10 : 90);
     const notify = (title: string, recipient = owner) => db.prepare("INSERT INTO notifications (id, owner, title, created, read) SELECT ?, ?, ?, ?, 0 WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ?)").bind(crypto.randomUUID(), recipient, title, now, recipient);
@@ -245,7 +249,7 @@ export async function POST(request: Request) {
       if (input.email === user.email.toLowerCase() || await db.prepare("SELECT owner FROM admin_members WHERE email = ?").bind(input.email).first()) throw new HttpError("الحساب عضو في الإدارة بالفعل. استخدم تعديل الصلاحيات.", 409);
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
       await db.batch([db.prepare("INSERT INTO admin_invites (hash, created_by, created, expires, email, permissions) VALUES (?, ?, ?, ?, ?, ?)").bind(await tokenHash(token), owner, now, now + 7 * 24 * 3600_000, input.email, JSON.stringify(input.permissions)), audit(owner, "admin-invite", "pending", `Email-bound, 7 day invitation: ${input.permissions.join(",")}`)]);
-      return json({ ...await snapshot(owner, user.fullName || "مرحباً بك"), invite: token });
+      return json({ ...await snapshot(owner, user.fullName || "مرحباً بك", {}, request), invite: token });
     } else if (input.action === "admin-invite-redeem") {
       const hash = await tokenHash(input.token);
       const invitation = await db.prepare("SELECT created_by, permissions, email FROM admin_invites WHERE hash = ? AND used_by IS NULL AND expires > ?").bind(hash, now).first<{created_by:string;permissions:string;email:string}>();
@@ -274,6 +278,6 @@ export async function POST(request: Request) {
     } else if (input.action === "read-notifications") {
       await db.prepare("UPDATE notifications SET read = 1 WHERE owner = ? AND read = 0").bind(owner).run();
     }
-    return json(await snapshot(owner, user.fullName || "مرحباً بك"));
+    return json(await snapshot(owner, user.fullName || "مرحباً بك", {}, request));
   } catch (error) { return errorResponse(error); }
 }

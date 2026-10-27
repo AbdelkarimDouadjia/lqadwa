@@ -11,6 +11,9 @@ const get=(path,options={})=>{
 const health=await get('/api/health');assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.release,'1.1.0');assert.equal(healthData.android,'2026-10-15');assert.equal(healthData.management,'2026-10-12');assert.equal(healthData.profiles,'2026-10-12');assert.equal(healthData.experience,'2026-10-13');assert.equal(healthData.design,'2026-10-13');
 assert.equal(healthData.discovery,'2026-10-14');
 assert.equal(healthData.presentation,'2026-10-15');
+assert.equal(healthData.editor,'2026-10-26');
+assert.equal(healthData.source?.dirty,false,'Production must use a clean build');
+if(process.env.EXPECTED_COMMIT)assert.equal(healthData.source?.commit,process.env.EXPECTED_COMMIT,'Hosted source must match the approved commit');
 for(const lang of ['ar','fr','en','kab']) {
  const response=await get('/?lang='+lang),html=await response.text();
  assert.equal(response.status,200);assert.match(html,/<h1>/);assert.match(html,/directory-title/);
@@ -46,6 +49,8 @@ assert.equal((await get('/api/profile')).status,401);
 assert.equal((await get('/api/stock')).status,401);
 const admin=await get('/operations',{redirect:'manual'});assert.equal(admin.status,307);assert.equal(admin.headers.get('location'),'/operations/login');
 assert.equal(admin.headers.get('x-frame-options'),'DENY','private early redirect');
+const editor=await get('/operations/editor',{redirect:'manual'});assert.equal(editor.status,307);assert.equal(editor.headers.get('location'),'/operations/login');
+assert.equal(editor.headers.get('x-frame-options'),'DENY','editor stays private');
 const medicines=await(await get('/api/medicines?q=doliprane')).json();assert(medicines.items.some(item=>item.brand==='DOLIPRANE'&&item.registration));
 for(const name of ['lqadwa-release.apk','lqadwa-release-armv7.apk']){
  const response=await get('/downloads/'+name);assert.equal(response.status,200,name);

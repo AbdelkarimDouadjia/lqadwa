@@ -1,10 +1,11 @@
 import { database } from "@/db";
+declare const __LQADWA_BUILD__: { commit: string; tree: string; dirty: boolean };
 export const dynamic = "force-dynamic";
 // No identity, configuration, counts or private records in public health output.
 export async function GET() {
   try {
     await database().prepare("SELECT 1").first();
-    return Response.json({ status: "ok", release: "1.1.0", management: "2026-10-12", profiles: "2026-10-12", experience: "2026-10-13", design: "2026-10-13", discovery: "2026-10-14", presentation: "2026-10-15", android: "2026-10-15" }, { headers: { "Cache-Control": "public, max-age=30", "X-Content-Type-Options": "nosniff" } });
+    return Response.json({ status: "ok", release: "1.1.0", management: "2026-10-12", profiles: "2026-10-12", experience: "2026-10-13", design: "2026-10-13", discovery: "2026-10-14", presentation: "2026-10-15", android: "2026-10-15", editor: "2026-10-26", source: __LQADWA_BUILD__ }, { headers: { "Cache-Control": "public, max-age=30", "X-Content-Type-Options": "nosniff" } });
   } catch {
     return Response.json({ status: "unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

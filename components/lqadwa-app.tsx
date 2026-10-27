@@ -27,7 +27,7 @@ import { PrescriptionScan } from "@/components/prescription-scan";
 import { DeviceSecurity } from "@/components/device-security";
 import { AdminControls, AdminIdentity } from "@/components/admin-controls";
 import { AdminManagement } from "@/components/admin-management";
-import { AdminLandingEditor } from "@/components/admin-landing-editor";
+import { AdminEditorLauncher } from "@/components/admin-editor-launcher";
 import { BookingQr } from "@/components/booking-qr";
 import { cities, distanceLabel, timeLeft, isFreshReply, type AppData, type Booking, type Pharmacy, type StaffBooking } from "@/lib/domain";
 import { tr, type Language, type TranslationKey } from "@/lib/i18n";
@@ -94,6 +94,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
       if (sequence !== latest.current) return;
       if ([401,403,410].includes(response.status)) { setData(blank); setModal(null); setPosition(null); setNotificationsOpen(false); setSignedOut(true); first.current = true; setLoading(false); setError(response.status === 403 ? tr(language, "applicationSuspended") : response.status === 410 ? tr(language, "signInRequired") : ""); return; }
       if (!response.ok) throw new Error(result.error || "Load failed");
+      if (result.adminStepUpRequired) { window.location.replace("/operations/security"); return; }
       setData(result); setSignedOut(false); setError("");
       if (first.current) {
         setCity(result.profile.city);
@@ -107,7 +108,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
     if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => {});
     queueMicrotask(() => setAppMode(new URLSearchParams(window.location.search).get("app") === "1" || window.matchMedia("(display-mode: standalone)").matches));
     const invite = new URLSearchParams(window.location.search).get("admin_invite");
-    if (invite) sessionStorage.setItem("dawa-admin-invite", invite);
+    if (invite && /^[0-9a-f-]{73}$/.test(invite)) sessionStorage.setItem("dawa-admin-invite", invite);
     const stored = localStorage.getItem("dawa-language");
     if (stored === "ar" || stored === "fr" || stored === "en" || stored === "kab") queueMicrotask(() => setLanguage(stored));
     const preferred = localStorage.getItem("dawa-theme") === "dark";
@@ -147,20 +148,24 @@ export default function HomePage({ initialView = "search", initialLandingContent
     return () => { clearInterval(timer); clearInterval(clock); };
   }, [load,preferences.value.refresh,signedOut]);
   useEffect(() => {
-    if (loading || signedOut || inviteClaimed.current) return;
+    if (loading || inviteClaimed.current) return;
     const token = sessionStorage.getItem("dawa-admin-invite");
     if (!token) return;
+    if (signedOut) { if (!error) window.location.replace("/login"); return; }
     inviteClaimed.current = true;
     void (async () => {
+      let discardInvite = false;
       try {
-        const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin-invite-redeem", token }) });
-        const result = await response.json() as AppData & { error?: string };
+        const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin-invite-redeem", token }), signal: AbortSignal.timeout(20000) });
+        const result = await response.json() as AppData & { error?: string; code?: string };
+        if (response.status === 403 && result.code === "MFA_REQUIRED") { window.location.replace("/operations/security"); return; }
+        discardInvite = response.ok || (response.status < 500 && response.status !== 429);
         if (!response.ok) throw new Error(result.error || t("error"));
-        setData(result); toast.success(t("inviteAccepted")); navigate("admin");
+        setData(result); toast.success(t("inviteAccepted")); window.location.replace("/operations");
       } catch (cause) { toast.error(cause instanceof Error ? cause.message : t("error")); }
-      finally { sessionStorage.removeItem("dawa-admin-invite"); window.history.replaceState(null, "", window.location.pathname + window.location.hash); }
+      finally { if (discardInvite) sessionStorage.removeItem("dawa-admin-invite"); window.history.replaceState(null, "", window.location.pathname + window.location.hash); }
     })();
-  }, [loading, signedOut, t, navigate]);
+  }, [loading, signedOut, error, t]);
   useEffect(() => {
     type Context = { registerTool: (tool: unknown, options: { signal: AbortSignal }) => void };
     const context = (document as Document & { modelContext?: Context }).modelContext;
@@ -327,7 +332,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
         {own?.status === "approved" ? <><div className="staff-summary"><div><span className="square-icon"><Bell /></span><span>{t("inbox")}<strong>{staffRequests.length}</strong></span></div><div><span className="square-icon"><BookmarkCheck /></span><span>{t("pickup")}<strong>{staffBookings.length}</strong></span></div><label className="staff-duty"><span className="square-icon"><MoonStar /></span><span>{t("duty")}</span><Switch checked={!!own.duty} disabled={!!busy} onCheckedChange={(enabled) => void mutate({ action: "duty", pharmacy: own.id, enabled }, t("save"))} /></label></div><div className="workspace-tabs" role="group" aria-label={t("pharmacy")} >{(["inbox", "pickup", "stock"] as const).map(tab => <Button key={tab} variant={pharmacyTab === tab ? "default" : "outline"} aria-pressed={pharmacyTab === tab} onClick={() => setPharmacyTab(tab)}>{t(tab)} · {tab === "inbox" ? staffRequests.length : tab === "pickup" ? staffBookings.length : data.stock.length}</Button>)}</div><div className="pharmacy-workspace">{pharmacyTab === "inbox" && <section className="panel"><h2>{t("inbox")}</h2><div className="item-stack">{staffRequests.length ? staffRequests.map((request) => <article className="portal-item" key={request.id}><h3>{request.medicine}</h3><p>{cityName(request.city)} · {new Date(request.created).toLocaleTimeString(localeTag[language])}</p><div className="row"><Button disabled={!!busy} onClick={() => void mutate({ action: "reply", request: request.id, pharmacy: own.id, available: true }, t("yes"))}><Check />{t("markYes")}</Button><Button variant="outline" disabled={!!busy} onClick={() => void mutate({ action: "reply", request: request.id, pharmacy: own.id, available: false }, t("no"))}><X />{t("markNo")}</Button></div></article>) : <p className="muted empty-copy">{t("noInbox")}</p>}</div></section>}{pharmacyTab === "pickup" && <section className="panel"><h2>{t("pickup")}</h2><div className="item-stack">{staffBookings.length ? staffBookings.map((booking) => <article className="portal-item" key={booking.id}><h3>{booking.medicine}</h3><p>{t("timeLeft")}: <b dir="ltr">{timeLeft(booking.expires, now)}</b></p><Button variant="outline" onClick={() => openModal({ kind: "collect", booking })}><FileCheck2 />{t("verify")}</Button></article>) : <p className="muted empty-copy">{t("noBookings")}</p>}</div></section>}</div>{pharmacyTab === "stock" && <InventoryWorkspace language={language} threshold={preferences.value.threshold} onThreshold={threshold=>preferences.update({threshold})} onChanged={()=>void load()}/>}</> : !canSubmitPharmacy(own?.status) ? <section className="panel application-status"><span className="dialog-symbol"><Store /></span><h2>{t(own?.status === "suspended" ? "applicationSuspended" : "applicationPending")}</h2><strong>{own?.name}</strong><p className="muted">{own?.address}</p><div className="row"><Button variant="outline" disabled={!!busy} onClick={() => void load()}><RefreshCw />{t("refresh")}</Button><Button asChild variant="outline"><a href="/privacy">{t("privacy")}</a></Button></div></section> : <div className="portal-grid"><form className="panel registration-form" onSubmit={async (event) => { event.preventDefault(); await mutate({ action: "register-pharmacy", name: registration.name.trim(), address: registration.address.trim(), city: registration.city, phone: registration.phone, license: registration.license.trim(), latitude: Number(registration.latitude), longitude: Number(registration.longitude) }, t("submitApplication")); }}><h2>{t("joinTitle")}</h2><label>{t("pharmacyName")}<Input required minLength={3} maxLength={100} value={registration.name} onChange={(event) => registrationSet("name", event.target.value)} /></label><label>{t("address")}<Input required minLength={8} maxLength={160} value={registration.address} onChange={(event) => registrationSet("address", event.target.value)} /></label><label>{t("city")}<NativeSelect value={registration.city} onChange={(event) => registrationSet("city", event.target.value)}>{cities.map((item) => <NativeSelectOption key={item.id} value={item.id}>{cityName(item.id)}</NativeSelectOption>)}</NativeSelect></label><label>{t("phone")}<Input type="tel" inputMode="tel" pattern="0[0-9]{8,9}" required value={registration.phone} onChange={(event) => registrationSet("phone", event.target.value)} /></label><label>{t("license")}<Input required minLength={5} maxLength={100} value={registration.license} onChange={(event) => registrationSet("license", event.target.value)} /></label><div className="row between"><strong>{t("coordinates")}</strong><Button type="button" variant="outline" onClick={() => { if (!navigator.geolocation) { toast.error(t("error")); return; } navigator.geolocation.getCurrentPosition(({ coords }) => setRegistration((old) => ({ ...old, latitude: coords.latitude.toFixed(6), longitude: coords.longitude.toFixed(6) })), () => toast.error(t("error"))); }}><LocateFixed />{t("getCoordinates")}</Button></div><div className="coordinates"><Input required type="number" min="18.9" max="38" step="any" aria-label="Latitude" placeholder="Latitude" value={registration.latitude} onChange={(event) => registrationSet("latitude", event.target.value)} /><Input required type="number" min="-9" max="12" step="any" aria-label="Longitude" placeholder="Longitude" value={registration.longitude} onChange={(event) => registrationSet("longitude", event.target.value)} /></div><Button type="submit" disabled={!!busy || signedOut || own?.status === "suspended"}>{t("submitApplication")}</Button></form><aside className="panel join-aside"><Store /><h2>{own?.status === "pending" ? t("applicationPending") : own?.status === "rejected" ? t("applicationRejected") : own?.status === "suspended" ? t("applicationSuspended") : t("joinSub")}</h2><p>{t("pickupOnly")}</p><p>{t("stockHelp")}</p></aside></div>}
       </>}
       {!signedOut && view === "pharmacy" && pharmacyTab === "pickup" && own?.status === "approved" && approaching.length > 0 && <section className="panel approach-panel"><h2>{t("approaching")}</h2><div className="item-stack">{approaching.map((booking) => <div className="approach-row" key={booking.id}><Navigation /><span>{booking.medicine}</span><strong>{localizedDistance(distanceMeters({ lat: booking.approachLat!, lng: booking.approachLng! }, { lat: own.latitude / 1e6, lng: own.longitude / 1e6 }), language)} {t("approx")}</strong></div>)}</div><DawaMap city={own.city} pharmacies={data.pharmacies.filter((p) => p.id === own.id)} position={null} approaches={approaching.map((b) => ({ lat: b.approachLat!, lng: b.approachLng!, label: `${t("approaching")} · ${b.medicine}` }))} onSelect={(pharmacy) => openModal({ kind: "pharmacy", pharmacy })} /></section>}
-      {view === "admin" && (data.role === "admin" && data.admin ? <><div className="page-heading"><div className="overline">LQADWA · OPERATIONS</div><h1>{t("adminTitle")}</h1><p>{t("adminSub")}</p></div><AdminIdentity admin={data.admin} language={language} />{data.admin.access.isOwner && <AdminLandingEditor language={language} />}<AdminManagement key={JSON.stringify(data.admin.access)} admin={data.admin} language={language} mutate={mutate} onChanged={() => void load()} /></> : <div className="panel empty-panel">{t("adminOnly")}</div>)}
+      {view === "admin" && (data.role === "admin" && data.admin ? <><div className="page-heading"><div className="overline">LQADWA · OPERATIONS</div><h1>{t("adminTitle")}</h1><p>{t("adminSub")}</p></div><AdminIdentity admin={data.admin} language={language} />{data.admin.access.isOwner && <AdminEditorLauncher language={language} />}<AdminManagement key={JSON.stringify(data.admin.access)} admin={data.admin} language={language} mutate={mutate} onChanged={() => void load()} /></> : <div className="panel empty-panel">{t("adminOnly")}</div>)}
       {!signedOut && view === "admin" && data.admin && <AdminControls teamOnly key={JSON.stringify(data.admin.access)} admin={data.admin} language={language} busy={!!busy} mutate={mutate} />}
       {!signedOut && view === "account" && <AppInstall language={language}/>}
       <SiteFooter language={language} signedOut={signedOut} role={data.role}/>
