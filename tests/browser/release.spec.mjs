@@ -298,6 +298,7 @@ test('multiple pages, repeatable items and movable introduction stay isolated', 
     await page.screenshot({path:`.cloudflare/e2e/${info.project.name}-multipage-editor.png`,fullPage:true});
     await page.getByLabel('Page',{exact:true}).selectOption('privacy');
     await expect(page.getByText('Add content here; the legal policy and account-deletion controls remain intact.',{exact:true})).toBeVisible();
+    await expect(page.locator('.builder-field-error')).toHaveCount(0);
     expect(await(await page.request.get('/privacy',options)).text()).toContain('href="/account-data"');
     await page.setViewportSize({width:390,height:844});await noOverflow(page);
   } finally {
