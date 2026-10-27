@@ -3,7 +3,8 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { contentAssets, contentBlockKinds, type LandingContent } from "@/lib/landing-content";
+import { contentAssets, contentBlockKinds, type ContentPageKey, type LandingContent } from "@/lib/landing-content";
+import { pageDefaultHeroAlt } from "@/lib/content-pages";
 import type { Language } from "@/lib/i18n";
 
 export const contentEditorWords = {
@@ -21,9 +22,14 @@ export const contentEditorWords = {
   privacyNote: ["يمكنك إضافة محتوى هنا؛ نص السياسة القانونية وأدوات حذف الحساب تبقى محفوظة.", "Ajoutez du contenu ici ; la politique juridique et les outils de suppression sont conservés.", "Add content here; the legal policy and account-deletion controls remain intact.", "Rnu agbur dagi; tasertit d yifecka ad qqimen."],
   limit: ["حتى 40 قسماً و12 عنصراً لكل قسم.", "Jusqu’à 40 sections et 12 éléments par section.", "Up to 40 sections and 12 items per section.", "Ar 40 n yiḥricen d 12 n yiferdisen."],
   previousPrice: ["السعر السابق المشطوب (اختياري)", "Ancien prix barré (facultatif)", "Crossed-out previous price (optional)", "Azal aqbur (s ufran)"],
+  noImage: ["بدون صورة", "Sans image", "No image", "War tawlaft"],
 } as const;
 export const contentEditorText = (language: Language, key: keyof typeof contentEditorWords) => contentEditorWords[key][language === "ar" ? 0 : language === "fr" ? 1 : language === "en" ? 2 : 3];
 type Block = LandingContent["blocks"][number];
+export function HeroProperties({hero,page,language,working,update}:{hero:LandingContent["hero"];page:ContentPageKey;language:Language;working:boolean;update:(hero:NonNullable<LandingContent["hero"]>)=>void}){
+  const t=(key:keyof typeof contentEditorWords)=>contentEditorText(language,key),value=hero??{enabled:true};
+  return <fieldset className="builder-copy-fields" disabled={working}><legend>{t("imageAsset")}</legend><div className="builder-field"><label htmlFor="hero-image">{t("imageAsset")}</label><select id="hero-image" value={hero?.image??(page==="home"?contentAssets[0]:"")} onChange={event=>update({...value,image:event.target.value?event.target.value as typeof contentAssets[number]:undefined})}>{page!=="home"&&<option value="">{t("noImage")}</option>}{contentAssets.map(asset=><option key={asset} value={asset}>{asset.split("/").at(-1)?.replace(".webp","")}</option>)}</select></div>{(hero?.image||page==="home")&&<div className="builder-field"><label htmlFor="hero-alt">{t("alt")}</label><Input id="hero-alt" maxLength={200} value={hero?.alt?.[language]??pageDefaultHeroAlt(page,language)} onChange={event=>{const alt={...hero?.alt};if(event.target.value.trim())alt[language]=event.target.value;else delete alt[language];update({...value,alt});}}/></div>}</fieldset>;
+}
 export function ContentBlockProperties({ block, language, working, update }: { block: Block; language: Language; working: boolean; update: (change: (block: Block) => Block) => void }) {
   const t = (key: keyof typeof contentEditorWords) => contentEditorText(language, key), prefix = `advanced-${block.id}`;
   const appearance = (key: string, value: string | number) => update(current => ({ ...current, appearance: { tone: "soft", align: "start", ...current.appearance, [key]: value } }));

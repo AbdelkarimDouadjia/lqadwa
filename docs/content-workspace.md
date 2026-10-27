@@ -8,6 +8,8 @@ Open `/operations/editor?page=home` after owner sign-in and recent authenticator
 
 Add up to 40 blocks per page, with up to 12 items per card group, step group or FAQ. Text, calls to action, images with descriptions, cards, steps, FAQ and dividers can be inserted, moved, duplicated, hidden or removed. The introduction is movable. Built-in home sections can be converted into editable blocks; their original version is retained hidden for recovery. Width, spacing, alignment, theme-safe tones and column counts work responsively. All four languages have separate content. A content block without text in a language is omitted there instead of inventing a translation.
 
+The Android download section keeps its working two-architecture links and is not converted to a generic text block. Its existing text, visibility and placement remain editable. Hiding the Home introduction keeps the live directory visible. Changing a repeatable block to a non-repeatable type hides its stored items until that type is selected again. Legacy incomplete text blocks keep their previous visibility rules. Hero descriptions retain the existing localized alternatives and can be edited. A Privacy introduction requires a complete title/body in each populated language before enabling; other languages omit it rather than rendering an empty heading.
+
 Images use the existing local illustration allowlist. Buttons have validated internal destinations. Arbitrary HTML, JavaScript, CSS and tracking-image URLs are not accepted. Editor flexibility does not grant access to clinical controls, account deletion, authorization or authentication templates. Privacy additions do not replace the existing legal policy or account-data tools; changing the legal policy requires its own reviewed source change.
 
 ## Storage and compatibility
@@ -15,6 +17,8 @@ Images use the existing local illustration allowlist. Buttons have validated int
 No database migration is needed. Home keeps the existing `landing_content.id='main'`. Other pages use bound allowlisted `page:<slug>` IDs in the same table. New content includes its page identity. Revisions are filtered/pruned/restored by that identity; legacy revisions without a page belong to Home. A revision from another page is rejected. Public reads expose only published JSON. Defaults are constructed in memory on reads, never seeded into the live database.
 
 The 512 KiB input/file limit, strict content schema, owner authorization, recent provider-verified MFA, CSRF, rate limit, optimistic version check, idempotent draft retry and atomic audit saves remain enforced. Existing homepage JSON and native clients remain compatible. No account, health record, inventory or prescription processing changes are introduced.
+
+History extraction checks `json_valid` inside a SQLite CASE expression. Malformed records are excluded from listing, lookup and pruning without silently deleting them or breaking other pages. Invalid structured snapshots are rejected on restore. Added admin workload fields are optional, calculated server-side under existing permissions and recent MFA, and distinguish pending pharmacies from total pharmacies. Account/operations delegates receive their authorized counts without needing analytics permission; unauthorized metric categories are omitted.
 
 ## Workspace navigation
 

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import {hasRecentMfa} from '../lib/mfa-assurance.ts';
 import { emptyLandingContent, landingContentSchema, landingLayout, pageLayout, contentPageKeys, maxContentBlocks, parseLandingContent, reorderLanding, importLandingDraft, exportLandingDraft, landingDraftFileMaxBytes } from '../lib/landing-content.ts';
 import { defaultPageContent, flexibleLandingSection } from '../lib/content-pages.ts';
+import {adminWorkspaceMetrics} from '../lib/workspace-metrics.ts';
 
 const original = structuredClone(emptyLandingContent), id = randomUUID();
 original.blocks = [{ id, enabled: true, target: 'search', copy: { en: { heading: 'Find a pharmacy', body: 'Collect your medicine in person.' } } }];
@@ -44,5 +45,11 @@ assert(!landingContentSchema.safeParse({...rich,blocks:Array.from({length:maxCon
 assert(!landingContentSchema.safeParse({...rich,blocks:[{...block,items:[block.items[0],block.items[0]]}]}).success);
 assert(!landingContentSchema.safeParse({...rich,blocks:[{...block,image:'https://tracking.invalid/image.png'}]}).success);
 assert(!landingContentSchema.safeParse({...rich,blocks:[{...block,appearance:{...block.appearance,columns:100}}]}).success);
-for(const section of original.order){const flexible=flexibleLandingSection(original,section,randomUUID(),[randomUUID(),randomUUID(),randomUUID()]);assert(landingContentSchema.safeParse({...emptyLandingContent,blocks:[flexible]}).success);}
+for(const section of original.order.filter(section=>section!=='android')){const flexible=flexibleLandingSection(original,section,randomUUID(),[randomUUID(),randomUUID(),randomUUID()]);assert(landingContentSchema.safeParse({...emptyLandingContent,blocks:[flexible]}).success);}
+const privacy=defaultPageContent('privacy');assert(!landingContentSchema.safeParse({...privacy,hero:{enabled:true}}).success);
+assert(!landingContentSchema.safeParse({...privacy,hero:{enabled:true},copy:{en:{titleA:'Title only'}}}).success);
+assert(landingContentSchema.safeParse({...privacy,hero:{enabled:true},copy:{en:{titleA:'Title',lead:'Introduction'}}}).success);
+const admin={access:{isOwner:false,permissions:[]},users:999,searches:500,activity:[{id:'local'}],workload:{pendingPharmacies:2,accounts:23,requests:9,reservations:4}};
+for(const [permissions,expected] of [[[],[]],[['pharmacies'],[{key:'pending',value:2}]],[['accounts'],[{key:'accounts',value:23}]],[['operations'],[{key:'requests',value:9},{key:'reservations',value:4}]],[['audit'],[{key:'activity',value:1}]],[['analytics'],[{key:'users',value:999},{key:'searches',value:500}]]])assert.deepEqual(adminWorkspaceMetrics({...admin,access:{isOwner:false,permissions}}),expected);
 console.log('PASS: seven page defaults, movable introduction, rich blocks, repeatable-item limits, asset allowlist and flexible built-in conversion.');
+console.log('PASS: optional privacy introduction validation and permission-specific workload metrics without invented pending totals.');

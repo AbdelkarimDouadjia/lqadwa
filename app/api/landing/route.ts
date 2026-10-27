@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
     if (input.action === "load") {
       const row = await current(input.page);
-      const revisions = await db.prepare("SELECT id,actor,created_at FROM landing_content_revisions WHERE COALESCE(json_extract(content_json,'$.page'),'home')=? ORDER BY created_at DESC LIMIT 25").bind(input.page).all<{ id: string; actor: string; created_at: number }>();
+      const revisions = await db.prepare("SELECT id,actor,created_at FROM landing_content_revisions WHERE (CASE WHEN json_valid(content_json) THEN COALESCE(json_extract(content_json,'$.page'),'home') ELSE NULL END)=? ORDER BY created_at DESC LIMIT 25").bind(input.page).all<{ id: string; actor: string; created_at: number }>();
       return json({
         draft: row ? parseLandingContent(row.draft_json) : defaults, published: row ? parseLandingContent(row.published_json) : defaults,
         draftVersion: row?.draft_version ?? 0, publishedVersion: row?.published_version ?? 0,
@@ -81,13 +81,13 @@ export async function POST(request: Request) {
         db.prepare("INSERT INTO landing_content_revisions (id,actor,created_at,content_json) SELECT ?,?,?,published_json FROM landing_content WHERE id=? AND draft_version=?").bind(revisionId, user.userId, now, pageId, input.draftVersion),
         db.prepare("UPDATE landing_content SET published_json=draft_json,published_version=published_version+1,draft_version=draft_version+1,published_at=?,updated_at=?,updated_by=? WHERE id=? AND draft_version=? AND draft_json<>published_json").bind(now, now, user.userId, pageId, input.draftVersion),
         audit(user.userId, "landing-publish", pageId, "Content page published", true),
-        db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions WHERE COALESCE(json_extract(content_json,'$.page'),'home')=? ORDER BY created_at DESC LIMIT -1 OFFSET 25)").bind(input.page),
+        db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions WHERE (CASE WHEN json_valid(content_json) THEN COALESCE(json_extract(content_json,'$.page'),'home') ELSE NULL END)=? ORDER BY created_at DESC LIMIT -1 OFFSET 25)").bind(input.page),
       ]);
       if (!results[1].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل النشر.", 409);
       return json({ ok: true, draftVersion: input.draftVersion + 1, publishedVersion: row.published_version + 1, publishedAt: now });
     }
 
-    const revision = await db.prepare("SELECT content_json FROM landing_content_revisions WHERE id=? AND COALESCE(json_extract(content_json,'$.page'),'home')=?").bind(input.revision, input.page).first<{ content_json: string }>();
+    const revision = await db.prepare("SELECT content_json FROM landing_content_revisions WHERE id=? AND (CASE WHEN json_valid(content_json) THEN COALESCE(json_extract(content_json,'$.page'),'home') ELSE NULL END)=?").bind(input.revision, input.page).first<{ content_json: string }>();
     if (!revision) throw new HttpError("هذه النسخة غير موجودة أو لم تعد محفوظة.", 404);
     const snapshot = landingContentSchema.safeParse(JSON.parse(revision.content_json));
     if (!snapshot.success || (snapshot.data.page ?? "home") !== input.page) throw new HttpError("This saved revision cannot be restored safely. Export the current draft before recovery.", 409);
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       db.prepare("INSERT INTO landing_content_revisions (id,actor,created_at,content_json) SELECT ?,?,?,published_json FROM landing_content WHERE id=? AND draft_version=?").bind(revisionId, user.userId, now, pageId, input.draftVersion),
       db.prepare("UPDATE landing_content SET draft_json=CASE WHEN draft_json=published_json THEN ? ELSE draft_json END,published_json=?,draft_version=draft_version+1,published_version=published_version+1,updated_by=?,updated_at=?,published_at=? WHERE id=? AND draft_version=?").bind(serialized, serialized, user.userId, now, now, pageId, input.draftVersion),
       audit(user.userId, "landing-restore", input.revision, "Landing page revision restored", true),
-      db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions WHERE COALESCE(json_extract(content_json,'$.page'),'home')=? ORDER BY created_at DESC LIMIT -1 OFFSET 25)").bind(input.page),
+      db.prepare("DELETE FROM landing_content_revisions WHERE id IN (SELECT id FROM landing_content_revisions WHERE (CASE WHEN json_valid(content_json) THEN COALESCE(json_extract(content_json,'$.page'),'home') ELSE NULL END)=? ORDER BY created_at DESC LIMIT -1 OFFSET 25)").bind(input.page),
     ]);
     if (!results[1].meta.changes) throw new HttpError("المسودة تغيّرت في نافذة أخرى. حدّث الصفحة قبل الاستعادة.", 409);
     return json({ ok: true, draftVersion: input.draftVersion + 1, publishedVersion: (row?.published_version ?? 0) + 1, publishedAt: now });

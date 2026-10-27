@@ -1,16 +1,17 @@
 import type { ReactNode } from "react";
 import type { Language } from "@/lib/i18n";
 import { pageLayout, type ContentPageKey, type LandingContent } from "@/lib/landing-content";
-import { pageDefaultCopy, contentPageLabels } from "@/lib/content-pages";
+import { pageDefaultCopy, pageDefaultHeroAlt, contentPageLabels } from "@/lib/content-pages";
 import { ContentBlock, contentTargetHref } from "@/components/content-block";
 import { Button } from "@/components/ui/button";
 
 export function ContentPage({ page, language, content, renderEditorSection }: { page: Exclude<ContentPageKey, "home">; language: Language; content: LandingContent; renderEditorSection?: (id: string, node: ReactNode) => ReactNode }) {
   const copy = (key: "titleA" | "lead" | "explore") => content.copy[language]?.[key] ?? pageDefaultCopy(page, language, key);
   const wrap = (id: string, node: ReactNode) => renderEditorSection ? renderEditorSection(id, node) : node;
+  const Title = page === "privacy" ? "h2" : "h1";
   return <article className="editorial-page public-information-page content-managed-page">
     {pageLayout(content).map(id => {
-      if (id === "hero") return content.hero?.enabled === false && !renderEditorSection ? null : <div key={id}>{wrap(id, <header className="public-info-hero"><div className="public-info-intro"><h1>{copy("titleA")}</h1><p>{copy("lead")}</p>{copy("explore") && <Button asChild><a href={contentTargetHref(page === "safety" ? "privacy" : page === "pricing" || page === "for-pharmacies" ? "pharmacy" : "search")}>{copy("explore")}</a></Button>}</div>{content.hero?.image && <figure className="public-info-image"><img src={content.hero.image} width="1200" height="900" alt="" /></figure>}</header>)}</div>;
+      if (id === "hero") return (content.hero?.enabled === false || (page === "privacy" && (!copy("titleA").trim() || !copy("lead").trim()))) && !renderEditorSection ? null : <div key={id}>{wrap(id, <header className="public-info-hero"><div className="public-info-intro"><Title>{copy("titleA")}</Title><p>{copy("lead")}</p>{copy("explore") && <Button asChild><a href={contentTargetHref(page === "safety" ? "privacy" : page === "pricing" || page === "for-pharmacies" ? "pharmacy" : "search")}>{copy("explore")}</a></Button>}</div>{content.hero?.image && <figure className="public-info-image"><img src={content.hero.image} width="1200" height="900" alt={content.hero?.alt?.[language] ?? pageDefaultHeroAlt(page, language)} /></figure>}</header>)}</div>;
       const block = content.blocks.find(block => block.id === id);
       return block && <div key={id}>{wrap(id, <ContentBlock block={block} language={language} editing={!!renderEditorSection} />)}</div>;
     })}

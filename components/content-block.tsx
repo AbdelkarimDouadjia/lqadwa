@@ -10,7 +10,8 @@ export function contentTargetHref(target: LandingContent["blocks"][number]["targ
   return target === "none" ? "" : `/${target}`;
 }
 export function ContentBlock({ block, language, editing = false }: { block: LandingContent["blocks"][number]; language: Language; editing?: boolean }) {
-  const text = block.copy[language], kind = block.kind ?? "text", items = block.items?.filter(item => item.copy[language]?.heading.trim());
+  const text = block.copy[language], kind = block.kind ?? "text", items = ["cards", "steps", "faq"].includes(kind) ? block.items?.filter(item => item.copy[language]?.heading.trim()) : undefined;
+  if (!editing && block.kind === undefined && (!text?.heading?.trim() || !text?.body?.trim())) return null;
   if (!editing && (!block.enabled || (kind !== "divider" && !text?.heading?.trim() && !text?.body?.trim() && !items?.length))) return null;
   if (kind === "divider") return <div className={`block-width-${block.appearance?.width ?? "full"} block-spacing-${block.appearance?.spacing ?? "comfortable"}`}><hr className="content-divider" /></div>;
   return <section className={`editorial-custom-section content-block block-kind-${kind} block-tone-${block.appearance?.tone ?? "soft"} block-align-${block.appearance?.align ?? "start"} block-width-${block.appearance?.width ?? "full"} block-spacing-${block.appearance?.spacing ?? "comfortable"}`} style={{ "--block-columns": block.appearance?.columns ?? 2 } as React.CSSProperties}>

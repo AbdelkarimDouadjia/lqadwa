@@ -32,13 +32,18 @@ const contentBlockSchema = z.object({
 export const landingContentSchema = z.object({
   version: z.literal(1),
   page: z.enum(contentPageKeys).optional(),
-  hero: z.object({ enabled: z.boolean(), image: z.enum(contentAssets).optional() }).strict().optional(),
+  hero: z.object({ enabled: z.boolean(), image: z.enum(contentAssets).optional(), alt: languageMap(z.string().trim().min(1).max(200)).optional() }).strict().optional(),
   copy: languageMap(localeCopySchema),
   sections: z.object(Object.fromEntries(landingSectionKeys.map(key => [key, z.boolean().optional()]))).strict(),
   order: z.array(z.enum(landingSectionKeys)).length(landingSectionKeys.length).refine(values => new Set(values).size === landingSectionKeys.length),
   blocks: z.array(contentBlockSchema).max(maxContentBlocks),
   layout: z.array(z.union([z.literal("hero"), z.enum(landingSectionKeys), z.string().uuid()])).max(maxContentBlocks + 7).optional(),
 }).strict().superRefine((content, context) => {
+  if (content.page === "privacy" && content.hero?.enabled) {
+    const locales = landingLanguages.filter(language => content.copy[language]?.titleA || content.copy[language]?.lead);
+    if (!locales.length) context.addIssue({ code: z.ZodIssueCode.custom, path: ["hero", "enabled"], message: "Add an introduction title and body before enabling it." });
+    for (const language of locales) if (!content.copy[language]?.titleA || !content.copy[language]?.lead) context.addIssue({ code: z.ZodIssueCode.custom, path: ["copy", language], message: "Complete the introduction title and body in this language." });
+  }
   if (new Set(content.blocks.map(block => block.id)).size !== content.blocks.length) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["blocks"], message: "Each content section needs a unique identifier." });
   }

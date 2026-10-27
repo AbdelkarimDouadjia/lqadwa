@@ -103,6 +103,7 @@ test('public information pages render in every language and link into the servic
       await expect(page.locator('html')).toHaveAttribute('lang', language);
       await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
       await expect(page.locator('.public-info-hero a')).toHaveAttribute('href', /\/login\?mode=register|\/privacy/);
+      await expect(page.locator('.public-info-image img')).not.toHaveAttribute('alt','');
       await expect(page.locator('.product-desktop-nav a').first()).toHaveAttribute('href', language === 'ar' ? '/how-it-works' : `/how-it-works?lang=${language}`);
       await expect(page.locator('.public-info-related a')).toHaveCount(4);
       await expect(page.locator('.product-avatar, .product-notification')).toHaveCount(0);
@@ -275,6 +276,11 @@ test('multiple pages, repeatable items and movable introduction stay isolated', 
     await page.getByRole('button',{name:'Add item',exact:true}).click();
     await page.getByLabel('Item heading',{exact:true}).nth(1).fill('LOCAL SECOND ITEM');
     await page.getByLabel('Item body',{exact:true}).nth(1).fill('LOCAL EXPLANATION');
+    await page.getByLabel('Section type',{exact:true}).selectOption('text');
+    await expect(page.frameLocator('.builder-canvas-frame').getByText('LOCAL SECOND ITEM',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Add item',exact:true})).toHaveCount(0);
+    await page.getByLabel('Section type',{exact:true}).selectOption('cards');
+    await expect(page.getByLabel('Item heading',{exact:true}).nth(1)).toHaveValue('LOCAL SECOND ITEM');
     await page.getByLabel('Columns',{exact:true}).selectOption('3');
     await page.getByLabel('Section width',{exact:true}).selectOption('narrow');
     const frame=page.frameLocator('.builder-canvas-frame');
@@ -299,6 +305,13 @@ test('multiple pages, repeatable items and movable introduction stay isolated', 
     await page.getByLabel('Page',{exact:true}).selectOption('privacy');
     await expect(page.getByText('Add content here; the legal policy and account-deletion controls remain intact.',{exact:true})).toBeVisible();
     await expect(page.locator('.builder-field-error')).toHaveCount(0);
+    await page.getByRole('checkbox',{name:'Visible to visitors',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Save draft',exact:true})).toBeDisabled();
+    await page.getByLabel('Headline - first line',{exact:true}).fill('LOCAL PRIVACY INTRODUCTION');
+    await page.getByLabel('Introductory copy',{exact:true}).fill('LOCAL ADDITION WITHOUT REPLACING THE POLICY');
+    await expect(page.getByRole('button',{name:'Save draft',exact:true})).toBeEnabled();
+    await expect(frame.locator('.public-info-intro h1')).toHaveCount(0);
+    await expect(frame.locator('.public-info-intro h2')).toHaveText('LOCAL PRIVACY INTRODUCTION');
     expect(await(await page.request.get('/privacy',options)).text()).toContain('href="/account-data"');
     await page.setViewportSize({width:390,height:844});await noOverflow(page);
   } finally {
@@ -334,10 +347,22 @@ test('real drag-and-drop, draft files, MFA recovery, publication and restoration
     await expect(frame.locator('h1')).toBeVisible();
     await expect(frame.locator('.editorial-cover img')).toBeVisible();
     const originalHeadline = await page.getByLabel('Headline - first line', { exact: true }).inputValue();
+    await page.getByRole('button',{name:'Hide section: Introduction',exact:true}).click();
+    await page.getByRole('button',{name:'Preview draft',exact:true}).click();
+    await expect(frame.locator('.editorial-hero')).toHaveCount(0);
+    await expect(frame.locator('.editorial-directory')).toBeVisible();
+    await page.getByRole('button',{name:'Back to editing',exact:true}).click();
+    await page.getByRole('button',{name:'Show section: Introduction',exact:true}).click();
+    await expect(frame.locator('h1')).toBeVisible();
     await page.getByLabel('Headline - first line', { exact: true }).fill('Find medicine nearby');
     await expect(frame.locator('h1')).toContainText('Find medicine nearby');
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect(page.getByLabel('Headline - first line', { exact: true })).toHaveValue(originalHeadline);
+
+    await page.locator('.builder-layer[data-editor-drop="android"] .builder-layer-name').click();
+    await expect(page.getByRole('button',{name:'Convert to flexible section',exact:true})).toHaveCount(0);
+    await expect(frame.locator('[data-editor-node="android"] a[href^="/downloads/"]')).toHaveCount(2);
+    await page.locator('.builder-layer[data-editor-drop="hero"] .builder-layer-name').click();
     await page.getByRole('button', { name: 'Redo', exact: true }).click();
     await expect(frame.locator('h1')).toContainText('Find medicine nearby');
     await page.getByLabel('Headline - first line', { exact: true }).fill('');

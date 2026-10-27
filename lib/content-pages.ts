@@ -1,6 +1,7 @@
 import { emptyLandingContent, landingLanguages, type ContentPageKey, type LandingContent, type LandingCopyKey, type LandingSectionKey } from "./landing-content.ts";
 import { publicInfoCopy } from "./public-information-copy.ts";
 import { landingDefaultCopy } from "./landing-copy.ts";
+import { editorialText } from "./editorial-copy.ts";
 import type { Language } from "./i18n";
 
 export const contentPageLabels: Record<ContentPageKey, readonly string[]> = {
@@ -24,7 +25,7 @@ export function defaultPageContent(page: ContentPageKey): LandingContent {
   for (const language of landingLanguages) {
     const copy = publicInfoCopy(language, page);
     result.copy[language] = { titleA: copy.title, lead: copy.summary, explore: copy.action };
-    result.hero = { enabled: true, image: copy.image as NonNullable<LandingContent["hero"]>["image"] };
+    result.hero = { enabled: true, image: copy.image as NonNullable<LandingContent["hero"]>["image"], alt: { ...result.hero?.alt, [language]: copy.imageAlt } };
     const add = (index: number, kind: "text" | "cards" | "faq" | "cta", heading: string, body: string, items?: { heading: string; body: string }[]) => {
       let block = result.blocks.find(block => block.id === id(index));
       if (!block) { block = { id: id(index), kind, enabled: true, target: "none", copy: {}, appearance: { tone: "plain", align: "start", columns: kind === "cards" ? 3 : 1 }, ...(items ? { items: items.map((_, item) => ({ id: id(index * 100 + item + 1), copy: {} })) } : {}) }; result.blocks.push(block); }
@@ -46,17 +47,20 @@ export function pageDefaultCopy(page: ContentPageKey, language: Language, key: L
   return key === "titleA" ? copy.title : key === "lead" ? copy.summary : key === "explore" ? copy.action : "";
 }
 
-export function flexibleLandingSection(content: LandingContent, section: LandingSectionKey, blockId: string, itemIds: string[]): LandingContent["blocks"][number] {
-  const definitions: Record<LandingSectionKey, { kind: "steps" | "cards" | "image" | "cta" | "faq"; heading: LandingCopyKey; body?: LandingCopyKey; button?: LandingCopyKey; items?: [LandingCopyKey, LandingCopyKey][] }> = {
+export function pageDefaultHeroAlt(page: ContentPageKey, language: Language) {
+  return page === "home" ? editorialText(language, "heroAlt") : page === "privacy" ? "" : publicInfoCopy(language, page).imageAlt;
+}
+
+export function flexibleLandingSection(content: LandingContent, section: Exclude<LandingSectionKey, "android">, blockId: string, itemIds: string[]): LandingContent["blocks"][number] {
+  const definitions: Record<Exclude<LandingSectionKey, "android">, { kind: "steps" | "cards" | "image" | "cta" | "faq"; heading: LandingCopyKey; body?: LandingCopyKey; button?: LandingCopyKey; items?: [LandingCopyKey, LandingCopyKey][] }> = {
     journey: { kind: "steps", heading: "journey", items: [["search", "scanHelp"], ["confirm", "confirmHelp"], ["collect", "collectHelp"]] },
     tools: { kind: "cards", heading: "tools", items: [["scan", "scanBody"], ["route", "routeBody"]] },
     pharmacy: { kind: "image", heading: "stock", body: "stockBody", button: "join" },
     offer: { kind: "cta", heading: "offer", body: "offerBody", button: "free" },
-    android: { kind: "cta", heading: "android", body: "androidBody", button: "explore" },
     faq: { kind: "faq", heading: "questions", items: [["delivery", "aDelivery"], ["coverage", "aCoverage"], ["reserve", "aReserve"]] },
   };
   const definition = definitions[section];
-  const block: LandingContent["blocks"][number] = { id: blockId, kind: definition.kind, enabled: true, target: section === "pharmacy" || section === "offer" ? "pharmacy" : section === "android" ? "help" : "none", copy: {}, appearance: { tone: "soft", align: "start", columns: definition.kind === "steps" ? 3 : 2 }, ...(definition.kind === "image" ? { image: "/art/pharmacy.webp" } : {}), ...(definition.items ? { items: definition.items.map((_, index) => ({ id: itemIds[index], copy: {} })) } : {}) };
+  const block: LandingContent["blocks"][number] = { id: blockId, kind: definition.kind, enabled: true, target: section === "pharmacy" || section === "offer" ? "pharmacy" : "none", copy: {}, appearance: { tone: "soft", align: "start", columns: definition.kind === "steps" ? 3 : 2 }, ...(definition.kind === "image" ? { image: "/art/pharmacy.webp" } : {}), ...(definition.items ? { items: definition.items.map((_, index) => ({ id: itemIds[index], copy: {} })) } : {}) };
   for (const language of landingLanguages) {
     const copy = (key: LandingCopyKey) => content.copy[language]?.[key] ?? landingDefaultCopy(language, key);
     block.copy[language] = { heading: copy(definition.heading), body: definition.body ? copy(definition.body) : "", ...(definition.button ? { button: copy(definition.button) } : {}) };

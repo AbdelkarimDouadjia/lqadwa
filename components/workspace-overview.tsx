@@ -4,6 +4,7 @@ import { ArrowUpRight, BookmarkCheck, ChartNoAxesCombined, ClipboardList, Packag
 import type { AppData } from "@/lib/domain";
 import type { Language } from "@/lib/i18n";
 import { tr } from "@/lib/i18n";
+import { adminWorkspaceMetrics } from "@/lib/workspace-metrics";
 import type { View } from "@/lib/workspace";
 
 const words = {
@@ -13,7 +14,10 @@ const words = {
   searches: ["طلباتك", "Vos demandes", "Your requests", "Tuttriwin-ik"],
   pending: ["طلبات تنتظر المراجعة", "Dossiers à examiner", "Applications to review", "Tuttriwin ara tettwasneqden"],
   users: ["المستخدمون", "Utilisateurs", "Users", "Iseqdacen"],
-  activity: ["العمليات المتاحة لك", "Activité accessible", "Accessible activity", "Armud yellan"],
+  activity: ["العمليات المتاحة لك", "Activité accessible", "Recent audit entries", "Armud yellan"],
+  accounts: ["حسابات تحت إدارتك", "Comptes gérés", "Managed accounts", "Imiḍanen n tedbelt"],
+  requests: ["طلبات التوفر", "Demandes", "Availability requests", "Tuttriwin"],
+  reservations: ["الحجوزات", "Réservations", "Reservations", "Iḥrazen"],
   stock: ["أصناف المخزون اليدوي", "Références du stock manuel", "Manual stock items", "Iferdisen n uxezzen"],
   motion: ["تأثير مرئي", "Effet visuel", "Visual effect", "Timeẓri"],
   empty: ["ابدأ بالبحث باسم دواء ومنطقتك.", "Commencez par un médicament et votre zone.", "Start with a medicine name and your area.", "Bdu s yisem n ddwa d temnaḍt-ik."],
@@ -51,7 +55,6 @@ export function WorkspaceOverview({ data, language, now, view, lessMotion, navig
   const t = (key: keyof typeof words) => words[key][i], count = (value: number) => value.toLocaleString(language === "kab" ? "fr-DZ" : language);
   if (!((role === "client" && view === "search") || (role === "pharmacist" && view === "pharmacy" && data.ownPharmacy?.status === "approved") || (role === "admin" && view === "admin" && data.admin))) return null;
   const active = data.reservations.filter(item => item.status === "active" && item.expires > now).length;
-  const analytics = data.admin?.access.isOwner || data.admin?.access.permissions.includes("analytics");
   const metrics = role === "client" ? [
     { label: t("searches"), value: data.requests.length, icon: Search, action: () => navigate("bookings") },
     { label: tr(language, "bookings"), value: active, icon: BookmarkCheck, action: () => navigate("bookings") },
@@ -59,10 +62,7 @@ export function WorkspaceOverview({ data, language, now, view, lessMotion, navig
     { label: tr(language, "inbox"), value: data.staffRequests.filter(item => item.status === "pending").length, icon: ClipboardList, action: () => onPharmacyTab("inbox") },
     { label: tr(language, "pickup"), value: data.staffBookings.filter(item => item.status === "active" && item.expires > now).length, icon: BookmarkCheck, action: () => onPharmacyTab("pickup") },
     { label: t("stock"), value: data.stock.length, icon: Package, action: () => onPharmacyTab("stock") },
-  ] : analytics ? [
-    { label: t("users"), value: data.admin!.users, icon: Users },
-    { label: tr(language, "search"), value: data.admin!.searches, icon: ChartNoAxesCombined },
-    ...(data.admin!.access.isOwner || data.admin!.access.permissions.includes("pharmacies") ? [{ label: t("pending"), value: data.admin!.applicationsCount, icon: Store }] : []),
-  ] : [{ label: t("activity"), value: data.admin!.activity.length, icon: ShieldCheck }];
+  ] : adminWorkspaceMetrics(data.admin!).map(metric=>({label:metric.key==="searches"?tr(language,"searches"):t(metric.key),value:metric.value,icon:({users:Users,searches:ChartNoAxesCombined,pending:Store,accounts:Users,requests:ClipboardList,reservations:BookmarkCheck,activity:ShieldCheck})[metric.key]}));
+  if(!metrics.length)return null;
   return <section className="workspace-overview" aria-label={t(role)}>{effect && !lessMotion && <AmbientField />}<div className="workspace-overview-heading"><h2>{t(role)}</h2>{!lessMotion && <button className="workspace-effect-toggle" aria-label={t("motion")} aria-pressed={effect} onClick={() => setEffect(value => !value)}><Sparkles aria-hidden="true" /><span>{t("motion")}</span></button>}</div><div className="workspace-metric-grid">{metrics.map(metric => { const Icon = metric.icon; const body = <><span className="workspace-metric-icon"><Icon aria-hidden="true" /></span><span className="workspace-metric-copy"><span>{metric.label}</span><strong>{count(metric.value)}</strong></span>{"action" in metric && <ArrowUpRight aria-hidden="true" />}</>; return "action" in metric ? <button key={metric.label} onClick={metric.action}>{body}</button> : <div key={metric.label}>{body}</div>; })}</div>{role === "client" && !data.requests.length && <p>{t("empty")}</p>}</section>;
 }

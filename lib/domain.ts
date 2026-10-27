@@ -28,7 +28,7 @@ export type AppData = {
   requests: RequestRecord[]; responses: Reply[]; reservations: Booking[]; notifications: Notice[];
   role: "client" | "pharmacist" | "admin"; ownPharmacy: PharmacyApplication | null;
   staffRequests: StaffRequest[]; staffBookings: StaffBooking[]; stock: StockItem[];
-  admin: { applications: (PharmacyApplication & { owner: string })[]; applicationsCount: number; users: number; searches: number; bookings: number; canInvite: boolean; access: AdminAccess; owners: { id: string; name: string }[];
+  admin: { applications: (PharmacyApplication & { owner: string })[]; applicationsCount: number; workload?: { pendingPharmacies?: number; accounts?: number; requests?: number; reservations?: number }; users: number; searches: number; bookings: number; canInvite: boolean; access: AdminAccess; owners: { id: string; name: string }[];
     accounts: { id: string; name: string; city: string; suspended: number; reason: string; protected: boolean }[];
     members: { owner: string; name: string; created: number; email: string; permissions: AdminPermission[] }[];
     activity: { id: string; actor: string; action: string; target: string; detail: string; created: number }[];

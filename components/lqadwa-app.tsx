@@ -291,7 +291,7 @@ export default function HomePage({ initialView = "search", initialLandingContent
   const staffBookings = own?.status === "approved" ? data.staffBookings.filter((item) => item.pharmacy === own.id && item.status === "active" && item.expires > now) : [];
   const approaching = staffBookings.filter(b => b.approachLat != null && b.approachLng != null && (b.approachUpdated || 0) > now - 60_000);
   const selectedBooking = modal?.kind === "booking" ? data.reservations.find((item) => item.id === modal.booking.id) || null : null;
-  const navigationCounts = { bookings: data.reservations.filter(item => item.status === "active" && item.expires > now).length, pharmacy: staffRequests.filter(item => item.status === "pending").length, admin: data.admin?.applicationsCount ?? 0 };
+  const navigationCounts = { bookings: data.reservations.filter(item => item.status === "active" && item.expires > now).length, pharmacy: staffRequests.filter(item => item.status === "pending").length, admin: data.admin?.workload?.pendingPharmacies ?? 0 };
   const registrationSet = (key: keyof typeof registration, value: string) => setRegistration((previous) => ({ ...previous, [key]: value }));
 
   if (error && signedOut && loading === false) return <main className="auth-page"><section className="auth-card"><h1>{t("error")}</h1><p role="alert">{error}</p><Button onClick={() => void load()}>{t("retry")}</Button><a href="/login">{t("login")}</a><a href="/privacy">{t("privacy")}</a></section></main>;
