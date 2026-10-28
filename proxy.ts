@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authConfig, authCookieOptions } from "@/lib/supabase-server";
 import { securityHeaders } from "./next.config";
 import { publicLanguage } from "@/lib/public-page";
+import { env } from "cloudflare:workers";
+import { assistantPolicy } from "@/lib/assistant-contract";
 
 function secured(response: NextResponse) {
   securityHeaders.forEach(({ key, value }) => response.headers.set(key, value));
@@ -15,9 +17,10 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-lqadwa-locale", publicLanguage(request.nextUrl.searchParams.get("lang"), publicLanguage(request.cookies.get("lqadwa-language")?.value)));
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   const authRoot = request.nextUrl.pathname === "/" && request.cookies.getAll().some(cookie => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+  const assistantPage = request.nextUrl.pathname === "/assistant" && assistantPolicy(env).enabled;
   if (request.nextUrl.pathname === "/") response.headers.set("Cache-Control", "private, no-store");
   // Keep early redirects protected, without refreshing Auth on public/API paths.
-  if (!authRoot && !["/connect", "/operations", "/operations/editor", "/operations/security"].includes(request.nextUrl.pathname)) return secured(response);
+  if (!authRoot && !assistantPage && !["/connect", "/operations", "/operations/editor", "/operations/security"].includes(request.nextUrl.pathname)) return secured(response);
   const settings = authConfig();
   const client = createServerClient(settings.url, settings.key, {
     cookieOptions: authCookieOptions,

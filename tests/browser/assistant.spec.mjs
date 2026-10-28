@@ -6,11 +6,13 @@ test.use({serviceWorkers:'block'});
 test('assistant: authenticated retrieval, language/theme layouts, account tools and recovery',async({page,context},info)=>{
  await context.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>route.abort());
  await context.addInitScript(()=>localStorage.setItem('dawa-language','en'));
- await page.goto('/login');
+ await page.goto('/assistant?lang=en');
+ await expect(page).toHaveURL(/\/login\?return_to=/);
  await page.getByLabel('Email address',{exact:true}).fill('delegate@example.invalid');
  await page.getByLabel('Password',{exact:true}).fill('LOCAL-only-unique-passphrase');
  await page.locator('form').getByRole('button',{name:'Sign in',exact:true}).click();
- await expect(page.locator('.product-avatar')).toBeVisible({timeout:30000});
+ await expect(page).toHaveURL(/\/assistant\?lang=en/,{timeout:30000});
+ await expect(page.locator('h1')).toHaveText('LQADWA assistant');
  for(const language of ['ar','fr','en','kab'])for(const theme of ['light','dark']){
   await context.addCookies([{name:'lqadwa-theme',value:theme,domain:'localhost',path:'/'}]);
   await page.goto('/assistant?lang='+language);
