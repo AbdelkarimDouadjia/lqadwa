@@ -1,5 +1,7 @@
 import { test,expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+// Page-level network interception cannot see requests handled by an active service worker.
+test.use({serviceWorkers:'block'});
 
 test('assistant: authenticated retrieval, language/theme layouts, account tools and recovery',async({page,context},info)=>{
  await context.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>route.abort());
