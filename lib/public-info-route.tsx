@@ -6,6 +6,9 @@ import { publicLanguage, publicOrigin } from "@/lib/public-page";
 import type { Language } from "@/lib/i18n";
 import { publishedPageContent } from "@/lib/published-content";
 import { ContentPage } from "@/components/content-page";
+import { env } from "cloudflare:workers";
+import { assistantPolicy } from "@/lib/assistant-contract";
+import { assistantText } from "@/lib/assistant-copy";
 
 type RouteProps = { searchParams: Promise<{ lang?: string }> };
 const localizedPath = (path: PublicInfoPath, language: Language) => `${publicOrigin}/${path}${language === "ar" ? "" : `?lang=${language}`}`;
@@ -24,7 +27,7 @@ export function createPublicInfoRoute(path: PublicInfoPath) {
     const language = publicLanguage(query.lang, publicLanguage(store.get("lqadwa-language")?.value));
     const dark = store.get("lqadwa-theme")?.value === "dark";
     const content = await publishedPageContent(path);
-    return <PublicInfoSite language={language} initialDark={dark}><ContentPage page={path} language={language} content={content} /></PublicInfoSite>;
+    return <PublicInfoSite language={language} initialDark={dark}><ContentPage page={path} language={language} content={content} />{path === "help" && assistantPolicy(env).enabled && <a className="public-primary" href={`/assistant?lang=${language}`}>{assistantText(language,"title")}</a>}</PublicInfoSite>;
   }
   return { generateMetadata, Page };
 }

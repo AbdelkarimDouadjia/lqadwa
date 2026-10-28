@@ -46,6 +46,8 @@ The owner’s [visual page editor](https://lqadwa.lqadwa-dz.workers.dev/operatio
 
 ### Trust and service limits
 
+The new [grounded assistant](docs/grounded-assistant.md) is an isolated, **disabled-by-default** module. It retrieves versioned service-document excerpts with citations and offers authenticated read-only catalog, pharmacy and own-request lookups. The optional model can select public evidence only; it receives no patient questions or account records. Its synthetic evaluation is not a public-launch or clinical acceptance. See the guide for flags, free-plan limits, source updates and exact activation gates.
+
 - A pharmacy confirms availability; a catalogue entry or directory listing is not proof of current stock.
 - Search results are ordered by distance. The public directory distance is approximate from the wilaya centre until the user signs in and provides location.
 - A reservation follows pharmacy confirmation and expires after two hours. The patient goes to the pharmacy and presents the original prescription when legally required.

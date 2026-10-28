@@ -7,6 +7,7 @@ import "./design-refinement.css";
 import "./editorial.css";
 import "./landing-editor.css";
 import "./content-workspace.css";
+import "./assistant.css";
 
 export const metadata: Metadata = {
   title: "لقى دوا · LQADWA | دواؤك أقرب إليك",
