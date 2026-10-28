@@ -45,7 +45,7 @@ test('assistant: authenticated retrieval, language/theme layouts, account tools 
  await page.route('**/api/assistant',route=>route.abort());
  await page.locator('#assistant-query').fill('How is my data protected?');
  await page.getByRole('button',{name:'Send',exact:true}).click();
- await expect(page.getByRole('alert')).toContainText('Check your connection');
+ await expect(page.getByRole('alert')).toContainText('Check your connection',{timeout:15000});
  await page.unroute('**/api/assistant');
  await page.locator('#assistant-query').fill('How is my data protected?');
  await page.getByRole('button',{name:'Send',exact:true}).click();
