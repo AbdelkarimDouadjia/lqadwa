@@ -90,3 +90,9 @@ export const landingContent = sqliteTable("landing_content", {
 export const landingContentRevisions = sqliteTable("landing_content_revisions", {
   id: text("id").primaryKey(), actor: text("actor").notNull(), createdAt: integer("created_at").notNull(), contentJson: text("content_json").notNull(),
 }, t => [index("landing_content_revisions_created_idx").on(t.createdAt)]);
+export const assistantProviderCredentials = sqliteTable("assistant_provider_credentials", {
+  provider:text("provider").primaryKey(),encryptedKey:text("encrypted_key").notNull(),iv:text("iv").notNull(),
+  keyVersion:integer("key_version").notNull(),revision:integer("revision").notNull(),enabled:integer("enabled").notNull().default(0),
+  testedAt:integer("tested_at").notNull().default(0),testedVersion:integer("tested_version").notNull().default(0),
+  updatedAt:integer("updated_at").notNull(),updatedBy:text("updated_by").notNull(),
+});

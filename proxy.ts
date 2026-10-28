@@ -20,7 +20,7 @@ export async function proxy(request: NextRequest) {
   const assistantPage = request.nextUrl.pathname === "/assistant" && assistantPolicy(env).enabled;
   if (request.nextUrl.pathname === "/") response.headers.set("Cache-Control", "private, no-store");
   // Keep early redirects protected, without refreshing Auth on public/API paths.
-  if (!authRoot && !assistantPage && !["/connect", "/operations", "/operations/editor", "/operations/security"].includes(request.nextUrl.pathname)) return secured(response);
+  if (!authRoot && !assistantPage && !["/connect", "/operations", "/operations/editor", "/operations/security", "/operations/assistant"].includes(request.nextUrl.pathname)) return secured(response);
   const settings = authConfig();
   const client = createServerClient(settings.url, settings.key, {
     cookieOptions: authCookieOptions,

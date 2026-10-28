@@ -17,7 +17,7 @@
     "test:e2e": "node scripts/ci-smoke.mjs --browser",
     "test:discovery": "node scripts/discovery-benchmark.mjs",
     "test:ocr": "node scripts/ocr-engine-smoke.mjs",
-    "test:assistant": "node scripts/assistant-index.mjs && node scripts/assistant-smoke.mjs"
+    "test:assistant": "node scripts/assistant-index.mjs && node scripts/assistant-smoke.mjs && node scripts/assistant-provider-smoke.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

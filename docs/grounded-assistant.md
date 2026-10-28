@@ -1,5 +1,7 @@
 # Grounded service assistant
 
+Owner-managed encrypted credentials are documented in [Assistant provider settings](assistant-provider-settings.md). That integration sends public excerpts only and never falls back to another model/provider when the chosen provider is disabled. The legacy Cloudflare evidence-selector adapter remains isolated; a missing managed key does not trigger a hidden Cloudflare call.
+
 This is a separate, default-OFF module on `/assistant`. It does not establish the core service's legal, email, participating-pharmacy or physical-phone acceptance. It creates no patient requests, reservations, account edits or clinical decisions.
 
 ## Implemented modes
