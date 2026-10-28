@@ -24,7 +24,9 @@ test('assistant: authenticated retrieval, language/theme layouts, account tools 
   expect(result.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)}))).toEqual([]);
  }
  await page.goto('/assistant?lang=en');
+ await page.waitForLoadState('networkidle');
  await page.locator('#assistant-query').fill('How do I collect my reservation?');
+ await expect(page.getByRole('button',{name:'Send',exact:true})).toBeEnabled();
  await page.locator('#assistant-query').focus();
  await page.keyboard.press('Tab');
  await expect(page.getByRole('button',{name:'Send',exact:true})).toBeFocused();
