@@ -12,7 +12,7 @@ function run(args){const r=spawnSync(node,args,{stdio:'inherit',env});if(r.error
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',()=>reject(Error('Port 5173 is occupied. Stop your local preview before integration checks.')));s.listen(5173,()=>s.close(resolve));});
 console.log('Isolated local integration database: '+testState);
 run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to',testState]);
-const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888'],{stdio:'inherit',env});
+const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888','--var','GROUNDED_ASSISTANT_ENABLED:true'],{stdio:'inherit',env});
 let childExit;child.once('error',e=>{childExit=e;});child.once('exit',code=>{childExit=Error('Worker exited '+code);});
 try {
  let ready=false;

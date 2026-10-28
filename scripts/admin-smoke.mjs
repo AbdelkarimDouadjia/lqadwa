@@ -7,6 +7,7 @@ import {parseAdminPermissions,adminPermissions} from '../lib/admin-permissions.t
 import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
 import {defaultPageContent} from '../lib/content-pages.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
+import {checkAssistant} from './assistant-integration.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
 // APP_OWNER_EMAIL:owner@example.invalid and SUPABASE_URL:http://127.0.0.1:5888.
@@ -254,6 +255,7 @@ try{
  const requestId=randomUUID();await request('/api/app',{action:'search',medicine:'Doliprane 1000 mg',city:'algiers',night:false,token:requestId},sessions[recipient.id]);
  await request('/api/app',{action:'reply',request:requestId,pharmacy,available:true},sessions[other.id]);
  const booking=(await request('/api/app',{action:'reserve',request:requestId,pharmacy,consent:true},sessions[recipient.id])).data.reservations.find(b=>b.request===requestId);assert(booking);
+ await checkAssistant({sql,request,cookie:sessions[recipient.id],otherCookie:sessions[delegate.id],userId:recipient.id,requestId,pharmacy,booking});
  await request('/api/app',{action:'share-location',reservation:booking.id,enabled:true,latitude:36.75,longitude:3.05},sessions[recipient.id]);
  const bookings=(await request('/api/admin?section=reservations&q='+booking.id,null,rootCookie)).data.rows;assert.equal(bookings.length,1);assert(!('code' in bookings[0]));assert(!('approachLat' in bookings[0]));
  let controls=(await request('/api/admin?section=service',null,rootCookie)).data.service;
