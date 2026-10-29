@@ -17,4 +17,4 @@ export const providerCommand=z.discriminatedUnion("action",[
   z.object({action:z.enum(["disable","remove"]),provider:providerId,revision:z.number().int().min(1)}).strict(),
 ]);
 export type ProviderStatus={provider:AssistantProvider;configured:boolean;revision:number;enabled:boolean;testedAt:number;updatedAt:number;tested:boolean};
-export type ProviderSettings={encryptionReady:boolean;storageReady:boolean;externalEnabled:boolean;items:ProviderStatus[];nvidiaEvaluation?:{configured:boolean;enabled:boolean}};
+export type ProviderSettings={encryptionReady:boolean;storageReady:boolean;externalEnabled:boolean;items:ProviderStatus[];nvidiaEvaluation?:{configured:boolean;enabled:boolean};chatFallbackAuthorized?:boolean};

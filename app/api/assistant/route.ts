@@ -9,7 +9,7 @@ import { corpusVersion, retrievalAnswer } from "@/lib/assistant-retrieval";
 import { readAssistantTool } from "@/lib/assistant-tools";
 import { optionalEvidence } from "@/lib/assistant-evidence-ai";
 import { managedEvidenceRunner,managedChatProviders } from "@/lib/assistant-provider-store";
-import {conversationalAnswer} from "@/lib/assistant-rag";
+import {conversationalAnswer,withChatCircuit} from "@/lib/assistant-rag";
 
 export const dynamic="force-dynamic";
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:privateHeaders});
@@ -33,12 +33,7 @@ export async function POST(request:Request) {
         if(env.ASSISTANT_NVIDIA_EVALUATION_ENABLED!=="true")throw new HttpError("Evaluation disabled",503,"feature_disabled");
       }else if(env.ASSISTANT_CHAT_ENABLED!=="true")throw new HttpError("Conversational chat disabled",503,"feature_disabled");
       const db=database(),providers=await managedChatProviders(input.evaluation);
-      const guarded=providers.map(provider=>({...provider,run:async(...args:Parameters<typeof provider.run>)=>{
-        try{return await provider.run(...args);}catch{
-          await db.prepare("INSERT INTO rate_limits(key,count,expires) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=1,expires=excluded.expires").bind(await tokenHash("assistant-chat-circuit:"+provider.id),Date.now()+60000).run();
-          throw Error("Chat provider unavailable");
-        }
-      }}));
+      const guarded=providers.map(provider=>withChatCircuit(provider,request.signal,async()=>db.prepare("INSERT INTO rate_limits(key,count,expires) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=1,expires=excluded.expires").bind(await tokenHash("assistant-chat-circuit:"+provider.id),Date.now()+60000).run()));
       return json(await conversationalAnswer(input,guarded,request.signal,async provider=>{
         if(await db.prepare("SELECT count FROM rate_limits WHERE key=? AND expires>?").bind(await tokenHash("assistant-chat-circuit:"+provider),Date.now()).first())return false;
         await rateLimit("all-users","assistant-evidence-global",20,86400);

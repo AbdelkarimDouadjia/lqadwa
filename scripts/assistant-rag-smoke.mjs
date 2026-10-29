@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {assistantInput} from '../lib/assistant-contract.ts';
-import {conversationalAnswer,containsPrivateInput} from '../lib/assistant-rag.ts';
+import {conversationalAnswer,containsPrivateInput,withChatCircuit,chatKeyAuthorized} from '../lib/assistant-rag.ts';
 import {retrievalAnswer} from '../lib/assistant-retrieval.ts';
 import {chatCompletionRunner,nvidiaChatModel} from '../lib/assistant-provider-http.ts';
 const signal=new AbortController().signal,input={tool:'chat',query:'How do I collect my reservation?',language:'en',previous:[],externalConsent:true,evaluation:true};
@@ -9,6 +9,17 @@ const source=retrievalAnswer(input.query,'en').citations[0];assert(source);
 let calls=0;
 const primary={id:'nvidia',run:async(messages)=>{calls++;const data=JSON.parse(messages[1].content);assert.equal(data.question,input.query);assert(data.publicEvidence.some(item=>item.id===source.id));assert(!('owner'in data));return JSON.stringify({answer:'Collect your reservation in person at the pharmacy.',citations:[source.id]});}};
 const grounded=await conversationalAnswer(input,[primary],signal,async()=>true);assert.equal(grounded.mode,'grounded-chat');assert.equal(grounded.citations[0].hash,source.hash);assert.equal(calls,1);
+for(const [query,answer] of [['What is the capital of Spain?','Madrid is the capital of Spain.'],['Explain painting.','Painting creates images with colour.'],['Divide 12345678 by 2.','The result is 6172839.']]){
+ const result=await conversationalAnswer({...input,query},[{id:'nvidia',run:async()=>JSON.stringify({answer,citations:[]})}],signal,async()=>true);assert.equal(result.mode,'general-chat',query);
+}
+for(const [language,query] of [['en','How is my data protected?'],['fr','Comment protéger mes données ?'],['kab','Amek ara ḥerzeɣ isefka-w?']]){
+ const result=await conversationalAnswer({...input,language,query},[{id:'nvidia',run:async()=>JSON.stringify({answer:'A general answer without evidence.',citations:[]})}],signal,async()=>true);assert(result.fallback,'Retrieved privacy evidence must not become an unsourced general answer');
+}
+const followed=await conversationalAnswer({...input,query:'Make that shorter.',previous:[input.query]},[{id:'nvidia',run:async messages=>{assert(JSON.parse(messages[1].content).publicEvidence.length);return JSON.stringify({answer:'Collect in person.',citations:[source.id]});}}],signal,async()=>true);assert.equal(followed.mode,'grounded-chat','Follow-ups must keep the original service sources');
+assert(!chatKeyAuthorized(1));assert(!chatKeyAuthorized(1,'1'));assert(!chatKeyAuthorized(1,'2','OWNER-ACCEPTANCE-REFERENCE'));assert(chatKeyAuthorized(1,'1','OWNER-ACCEPTANCE-REFERENCE'));assert(!chatKeyAuthorized(2,'1','OWNER-ACCEPTANCE-REFERENCE'),'Replacing a key invalidates separate conversational consent');
+let circuitWrites=0;const caller=new AbortController();
+await assert.rejects(withChatCircuit({id:'nvidia',run:async()=>{caller.abort();throw Error('caller stopped');}},caller.signal,async()=>circuitWrites++).run([],caller.signal));assert.equal(circuitWrites,0);
+await assert.rejects(withChatCircuit({id:'nvidia',run:async()=>{throw Error('upstream failed');}},signal,async()=>circuitWrites++).run([],signal));assert.equal(circuitWrites,1);
 const general=await conversationalAnswer({...input,query:'Explain retrieval augmented generation.'},[{id:'nvidia',run:async()=>JSON.stringify({answer:'It retrieves relevant documents before generating an answer.',citations:[]})}],signal,async()=>true);assert.equal(general.mode,'general-chat');assert.equal(general.citations.length,0);
 const order=[],budgets=[];
 const backup=await conversationalAnswer(input,[{id:'nvidia',run:async()=>{order.push('primary');throw Error('outage');}},{id:'openrouter',run:async()=>{order.push('backup');return JSON.stringify({answer:'Collect in person.',citations:[source.id]});}}],signal,async provider=>{budgets.push(provider);return true;});
