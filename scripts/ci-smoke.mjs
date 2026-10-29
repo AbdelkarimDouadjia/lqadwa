@@ -9,9 +9,14 @@ mkdirSync('.wrangler',{recursive:true});
 const testState=mkdtempSync(path.resolve('.wrangler','integration-'));
 // Never initialize a remote AI binding in isolated tests. Production config stays intact.
 const isolatedConfig='dist/server/wrangler.local-tests.json',localConfig=JSON.parse(readFileSync('dist/server/wrangler.json','utf8'));
-delete localConfig.ai;writeFileSync(isolatedConfig,JSON.stringify(localConfig));
+delete localConfig.ai;
+// Match Wrangler's bundled dev drain middleware, without changing the production entry.
+writeFileSync('dist/server/local-test-body-drain.mjs',readFileSync('scripts/local-test-body-drain.mjs'));
+writeFileSync('dist/server/local-test-entry.mjs',`import worker from './index.js';import {withDrainedBody} from './local-test-body-drain.mjs';export * from './index.js';export default withDrainedBody(worker);`);
+localConfig.main='local-test-entry.mjs';writeFileSync(isolatedConfig,JSON.stringify(localConfig));
 const env={...process.env,AUTH_OFFLINE:'1',LQADWA_TEST_STATE:testState};
 function run(args){const r=spawnSync(node,args,{stdio:'inherit',env});if(r.error)throw r.error;if(r.status!==0)throw Error('Check failed: '+args.join(' '));}
+run(['scripts/local-test-body-drain-smoke.mjs']);
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',()=>reject(Error('Port 5173 is occupied. Stop your local preview before integration checks.')));s.listen(5173,()=>s.close(resolve));});
 console.log('Isolated local integration database: '+testState);
 run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to',testState]);
@@ -26,6 +31,13 @@ try {
   await new Promise(resolve=>setTimeout(resolve,500));
  }
  if(!ready)throw Error('Local Worker did not become healthy');
+ // An early rejection must not reset the following request through Wrangler's proxy.
+ for(let i=0;i<5;i++){
+  const rejected=await fetch('http://localhost:5173/api/assistant',{method:'POST',headers:{origin:'https://evil.invalid','content-type':'application/json'},body:'x'.repeat(100000),signal:AbortSignal.timeout(10000)});
+  assert.equal(rejected.status,403);await rejected.arrayBuffer();
+  const nextPost=await fetch('http://localhost:5173/api/assistant',{method:'POST',headers:{origin:'https://evil.invalid','content-type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});assert.equal(nextPost.status,403);await nextPost.arrayBuffer();
+  const following=await fetch('http://localhost:5173/api/health',{signal:AbortSignal.timeout(10000)});assert.equal(following.status,200);await following.arrayBuffer();
+ }
  for(const path of ['/','/login','/operations']){
   const response=await fetch('http://localhost:5173'+path,{redirect:'manual',signal:AbortSignal.timeout(15000)});
   if(path==='/operations'){
