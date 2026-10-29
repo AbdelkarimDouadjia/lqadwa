@@ -9,6 +9,7 @@ import {sealProviderKey,openProviderKey} from "@/lib/assistant-key-crypto";
 import {providerStorageReady,encryptionReady,publicProviderStatus,type CredentialRow} from "@/lib/assistant-provider-store";
 import {checkProviderKey,probeFreeEvidence,ProviderConnectionError} from "@/lib/assistant-provider-http";
 import {chatKeyAuthorized} from "@/lib/assistant-rag";
+import {cloudflareChatAuthorized} from "@/lib/assistant-cloudflare-chat";
 export const dynamic="force-dynamic";
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:privateHeaders});
 async function owner(request:Request) {
@@ -19,7 +20,7 @@ async function metadata() {
   const storageReady=await providerStorageReady();
   const rows=storageReady?await database().prepare("SELECT provider,revision,enabled,tested_at,tested_version,key_version,updated_at,length(encrypted_key)>0 AS has_key FROM assistant_provider_credentials ORDER BY provider").all<CredentialRow & {has_key:number}>():{results:[]};
   const chatKey=rows.results.find(row=>row.provider==="openrouter");
-  return {storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(row=>publicProviderStatus(row)),nvidiaEvaluation:{configured:Boolean(env.ASSISTANT_NVIDIA_API_KEY_V1),enabled:env.ASSISTANT_NVIDIA_EVALUATION_ENABLED==="true"},chatFallbackAuthorized:Boolean(chatKey?.has_key&&chatKey.enabled===1&&chatKey.tested_version===chatKey.key_version&&chatKeyAuthorized(chatKey.key_version,env.ASSISTANT_OPENROUTER_CHAT_KEY_VERSION,env.ASSISTANT_OPENROUTER_CHAT_ACCEPTANCE_REFERENCE))};
+  return {cloudflareChat:{bound:Boolean(env.AI),enabled:env.ASSISTANT_CLOUDFLARE_CHAT_ENABLED==="true",freeConfirmed:env.ASSISTANT_CLOUDFLARE_FREE_CONFIRMED==="true",publicAuthorized:env.ASSISTANT_CHAT_ENABLED==="true"&&cloudflareChatAuthorized(false,env)},storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(row=>publicProviderStatus(row)),nvidiaEvaluation:{configured:Boolean(env.ASSISTANT_NVIDIA_API_KEY_V1),enabled:env.ASSISTANT_NVIDIA_EVALUATION_ENABLED==="true"},chatFallbackAuthorized:Boolean(chatKey?.has_key&&chatKey.enabled===1&&chatKey.tested_version===chatKey.key_version&&chatKeyAuthorized(chatKey.key_version,env.ASSISTANT_OPENROUTER_CHAT_KEY_VERSION,env.ASSISTANT_OPENROUTER_CHAT_ACCEPTANCE_REFERENCE))};
 }
 function fail(error:unknown) {
   if(error instanceof z.ZodError)return json({code:"invalid_input"},400);

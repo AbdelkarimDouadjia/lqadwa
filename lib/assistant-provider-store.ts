@@ -4,6 +4,7 @@ import {openProviderKey} from "./assistant-key-crypto";
 import {freeEvidenceRunner,chatCompletionRunner} from "./assistant-provider-http";
 import type {ChatProvider} from "./assistant-rag";
 import {chatKeyAuthorized} from "./assistant-rag";
+import {cloudflareChatRunner,cloudflareChatAuthorized} from "./assistant-cloudflare-chat";
 import type {AssistantProvider} from "./assistant-providers";
 export {publicProviderStatus} from "./assistant-provider-status";
 export type CredentialRow={provider:AssistantProvider;encrypted_key:string;iv:string;key_version:number;revision:number;enabled:number;tested_at:number;tested_version:number;updated_at:number};
@@ -14,6 +15,7 @@ export async function managedChatProviders(evaluation:boolean):Promise<ChatProvi
   const providers:ChatProvider[]=[];
   // NVIDIA's trial must never serve the public app. The API separately verifies root-owner MFA for evaluation.
   if(evaluation&&env.ASSISTANT_NVIDIA_EVALUATION_ENABLED==="true"&&env.ASSISTANT_NVIDIA_API_KEY_V1)providers.push({id:"nvidia",run:chatCompletionRunner("nvidia",env.ASSISTANT_NVIDIA_API_KEY_V1)});
+  if(env.AI&&cloudflareChatAuthorized(evaluation,env))providers.push({id:"cloudflare",run:cloudflareChatRunner(env.AI)});
   if(encryptionReady()&&await providerStorageReady()){
     const active=await database().prepare("SELECT revision,key_version FROM assistant_provider_credentials WHERE provider='openrouter' AND enabled=1 AND tested_version=key_version AND tested_at>0").first<{revision:number;key_version:number}>();
     if(!active||!chatKeyAuthorized(active.key_version,env.ASSISTANT_OPENROUTER_CHAT_KEY_VERSION,env.ASSISTANT_OPENROUTER_CHAT_ACCEPTANCE_REFERENCE))return providers;

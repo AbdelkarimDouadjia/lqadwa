@@ -40,6 +40,7 @@ export function AdminAssistantSettings({language}:{language:Language}){
   <div className="page-heading"><a href="/operations" className="row"><ArrowLeft aria-hidden="true"/>{t("back")}</a><div className="overline">LQADWA · OWNER</div><h1>{t("title")}</h1><p>{t("intro")}</p></div>
   <section className="panel assistant-settings-panel" aria-label={t("title")}>
    <p className="row"><ShieldCheck aria-hidden="true"/>{t("free")}</p><p>{t("privacy")}</p>
+   {data?.cloudflareChat?.bound&&<aside className="assistant-nvidia-settings"><h2>{t("cloudflare")}</h2><p>{t(data.cloudflareChat.publicAuthorized?"cloudflareReady":"cloudflareHold")}</p></aside>}
    {data?.nvidiaEvaluation?.configured&&<aside className="assistant-nvidia-settings"><h2>{t("nvidia")}</h2><p>{t("nvidiaNote")}</p>{!data.chatFallbackAuthorized&&<p>{t("chatConsentNeeded")}</p>}{data.nvidiaEvaluation.enabled&&<Button asChild variant="outline"><a href={`/operations/assistant/chat?lang=${language}`}>{t("nvidia")}</a></Button>}</aside>}
    {!ready&&data&&<p role="alert">{t("setup")}</p>}{data&&!data.externalEnabled&&<p>{t("externalOff")}</p>}
    {mfa&&<a href="/operations/security">{t("mfa")}</a>}

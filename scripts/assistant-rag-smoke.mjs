@@ -3,7 +3,11 @@ import {assistantInput} from '../lib/assistant-contract.ts';
 import {conversationalAnswer,containsPrivateInput,withChatCircuit,chatKeyAuthorized} from '../lib/assistant-rag.ts';
 import {retrievalAnswer} from '../lib/assistant-retrieval.ts';
 import {chatCompletionRunner,nvidiaChatModel} from '../lib/assistant-provider-http.ts';
+import {cloudflareChatRunner,cloudflareChatModel,cloudflareChatAuthorized} from '../lib/assistant-cloudflare-chat.ts';
 const signal=new AbortController().signal,input={tool:'chat',query:'How do I collect my reservation?',language:'en',previous:[],externalConsent:true,evaluation:true};
+assert(!cloudflareChatAuthorized(false,{}));assert(!cloudflareChatAuthorized(true,{ASSISTANT_CLOUDFLARE_CHAT_ENABLED:'true'}));
+const cfFree={ASSISTANT_CLOUDFLARE_CHAT_ENABLED:'true',ASSISTANT_CLOUDFLARE_FREE_CONFIRMED:'true'};assert(cloudflareChatAuthorized(true,cfFree));assert(!cloudflareChatAuthorized(false,cfFree));assert(cloudflareChatAuthorized(false,{...cfFree,ASSISTANT_CLOUDFLARE_CHAT_ACCEPTANCE_REFERENCE:'OPERATOR-ACCEPTANCE'}));
+for(const shape of ['legacy','completion'])assert.equal(await cloudflareChatRunner({run:async(model,body,options)=>{assert.equal(model,cloudflareChatModel);assert.equal(body.max_tokens,768);assert.equal(body.stream,false);assert.equal(body.response_format.type,'json_object');assert.equal(options.signal,signal);assert(!('tools'in body));return shape==='legacy'?{response:'{"answer":"Hello","citations":[]}'}:{choices:[{message:{content:'{"answer":"Hello","citations":[]}'},finish_reason:'stop'}]};}})([{role:'user',content:'Public synthetic question'}],signal),'{"answer":"Hello","citations":[]}');
 for(const extra of [{externalConsent:false},{externalConsent:undefined},{owner:'other'},{url:'https://evil.invalid'},{sql:'SELECT *'},{model:'paid-model'}])assert(!assistantInput.safeParse({...input,...extra}).success);
 const source=retrievalAnswer(input.query,'en').citations[0];assert(source);
 let calls=0;
@@ -33,6 +37,7 @@ for(const output of [JSON.stringify({answer:'Take 100 mg.',citations:[source.id]
 }
 await conversationalAnswer(input,[forbidden],signal,async()=>false);assert.equal(blockedCalls,0);
 const abort=new AbortController();abort.abort();assert((await conversationalAnswer(input,[forbidden],abort.signal,async()=>true)).fallback);assert.equal(blockedCalls,0);
+assert.equal((await conversationalAnswer({...input,query:'What is the capital of Spain?'},[],signal,async()=>false)).mode,'abstain','An unavailable model must not turn an ordinary question into a medical warning');
 for(const provider of ['nvidia','openrouter']){
  const result=await chatCompletionRunner(provider,'LOCAL-only-synthetic-key',async(url,options)=>{
   assert.equal(url,provider==='nvidia'?'https://integrate.api.nvidia.com/v1/chat/completions':'https://openrouter.ai/api/v1/chat/completions');assert.equal(options.redirect,'error');assert(!url.includes('LOCAL'));

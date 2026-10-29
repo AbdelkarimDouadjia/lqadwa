@@ -2,18 +2,21 @@
 import {spawn,spawnSync} from 'node:child_process';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
 const node=process.execPath,cli='./node_modules/wrangler/wrangler-dist/cli.js';
 mkdirSync('.wrangler',{recursive:true});
 const testState=mkdtempSync(path.resolve('.wrangler','integration-'));
+// Never initialize a remote AI binding in isolated tests. Production config stays intact.
+const isolatedConfig='dist/server/wrangler.local-tests.json',localConfig=JSON.parse(readFileSync('dist/server/wrangler.json','utf8'));
+delete localConfig.ai;writeFileSync(isolatedConfig,JSON.stringify(localConfig));
 const env={...process.env,AUTH_OFFLINE:'1',LQADWA_TEST_STATE:testState};
 function run(args){const r=spawnSync(node,args,{stdio:'inherit',env});if(r.error)throw r.error;if(r.status!==0)throw Error('Check failed: '+args.join(' '));}
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',()=>reject(Error('Port 5173 is occupied. Stop your local preview before integration checks.')));s.listen(5173,()=>s.close(resolve));});
 console.log('Isolated local integration database: '+testState);
 run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to',testState]);
 // Synthetic encryption key and provider switches exist only in this isolated local fixture process.
-const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888','--var','GROUNDED_ASSISTANT_ENABLED:true','--var','ASSISTANT_EVIDENCE_AI_ENABLED:true','--var','ASSISTANT_NVIDIA_EVALUATION_ENABLED:true','--var',`ASSISTANT_SETTINGS_KEY_V1:${Buffer.alloc(32,3).toString('base64')}`],{stdio:'inherit',env});
+const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config',isolatedConfig,'--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888','--var','GROUNDED_ASSISTANT_ENABLED:true','--var','ASSISTANT_EVIDENCE_AI_ENABLED:true','--var','ASSISTANT_NVIDIA_EVALUATION_ENABLED:true','--var',`ASSISTANT_SETTINGS_KEY_V1:${Buffer.alloc(32,3).toString('base64')}`],{stdio:'inherit',env});
 let childExit;child.once('error',e=>{childExit=e;});child.once('exit',code=>{childExit=Error('Worker exited '+code);});
 try {
  let ready=false;
