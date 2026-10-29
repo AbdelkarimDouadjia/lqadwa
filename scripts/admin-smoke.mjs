@@ -8,6 +8,7 @@ import {emptyLandingContent,landingCopyKeys} from '../lib/landing-content.ts';
 import {defaultPageContent} from '../lib/content-pages.ts';
 import {startUiProxy} from './local-ui-proxy.mjs';
 import {checkAssistant} from './assistant-integration.mjs';
+import {checkProviderSettings} from './provider-settings-integration.mjs';
 
 // LOCAL ONLY. Run a local Worker with APP_ADMIN_IDS:local-release-owner,
 // APP_OWNER_EMAIL:owner@example.invalid and SUPABASE_URL:http://127.0.0.1:5888.
@@ -69,7 +70,7 @@ try{
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
  const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
  const authCookieName=rootCookie.split('; ').find(value=>/^sb-.+-auth-token=/.test(value)).split('=')[0];
- for(const path of ['/operations/editor','/operations/security','/assistant?lang=en']){
+ for(const path of ['/operations/editor','/operations/security','/assistant?lang=en','/operations/assistant']){
   const expired=fixture.session(owner,'aal2',-60),encoded='base64-'+Buffer.from(JSON.stringify(expired)).toString('base64url');
   const refreshed=await request(path,null,`${authCookieName}=${encoded}`);
   const refreshedCookie=cookie(refreshed.response);
@@ -81,8 +82,10 @@ try{
  const staleSnapshot=(await request('/api/app',null,staleCookie)).data;
  assert.equal(staleSnapshot.admin,null);assert.equal(staleSnapshot.adminStepUpRequired,true,'Expired step-up is explicit rather than silently demoting the administrator');
  await request('/api/landing',{action:'load'},staleCookie,403);
+ await request('/api/assistant/settings',null,staleCookie,403);
  delete owner.mfaTime;
  const sessions={};for(const u of [delegate,recipient,other]){const login=await request('/api/auth',{action:'login',email:u.email,password});sessions[u.id]=cookie(login.response);await request('/api/app',null,sessions[u.id]);}
+ await checkProviderSettings({request,sql,rootCookie,otherCookie:sessions[delegate.id],ownerId:owner.id});
  assert.equal((await request('/api/profile',null,sessions[recipient.id])).data.details.lastName,'NEW PERSON','Verified signup names initialize the profile');
  await request('/api/auth',{action:'register',email:'fresh@example.invalid',password,firstName:'LOCAL'},'',400);
  await request('/api/auth',{action:'register',email:'fresh@example.invalid',password,firstName:'LOCAL',lastName:'NEW PERSON'});

@@ -3,7 +3,7 @@ import type { AssistantAnswer } from "./assistant-contract";
 
 export const evidenceModel = "@cf/qwen/qwen3-30b-a3b-fp8";
 const selectedSchema=z.object({ids:z.array(z.string().max(100)).min(1).max(3)}).strict();
-type RunEvidenceModel = (model: string, input: {messages:{role:"system"|"user";content:string}[];max_tokens:number;temperature:number;stream:false}, options:{signal:AbortSignal})=>Promise<unknown>;
+export type RunEvidenceModel = (model: string, input: {messages:{role:"system"|"user";content:string}[];max_tokens:number;temperature:number;stream:false}, options:{signal:AbortSignal})=>Promise<unknown>;
 export async function optionalEvidence(answer:AssistantAnswer, run:RunEvidenceModel, signal:AbortSignal, reserve:()=>Promise<boolean>, failure:()=>Promise<unknown>) {
   if(answer.mode!=="retrieval") return answer;
   try {

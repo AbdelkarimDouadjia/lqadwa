@@ -9,5 +9,6 @@ declare namespace Cloudflare {
     GROUNDED_ASSISTANT_ENABLED?: string;
     ASSISTANT_EVIDENCE_AI_ENABLED?: string;
     AI?: Ai;
+    ASSISTANT_SETTINGS_KEY_V1?: string;
   }
 }

@@ -7,6 +7,7 @@ import { assistantInput, assistantPolicy } from "@/lib/assistant-contract";
 import { corpusVersion, retrievalAnswer } from "@/lib/assistant-retrieval";
 import { readAssistantTool } from "@/lib/assistant-tools";
 import { optionalEvidence } from "@/lib/assistant-evidence-ai";
+import { managedEvidenceRunner } from "@/lib/assistant-provider-store";
 
 export const dynamic="force-dynamic";
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:privateHeaders});
@@ -24,11 +25,11 @@ export async function POST(request:Request) {
     if(request.signal.aborted) return json({code:"cancelled"},408);
     if(input.tool!=="help") return json(await readAssistantTool(input,user.userId));
     let answer=retrievalAnswer(input.query,input.language,input.previous);
-    if(policy.evidenceAI && !env.AI && answer.mode==="retrieval") answer={...answer,fallback:true};
-    if(policy.evidenceAI && env.AI && answer.mode==="retrieval") {
+    const managed=policy.evidenceAI && answer.mode==="retrieval"?await managedEvidenceRunner().catch(()=>null):null;
+    const run=managed;
+    if(policy.evidenceAI && run && answer.mode==="retrieval") {
       const key=await tokenHash("assistant-evidence-circuit"), db=database();
-      const ai=env.AI;
-      answer=await optionalEvidence(answer,async (model,input,options)=>ai.run(model,input,options),request.signal,async()=>{
+      answer=await optionalEvidence(answer,run,request.signal,async()=>{
         const circuit=await db.prepare("SELECT count FROM rate_limits WHERE key=? AND expires>?").bind(key,Date.now()).first();
         if(circuit) return false;
         // Hard application-wide bound: 20 provider attempts/day, no retries, including failed attempts.

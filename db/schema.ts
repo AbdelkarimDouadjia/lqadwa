@@ -90,3 +90,5 @@ export const landingContent = sqliteTable("landing_content", {
 export const landingContentRevisions = sqliteTable("landing_content_revisions", {
   id: text("id").primaryKey(), actor: text("actor").notNull(), createdAt: integer("created_at").notNull(), contentJson: text("content_json").notNull(),
 }, t => [index("landing_content_revisions_created_idx").on(t.createdAt)]);
+// The credential vault is SQL-owned by Wrangler migration 0015 and direct D1 queries.
+// Keep it outside this ORM schema so db:generate cannot recreate the manually managed table.
