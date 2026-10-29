@@ -6,6 +6,7 @@
   "compatibility_date": "2026-09-28",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "ai": {"binding":"AI"},
   "d1_databases": [{
     "binding": "DB",
     "database_name": "lqadwa-production",

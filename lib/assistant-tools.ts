@@ -6,7 +6,7 @@ import { assistantText } from "./assistant-copy";
 import { assistantCatalogVersion, getAssistantMedicine, searchAssistantCatalog } from "./assistant-catalog";
 import type { AssistantAnswer, AssistantInput } from "./assistant-contract";
 
-export async function readAssistantTool(input:Exclude<AssistantInput,{tool:"help"}>, owner:string):Promise<AssistantAnswer> {
+export async function readAssistantTool(input:Exclude<AssistantInput,{tool:"help"|"chat"}>, owner:string):Promise<AssistantAnswer> {
   const db=database(), now=Date.now(), text=(key:Parameters<typeof assistantText>[1])=>assistantText(input.language,key);
   const result:AssistantAnswer={mode:"tool",text:"",asOf:new Date(now).toISOString(),citations:[],records:[]};
   if (input.tool==="catalog" || input.tool==="medicine") {

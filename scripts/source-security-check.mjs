@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 const list=execFileSync('git',['ls-files','--cached','--others','--exclude-standard','-z'],{encoding:'utf8'}).split('\0').filter(Boolean);
 const failures=[];
 function inspect(path,text) {
+ for(const pattern of [/\bnvapi-[A-Za-z0-9_-]{30,}/,/\bsk_[A-Za-z0-9]{28,}/])if(pattern.test(text))failures.push({path,kind:'providerCredential'});
  for(const [kind,pattern] of Object.entries({privateKey:/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,githubToken:/\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/,supabaseSecret:/\bsb_secret_[A-Za-z0-9_-]{20,}\b/,awsKey:/\bAKIA[A-Z0-9]{16}\b/}))if(pattern.test(text))failures.push({path,kind});
  for(const token of text.match(/eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]) {
   try{if(JSON.parse(Buffer.from(token.split('.')[1],'base64url')).role==='service_role')failures.push({path,kind:'serviceRoleJWT'});}catch{}

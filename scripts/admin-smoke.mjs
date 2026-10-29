@@ -70,7 +70,7 @@ try{
  const logged=await request('/api/auth',{action:'admin-login',identifier:'admin',password});assert.equal(logged.data.redirect,'/operations');const rootCookie=cookie(logged.response);assert(rootCookie);
  const root=await request('/api/app',null,rootCookie);assert(root.data.admin.access.isOwner);assert.equal(root.data.admin.access.permissions.length,adminPermissions.length);assert(root.data.admin.owners.some(u=>u.id===owner.id));
  const authCookieName=rootCookie.split('; ').find(value=>/^sb-.+-auth-token=/.test(value)).split('=')[0];
- for(const path of ['/operations/editor','/operations/security','/assistant?lang=en','/operations/assistant']){
+ for(const path of ['/operations/editor','/operations/security','/assistant?lang=en','/operations/assistant','/operations/assistant/chat']){
   const expired=fixture.session(owner,'aal2',-60),encoded='base64-'+Buffer.from(JSON.stringify(expired)).toString('base64url');
   const refreshed=await request(path,null,`${authCookieName}=${encoded}`);
   const refreshedCookie=cookie(refreshed.response);
