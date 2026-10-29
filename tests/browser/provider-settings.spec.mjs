@@ -12,7 +12,7 @@ test('owner provider settings: private routes, encrypted save/remove and languag
   await page.goto('/operations/assistant?lang='+lang);await expect(page.locator('#assistant-provider')).toBeVisible();
   await expect(page.locator('#assistant-provider option')).toHaveCount(7);await expect(page.locator('h1')).toHaveCount(1);
   for(const width of [320,390,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);}
-  const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(item=>item.id)).toEqual([]);
+  const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>({target:node.target,summary:node.failureSummary}))})),`${theme}/${lang}`).toEqual([]);
  }
  await page.goto('/operations/assistant?lang=en');await page.waitForLoadState('networkidle');await expect(page.locator('#assistant-api-key')).toBeEnabled();
  await page.locator('#assistant-provider').selectOption('mistral');

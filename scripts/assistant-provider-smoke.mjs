@@ -5,7 +5,13 @@ import {readFileSync} from 'node:fs';
 import {providerCommand,providers} from '../lib/assistant-providers.ts';
 import {sealProviderKey,openProviderKey} from '../lib/assistant-key-crypto.ts';
 import {checkProviderKey,freeEvidenceRunner} from '../lib/assistant-provider-http.ts';
+import {publicProviderStatus} from '../lib/assistant-provider-status.ts';
 const master=randomBytes(32).toString('base64'),key='LOCAL-only-synthetic-credential';
+const now=Date.now(),statusRow={provider:'openrouter',has_key:1,revision:1,enabled:0,tested_at:now,tested_version:1,key_version:1,updated_at:now};
+assert(publicProviderStatus(statusRow,now).tested);
+for(const tested_at of [0,now+1,now-86400_000,now-90000_000])assert(!publicProviderStatus({...statusRow,tested_at},now).tested);
+await assert.rejects(checkProviderKey('gemini',key,new AbortController().signal,async()=>Response.json({error:{details:[{reason:'API_KEY_INVALID'}]}},{status:400})),error=>error.code==='provider_auth');
+await assert.rejects(checkProviderKey('gemini',key,new AbortController().signal,async()=>Response.json({error:{details:[{reason:'OTHER_ERROR'}]}},{status:400})),error=>error.code==='provider_unavailable');
 for(const provider of Object.keys(providers)){
  const sealed=await sealProviderKey(key,provider,master),row={provider,...sealed};
  assert(!JSON.stringify(row).includes(key));assert.equal(await openProviderKey(row,master),key);

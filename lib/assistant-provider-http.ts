@@ -13,14 +13,25 @@ export async function checkProviderKey(provider:AssistantProvider,key:string,sig
   else if(provider==="gemini")headers["x-goog-api-key"]=key;
   else headers.authorization=`Bearer ${key}`;
   const response=await request(providers[provider].url,{headers,redirect:"error",signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])});
+  if(provider==="gemini" && response.status===400){
+    // Google reports a revoked/invalid API key as 400 API_KEY_INVALID, not always 401/403.
+    try{
+      const body=await boundedErrorJson(response);
+      if(body.error?.details?.some((detail:{reason?:string})=>detail.reason==="API_KEY_INVALID"))throw new ProviderConnectionError("provider_auth");
+    }catch(error){if(error instanceof ProviderConnectionError && error.code==="provider_auth")throw error;}
+    throw new ProviderConnectionError("provider_unavailable");
+  }
   try{ensureResponse(response);}finally{await response.body?.cancel();}
 }
-async function boundedJson(response:Response) {
-  try{ensureResponse(response);}catch(error){await response.body?.cancel();throw error;}
+async function boundedErrorJson(response:Response) {
   const reader=response.body?.getReader();if(!reader)throw new ProviderConnectionError("provider_unavailable");
   let size=0,text="";const decoder=new TextDecoder("utf-8",{fatal:true});
   try{for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>16000){await reader.cancel();throw new ProviderConnectionError("provider_unavailable");}text+=decoder.decode(value,{stream:true});}}finally{reader.releaseLock();}
   return JSON.parse(text+decoder.decode());
+}
+async function boundedJson(response:Response) {
+  try{ensureResponse(response);}catch(error){await response.body?.cancel();throw error;}
+  return boundedErrorJson(response);
 }
 export function freeEvidenceRunner(key:string,request:typeof fetch=fetch) {
   return async (_model:string,input:{messages:{role:"system"|"user";content:string}[];max_tokens:number;temperature:number;stream:false},options:{signal:AbortSignal})=>{

@@ -23,8 +23,12 @@ export async function checkProviderSettings({request,sql,rootCookie,otherCookie,
   }
   await call({action:'test',provider:'openrouter',revision:1,publicEvidenceConsent:false},rootCookie,400);
   await call({action:'enable',provider:'openrouter',revision:1,publicEvidenceConsent:true},rootCookie,409);
+  await sql(`UPDATE assistant_provider_credentials SET tested_at=${Date.now()-90000_000},tested_version=key_version WHERE provider='openrouter'`);
+  assert(!(await call(null)).data.items.find(row=>row.provider==='openrouter').tested,'Expired checks must not appear valid');
+  await call({action:'enable',provider:'openrouter',revision:1,publicEvidenceConsent:true},rootCookie,409);
   // Synthetic verification metadata in isolated D1 only; no provider or model is called by this HTTP suite.
   await sql(`UPDATE assistant_provider_credentials SET tested_at=${Date.now()},tested_version=key_version WHERE provider='openrouter'`);
+  assert((await call(null)).data.items.find(row=>row.provider==='openrouter').tested,'Current successful check must be displayed as valid');
   const enabled=(await call({action:'enable',provider:'openrouter',revision:1,publicEvidenceConsent:true})).data.items.find(row=>row.provider==='openrouter');assert(enabled.enabled);
   const removed=(await call({action:'remove',provider:'openrouter',revision:enabled.revision})).data.items.find(row=>row.provider==='openrouter');assert(!removed.configured);assert(!removed.enabled);
   const readded=(await call({action:'save',provider:'openrouter',revision:removed.revision,apiKey:key+'-replacement'})).data.items.find(row=>row.provider==='openrouter');assert(!readded.enabled);assert(!readded.tested);assert(readded.revision>enabled.revision);

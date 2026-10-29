@@ -22,7 +22,7 @@ Production calls and OpenRouter probes share the existing 20-attempt/day global 
 
 ## Storage and recovery
 
-Additive migration `0015_assistant_provider_credentials.sql` creates one table, with no alteration/deletion of existing accounts, pharmacy records or medical records. The operator explicitly approved this migration on 28 October 2026. It was rehearsed against a protected production export before application. The ORM table declaration mirrors the SQL; production migrations continue to use Wrangler's reviewed SQL workflow, not an unreviewed generated migration.
+Additive migration `0015_assistant_provider_credentials.sql` creates one table, with no alteration/deletion of existing accounts, pharmacy records or medical records. The operator explicitly approved this migration on 28 October 2026. It was rehearsed against a protected production export before application. This vault is managed exclusively by reviewed Wrangler SQL and direct D1 queries, deliberately outside `db/schema.ts` and Drizzle's generated schema. An isolated `db:generate` regression verifies that it does not recreate the vault table or write a duplicate migration. Do not introduce an ORM declaration without reconciling the SQL-owned table first.
 
 Keys use AES-256-GCM with a random 96-bit IV and provider-bound additional authenticated data. `ASSISTANT_SETTINGS_KEY_V1` is a Cloudflare Worker secret, never a public environment variable or client bundle value. An encrypted D1 backup without the matching key cannot restore usable credentials.
 

@@ -17,7 +17,7 @@ async function owner(request:Request) {
 async function metadata() {
   const storageReady=await providerStorageReady();
   const rows=storageReady?await database().prepare("SELECT provider,revision,enabled,tested_at,tested_version,key_version,updated_at,length(encrypted_key)>0 AS has_key FROM assistant_provider_credentials ORDER BY provider").all<CredentialRow & {has_key:number}>():{results:[]};
-  return {storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(publicProviderStatus)};
+  return {storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(row=>publicProviderStatus(row))};
 }
 function fail(error:unknown) {
   if(error instanceof z.ZodError)return json({code:"invalid_input"},400);
@@ -59,7 +59,7 @@ export async function POST(request:Request) {
         if(!results[0].meta.changes)throw new HttpError("Configuration changed",409,"revision_conflict");
       }else if(input.action==="enable"){
         if(env.ASSISTANT_EVIDENCE_AI_ENABLED!=="true")throw new HttpError("External evidence selection is disabled",409,"external_disabled");
-        if(row.tested_version!==row.key_version || row.tested_at<=0 || row.tested_at>now || now-row.tested_at>86400_000)throw new HttpError("Test this key first",409,"test_required");
+        if(row.tested_version!==row.key_version || row.tested_at<=0 || row.tested_at>now || now-row.tested_at>=86400_000)throw new HttpError("Test this key first",409,"test_required");
         const results=await db.batch([db.prepare("UPDATE assistant_provider_credentials SET enabled=1,revision=revision+1,updated_at=?,updated_by=? WHERE provider=? AND revision=? AND tested_version=key_version AND tested_at>? AND tested_at<=?").bind(now,actor,input.provider,input.revision,now-86400_000,now),audit(actor,"assistant-provider-enable",input.provider,"Free-only public evidence selection enabled",true)]);
         if(!results[0].meta.changes)throw new HttpError("Configuration changed",409,"revision_conflict");
       }else{
