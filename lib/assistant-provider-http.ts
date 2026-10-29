@@ -48,3 +48,15 @@ export async function probeFreeEvidence(key:string,signal:AbortSignal,request:ty
   const evidence:AssistantAnswer={mode:"retrieval",text:"Public service guide",asOf:new Date().toISOString(),citations:[{id:"public-pickup",title:"Pickup",url:"/how-it-works",text:"Collection takes place in person at the pharmacy. A catalog listing is not confirmation of stock.",hash:"synthetic-public-probe",updated:"2026-10-28"}]};
   try{await selectEvidence(evidence,freeEvidenceRunner(key,request),signal);}catch(error){if(error instanceof ProviderConnectionError)throw error;throw new ProviderConnectionError("provider_unavailable");}
 }
+export const nvidiaChatModel="nvidia/nemotron-3.5-lightning-30b-a3b";
+export function chatCompletionRunner(provider:"nvidia"|"openrouter",key:string,request:typeof fetch=fetch){
+  return async(messages:{role:"system"|"user";content:string}[],signal:AbortSignal)=>{
+    const body=provider==="nvidia"?{model:nvidiaChatModel,messages,max_tokens:768,temperature:0.2,stream:false,chat_template_kwargs:{enable_thinking:false}}:{model:"openrouter/free",messages,max_tokens:768,temperature:0.2,stream:false,response_format:{type:"json_object"},provider:{max_price:{prompt:0,completion:0,request:0},allow_fallbacks:false,data_collection:"deny",zdr:true},reasoning:{enabled:false}};
+    const response=await request(provider==="nvidia"?"https://integrate.api.nvidia.com/v1/chat/completions":"https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{authorization:`Bearer ${key}`,"content-type":"application/json"},body:JSON.stringify(body),signal,redirect:"error"});
+    const data=await boundedJson(response);
+    if(data.usage?.cost&&Number(data.usage.cost)!==0)throw new ProviderConnectionError("provider_unavailable");
+    const content=data.choices?.[0]?.message?.content;
+    if(typeof content!=="string"||content.length>5000||data.choices[0].finish_reason==="length")throw new ProviderConnectionError("provider_unavailable");
+    return content;
+  };
+}

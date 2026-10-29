@@ -5,6 +5,11 @@ export async function checkProviderSettings({request,sql,rootCookie,otherCookie,
  const reset=async()=>{const bucket=Math.floor(Date.now()/60000);await sql(`DELETE FROM rate_limits WHERE key IN (${[-1,0,1].map(offset=>quote(hash(`assistant-settings:${ownerId}:${bucket+offset}`))).join(',')})`);};
  const call=async(body,credential=rootCookie,status=200)=>{await reset();return request('/api/assistant/settings',body,credential,status);};
  await call(null,'',401);await call(null,otherCookie,403);
+ const chat={tool:'chat',language:'en',query:'How do I collect my reservation?',previous:[],externalConsent:true,evaluation:true};
+ await request('/api/assistant',chat,'',401);
+ await request('/api/assistant',chat,otherCookie,403);
+ await request('/api/assistant',{...chat,evaluation:false},rootCookie,503);
+ await request('/api/assistant',{...chat,externalConsent:false},rootCookie,400);
  const initial=(await call(null)).data;assert.equal(initial.storageReady,true);assert.equal(initial.encryptionReady,true);assert.equal(initial.externalEnabled,true);
  await sql('DELETE FROM assistant_provider_credentials');
  const key='LOCAL-only-synthetic-credential';
@@ -12,6 +17,7 @@ export async function checkProviderSettings({request,sql,rootCookie,otherCookie,
  try{
   await sql(`INSERT INTO mobile_sessions(hash,owner,created,expires) VALUES (${quote(hash(token))},${quote(ownerId)},${Date.now()},${Date.now()+60000})`);
   const native=await fetch('http://localhost:5173/api/assistant/settings',{headers:{cookie:rootCookie,'x-lqadwa-session':token}});assert.equal(native.status,403,'Opaque native sessions cannot bypass owner MFA');
+  const nativeChat=await fetch('http://localhost:5173/api/assistant',{method:'POST',headers:{cookie:rootCookie,'x-lqadwa-session':token,'content-type':'application/json'},body:JSON.stringify(chat)});assert.equal(nativeChat.status,403,'Opaque tokens cannot reach NVIDIA evaluation alongside an owner cookie');await nativeChat.arrayBuffer();
   for(const provider of ['openrouter','openai','anthropic','gemini','groq','mistral','deepseek']){
    await call({action:'save',provider,revision:0,apiKey:key},otherCookie,403);
    const saved=(await call({action:'save',provider,revision:0,apiKey:key})).data;
@@ -37,5 +43,7 @@ export async function checkProviderSettings({request,sql,rootCookie,otherCookie,
   for(const extra of [{url:'http://127.0.0.1'},{owner:ownerId},{model:'paid-model'}])await call({action:'save',provider:'openai',revision:1,apiKey:key,...extra},rootCookie,400);
   const leaked=(await sql(`SELECT count(*) AS n FROM audit_log WHERE detail LIKE ${quote('%'+key+'%')}`))[0].results[0].n;assert.equal(leaked,0);
  }finally{await sql(`DELETE FROM assistant_provider_credentials;DELETE FROM mobile_sessions WHERE hash=${quote(hash(token))}`);await reset();}
+ const evaluated=(await request('/api/assistant',chat,rootCookie)).data;
+ assert.equal(evaluated.mode,'retrieval');assert(evaluated.fallback);assert(evaluated.citations.length,'No key means a genuine local-source fallback, not a simulated model reply');
  console.log('PASS: private provider CRUD, seven encrypted credentials, no key echo/audit leak, owner-only verified MFA, native denial, optimistic concurrency, replacement disables inference, no paid activation and stale-test ABA protection. No upstream calls.');
 }

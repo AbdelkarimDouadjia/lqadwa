@@ -4,6 +4,7 @@ export const assistantLanguage = z.enum(["ar", "fr", "en", "kab"]);
 const query = z.string().trim().min(2).max(400);
 // The caller chooses an allowlisted read; neither a model nor the caller supplies SQL, URLs or an owner.
 export const assistantInput = z.discriminatedUnion("tool", [
+  z.object({ tool: z.literal("chat"), language: assistantLanguage, query, previous: z.array(query).max(2).default([]), externalConsent: z.literal(true), evaluation:z.boolean().default(false) }).strict(),
   z.object({ tool: z.literal("help"), language: assistantLanguage, query, previous: z.array(query).max(2).default([]) }).strict(),
   z.object({ tool: z.literal("catalog"), language: assistantLanguage, query: z.string().trim().min(2).max(100) }).strict(),
   z.object({ tool: z.literal("medicine"), language: assistantLanguage, medicineId: z.string().regex(/^miph-2026-08:\d{5}$/) }).strict(),
@@ -14,7 +15,7 @@ export const assistantInput = z.discriminatedUnion("tool", [
 export type AssistantInput = z.infer<typeof assistantInput>;
 export type AssistantCitation = { id: string; title: string; url: string; updated: string; hash: string; text: string };
 export type AssistantAnswer = {
-  mode: "retrieval" | "model-selected-evidence" | "tool" | "abstain" | "safety";
+  mode: "retrieval" | "model-selected-evidence" | "grounded-chat" | "general-chat" | "tool" | "abstain" | "safety";
   text: string; citations: AssistantCitation[]; asOf: string; fallback?: boolean;
   limit?: number;
   // Typed records are rendered as plain text, never interpreted as model instructions or HTML.

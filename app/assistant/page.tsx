@@ -11,5 +11,5 @@ export default async function AssistantPage({searchParams}:{searchParams:Promise
   const query=await searchParams, store=await cookies();
   const language=publicLanguage(query.lang,publicLanguage(store.get("lqadwa-language")?.value));
   if(assistantPolicy(env).enabled) await requireAppUser(`/assistant?lang=${language}`);
-  return <AssistantChat key={language} language={language} initialDark={store.get("lqadwa-theme")?.value==="dark"} enabled={assistantPolicy(env).enabled}/>;
+  return <AssistantChat key={language} language={language} initialDark={store.get("lqadwa-theme")?.value==="dark"} enabled={assistantPolicy(env).enabled} chatEnabled={env.ASSISTANT_CHAT_ENABLED==="true"}/>;
 }

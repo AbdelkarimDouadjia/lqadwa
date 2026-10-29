@@ -10,5 +10,8 @@ declare namespace Cloudflare {
     ASSISTANT_EVIDENCE_AI_ENABLED?: string;
     AI?: Ai;
     ASSISTANT_SETTINGS_KEY_V1?: string;
+    ASSISTANT_NVIDIA_API_KEY_V1?: string;
+    ASSISTANT_NVIDIA_EVALUATION_ENABLED?: string;
+    ASSISTANT_CHAT_ENABLED?: string;
   }
 }

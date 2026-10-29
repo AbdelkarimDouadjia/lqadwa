@@ -13,7 +13,7 @@ await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',(
 console.log('Isolated local integration database: '+testState);
 run(['--import','./scripts/sites-env.mjs',cli,'d1','migrations','apply','DB','--local','--config','dist/server/wrangler.json','--persist-to',testState]);
 // Synthetic encryption key and provider switches exist only in this isolated local fixture process.
-const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888','--var','GROUNDED_ASSISTANT_ENABLED:true','--var','ASSISTANT_EVIDENCE_AI_ENABLED:true','--var',`ASSISTANT_SETTINGS_KEY_V1:${Buffer.alloc(32,3).toString('base64')}`],{stdio:'inherit',env});
+const child=spawn(node,['--import','./scripts/sites-env.mjs',cli,'dev','--config','dist/server/wrangler.json','--local','--persist-to',testState,'--port','5173','--ip','127.0.0.1','--inspector-port','0','--var','APP_ADMIN_IDS:local-release-owner','--var','APP_OWNER_EMAIL:owner@example.invalid','--var','SUPABASE_URL:http://127.0.0.1:5888','--var','GROUNDED_ASSISTANT_ENABLED:true','--var','ASSISTANT_EVIDENCE_AI_ENABLED:true','--var','ASSISTANT_NVIDIA_EVALUATION_ENABLED:true','--var',`ASSISTANT_SETTINGS_KEY_V1:${Buffer.alloc(32,3).toString('base64')}`],{stdio:'inherit',env});
 let childExit;child.once('error',e=>{childExit=e;});child.once('exit',code=>{childExit=Error('Worker exited '+code);});
 try {
  let ready=false;

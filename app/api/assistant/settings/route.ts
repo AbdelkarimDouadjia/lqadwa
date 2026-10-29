@@ -17,7 +17,7 @@ async function owner(request:Request) {
 async function metadata() {
   const storageReady=await providerStorageReady();
   const rows=storageReady?await database().prepare("SELECT provider,revision,enabled,tested_at,tested_version,key_version,updated_at,length(encrypted_key)>0 AS has_key FROM assistant_provider_credentials ORDER BY provider").all<CredentialRow & {has_key:number}>():{results:[]};
-  return {storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(row=>publicProviderStatus(row))};
+  return {storageReady,encryptionReady:encryptionReady(),externalEnabled:env.ASSISTANT_EVIDENCE_AI_ENABLED==="true",items:rows.results.map(row=>publicProviderStatus(row)),nvidiaEvaluation:{configured:Boolean(env.ASSISTANT_NVIDIA_API_KEY_V1),enabled:env.ASSISTANT_NVIDIA_EVALUATION_ENABLED==="true"}};
 }
 function fail(error:unknown) {
   if(error instanceof z.ZodError)return json({code:"invalid_input"},400);
