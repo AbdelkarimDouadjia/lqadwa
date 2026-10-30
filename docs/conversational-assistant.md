@@ -23,6 +23,8 @@ The fixed model is `@cf/qwen/qwen3-30b-a3b-fp8`, using standard inference withou
 
 Production declares the normal `AI` binding. Isolated CI creates a separate generated Wrangler config in the same output directory with that remote binding removed; production config remains intact. CI never initializes/calls the remote AI binding or uses live credentials.
 
+The isolated entry also drains unused request bodies, matching Wrangler's bundled development middleware. This prevents its documented `no_bundle` proxy connection loss after early rejection ([upstream issue](https://github.com/cloudflare/workers-sdk/issues/15203)). Production entry/configuration and all rejection assertions stay unchanged. A regression sends rejected uploads followed by health reads without retrying mutations.
+
 ## Consent, privacy and controls
 
 Conversation mode requires a new unchecked consent box. Only the current question, at most two previous user questions from generated conversation turns and up to three public excerpts are submitted. Account/request tool results, catalog results, prescription files/OCR, GPS, cookies and account IDs are not included. Switching tabs and clicking an older record action preserves its authorized structured tool; it must not turn private record labels into an LLM prompt. Conversations stay in component memory and are not stored by LQADWA. Provider retention is separate and disclosed for the private trial.
