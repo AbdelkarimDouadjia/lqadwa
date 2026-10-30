@@ -38,6 +38,9 @@ try {
   const nextPost=await fetch('http://localhost:5173/api/assistant',{method:'POST',headers:{origin:'https://evil.invalid','content-type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});assert.equal(nextPost.status,403);await nextPost.arrayBuffer();
   const following=await fetch('http://localhost:5173/api/health',{signal:AbortSignal.timeout(10000)});assert.equal(following.status,200);await following.arrayBuffer();
  }
+ let chunks=0;
+ const chunked=await fetch('http://localhost:5173/api/auth',{method:'POST',headers:{origin:'http://localhost:5173','content-type':'application/json'},body:new ReadableStream({pull(controller){if(++chunks<20)controller.enqueue(new Uint8Array(1000));else controller.close();}}),duplex:'half',signal:AbortSignal.timeout(10000)});
+ assert.equal(chunked.status,413,'Oversized chunked input must cancel without tee deadlock');await chunked.arrayBuffer();
  for(const path of ['/','/login','/operations']){
   const response=await fetch('http://localhost:5173'+path,{redirect:'manual',signal:AbortSignal.timeout(15000)});
   if(path==='/operations'){

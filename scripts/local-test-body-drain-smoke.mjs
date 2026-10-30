@@ -13,6 +13,13 @@ let pulled=0;
 const transferred=new Request('http://localhost/transferred',{method:'POST',duplex:'half',body:new ReadableStream({pull(controller){if(++pulled<4)controller.enqueue(new Uint8Array(100));else controller.close();}})});
 await withDrainedBody({fetch:async request=>{new Request(request);return new Response('Denied',{status:403});}}).fetch(transferred);
 assert.equal(pulled,4,'A transferred body must also reach EOF before returning through the proxy');
+let chunks=0,timer;
+const chunked=new Request('http://localhost/chunked',{method:'POST',duplex:'half',body:new ReadableStream({pull(controller){if(++chunks<20)controller.enqueue(new Uint8Array(1000));else controller.close();}})});
+try{
+ const rejected=withDrainedBody({fetch:async request=>{const reader=request.body.getReader();await reader.read();await reader.cancel();return new Response('Too large',{status:413});}}).fetch(chunked);
+ const response=await Promise.race([rejected,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Chunked rejection deadlocked while cancelling the tee')),500);})]);
+ assert.equal(response.status,413);
+}finally{clearTimeout(timer);}
 const stream=new ReadableStream({pull(controller){controller.error(Error('Aborted client'));}});
 const aborted=new Request('http://localhost/aborted',{method:'POST',body:stream,duplex:'half'});
 const log=console.error;let reported=false;
